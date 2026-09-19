@@ -536,7 +536,19 @@
       function getSubcategoria(catId, subId) { const cat = getCategoria(catId); if (!cat || !cat.subcategorias) return null; return cat.subcategorias.find(s => s.id === subId) || null; }
 
       function isFaturaFechada(comp) { return faturasFechadas[comp] ? true : false; }
-      function isDiaFechado(dataStr) { return !!diasFechados[dataStr]; }
+
+      // Fechamento diário da conciliação é individual por conta bancária.
+      // Os fechamentos antigos, sem conta, continuam disponíveis nas telas
+      // gerais; na conciliação, quando uma conta é informada, usamos somente
+      // a chave daquela conta.
+      function chaveDiaFechado(dataStr, contaId) {
+        return contaId ? `${String(contaId)}::${String(dataStr)}` : String(dataStr);
+      }
+
+      function isDiaFechado(dataStr, contaId = null) {
+        return !!diasFechados[chaveDiaFechado(dataStr, contaId)];
+      }
+
       function isMesFechado(compStr) { return !!mesesFechados[compStr]; }
 
       const fechadaAtual = isFaturaFechada(month);
@@ -703,7 +715,19 @@
       async function handleLogin(e) { e.preventDefault(); setAuthError(""); const { error } = await supabaseClient.auth.signInWithPassword({ email: authEmail, password: authPassword }); if (error) setAuthError("Erro: " + error.message); }
       async function handleLogout() { await supabaseClient.auth.signOut(); }
 
-      function toggleDiaFechado(dataStr, e) { if (e) e.stopPropagation(); const jaFechado = !!diasFechados[dataStr]; if (jaFechado && !window.confirm(`Deseja reabrir o dia ${formatDateBR(dataStr)}?`)) return; updateDiasFechados(prev => ({ ...prev, [dataStr]: !prev[dataStr] })); }
+      function toggleDiaFechado(dataStr, e, contaId = null) {
+        if (e) e.stopPropagation();
+
+        const chave = chaveDiaFechado(dataStr, contaId);
+        const jaFechado = !!diasFechados[chave];
+
+        if (jaFechado && !window.confirm(`Deseja reabrir o dia ${formatDateBR(dataStr)}${contaId ? ' desta conta bancária' : ''}?`)) return;
+
+        updateDiasFechados(prev => ({
+          ...prev,
+          [chave]: !prev[chave]
+        }));
+      }
       function toggleMesFechado(compStr, e) { if (e) e.stopPropagation(); const jaFechado = !!mesesFechados[compStr]; if (jaFechado && !window.confirm(`Deseja reabrir o mês ${formatMonthLabel(compStr)}?`)) return; updateMesesFechados(prev => ({ ...prev, [compStr]: !prev[compStr] })); }
       
       function openFecharFaturaModal(comp) {
@@ -2201,12 +2225,15 @@
               ),
 
               calendarioExpandido && h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 24 } }, calendarioDiasDoMes.map(d => {
-                const fechado = isDiaFechado(d.data); return h('div', { key: d.data, style: { background: '#fff', border: '1px solid var(--line)', borderRadius: 5, padding: 8, fontSize: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', marginBottom: 4 } }, h('span', null, formatDateBR(d.data)), h('button', { type: 'button', className: 'action-btn', style: { padding: 2, background: fechado ? 'var(--amber-soft)' : '#fff', borderColor: fechado ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => toggleDiaFechado(d.data, e) }, fechado ? h(Lock, { size: 10, color: 'var(--amber)' }) : h(Unlock, { size: 10, color: 'var(--green)' }))), h('div', { style: { color: 'var(--red)', fontSize: 11 } }, `(-) ${showMoney(d.debitos)}`), h('div', { style: { color: 'var(--green)', fontSize: 11 } }, `(+) ${showMoney(d.cred)}`), h('div', { className: 'num', style: { fontWeight: 'bold', marginTop: 4, borderTop: '1px solid var(--line)', paddingTop: 2 } }, `Saldo: ${showMoney(d.saldo)}`));
+                const fechado = isDiaFechado(d.data, concilContaId); return h('div', { key: d.data, style: { background: '#fff', border: '1px solid var(--line)', borderRadius: 5, padding: 8, fontSize: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', marginBottom: 4 } }, h('span', null, formatDateBR(d.data)), h('button', { type: 'button', className: 'action-btn', style: { padding: 2, background: fechado ? 'var(--amber-soft)' : '#fff', borderColor: fechado ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => toggleDiaFechado(d.data, e, concilContaId) }, fechado ? h(Lock, { size: 10, color: 'var(--amber)' }) : h(Unlock, { size: 10, color: 'var(--green)' }))), h('div', { style: { color: 'var(--red)', fontSize: 11 } }, `(-) ${showMoney(d.debitos)}`), h('div', { style: { color: 'var(--green)', fontSize: 11 } }, `(+) ${showMoney(d.cred)}`), h('div', { className: 'num', style: { fontWeight: 'bold', marginTop: 4, borderTop: '1px solid var(--line)', paddingTop: 2 } }, `Saldo: ${showMoney(d.saldo)}`));
               })),
 
-              h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottom: '2px solid var(--line)', paddingBottom: 8 } }, "Movimentação Detalhada do Período Filtrado"),
+              h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottom: '2px solid var(--line)', paddingBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' } },
+                h('span', null, "Movimentação Detalhada do Período Filtrado"),
+                h('span', { style: { fontSize: 11, color: 'var(--ink-soft)', fontWeight: '500' } }, "🔒 Fechamento diário individual por conta")
+              ),
 
-              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e) }, isDiaFechado(grupo.data) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { className: 'concil-day-table', style: { marginTop: 0 } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'center' }, "Conciliado"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('a', { href: '#', style: { color: 'var(--green)', fontWeight: 'bold', textDecoration: 'underline', fontSize: '12px' }, onClick: (e) => { e.preventDefault(); setConcilEditModal({ open: true, item }); } }, "🔗 Abrir / Alterar")), h('td', { className: 'center' }, item.conciliado ? h(CheckCircle, { color: 'var(--green)', size: 16 }) : '-'), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))
+              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data, concilContaId) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e, concilContaId) }, isDiaFechado(grupo.data, concilContaId) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { className: 'concil-day-table', style: { marginTop: 0 } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'center' }, "Conciliado"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('a', { href: '#', style: { color: 'var(--green)', fontWeight: 'bold', textDecoration: 'underline', fontSize: '12px' }, onClick: (e) => { e.preventDefault(); setConcilEditModal({ open: true, item }); } }, "🔗 Abrir / Alterar")), h('td', { className: 'center' }, item.conciliado ? h(CheckCircle, { color: 'var(--green)', size: 16 }) : '-'), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))
             ),
 
             concilTab === "ofx" && h(React.Fragment, null, 
