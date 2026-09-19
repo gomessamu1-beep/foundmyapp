@@ -1216,28 +1216,19 @@
       const ofxFiltrado = useMemo(() => {
         const ini = normalizarDataOfx(concilDataIniAplicada);
         const fim = normalizarDataOfx(concilDataFimAplicada);
-        const contaIdSelecionada = String(concilContaId || '');
-
+        const contaIdSelecionada = String(concilContaId || '').trim();
         if (!contaIdSelecionada) return [];
 
-        /*
-         * REGRA DEFINITIVA DO OFX:
-         * Depois que o arquivo é importado, a conta do lançamento é definida
-         * EXCLUSIVAMENTE pela conta selecionada no momento da importação.
-         *
-         * Não usamos Banco, Agência, Número da Conta, bancoCode, agenciaOfx,
-         * contaOfx ou qualquer outro conteúdo do arquivo para decidir em qual
-         * conta o lançamento deve aparecer.
-         */
+        // O OFX pertence EXCLUSIVAMENTE à conta em que foi importado.
+        // Não usamos banco, agência, número da conta, contaNome ou dados do arquivo para escolher a conta.
         return ofxData.filter(o => {
-          if (String(o?.contaId || '') !== contaIdSelecionada) return false;
+          const idVinculado = String(o?.contaId || '').trim();
+          if (!idVinculado || idVinculado !== contaIdSelecionada) return false;
 
-          // Sem filtro aplicado, mostra todos os OFX importados para a conta.
           if (!concilDataIniAplicada && !concilDataFimAplicada) return true;
 
           const dataOfx = normalizarDataOfx(o?.data);
           if (!/^\d{4}-\d{2}-\d{2}$/.test(dataOfx)) return true;
-
           return (!ini || dataOfx >= ini) && (!fim || dataOfx <= fim);
         }).slice().sort((a, b) => {
           const da = normalizarDataOfx(a?.data);
@@ -2140,6 +2131,14 @@
               h('button', { className: concilTab === "ofx" ? "active" : "", onClick: () => setConcilTab("ofx") }, "Conciliação OFX")
             ),
 
+            concilTab === "ofx" && h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 14px 0', padding: '12px 14px', background: '#FAF8F2', border: '2px solid var(--line)', borderRadius: 8 } },
+              h('strong', { style: { fontSize: 13 } }, 'AÇÕES DO OFX:'),
+              h('input', { type: 'file', accept: '.ofx', ref: ofxInputRef, style: { display: 'none' }, onChange: handleOfxUpload }),
+              h('button', { type: 'button', className: 'primary', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária antes de importar o OFX.'); ofxInputRef.current?.click(); } }, '📁 Importar OFX'),
+              h('button', { type: 'button', className: 'danger', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária antes de excluir movimentações OFX.'); setOfxExcluirDia(ofxFiltrado[0]?.data || concilDataIniAplicada || currentDate()); setOfxExcluirDiaModalOpen(true); } }, h(Trash2, { size: 14 }), ' Excluir dia do OFX'),
+              h('button', { type: 'button', className: 'action-btn', onClick: () => setOfxArquivosModalOpen(true) }, h(FileText, { size: 14 }), ` Arquivos OFX (${ofxArquivosImportados.length})`)
+            ),
+
             h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(BancoLogo, { code: (() => { const c = contasBancarias.find(x => String(x.id) === String(concilContaId)); return c?.bancoCode || c?.banco || c?.nome; })(), logoData: contasBancarias.find(x => String(x.id) === String(concilContaId))?.logoData || '', size: 38 }), h('select', { value: concilContaId, style: { flex: 1 }, onChange: e => { setConcilContaId(e.target.value); setOfxSelectedIds([]); setSysSelectedIds([]); } }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome))))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => { if (!concilContaId) { alert('Selecione a Conta Bancária no filtro antes de consultar.'); return; } if (!concilDataIni || !concilDataFim) { alert('Informe a Data Inicial e a Data Final.'); return; } if (concilDataIni > concilDataFim) { alert('A Data Inicial não pode ser maior que a Data Final.'); return; } setConcilDataIniAplicada(String(concilDataIni).substring(0,10)); setConcilDataFimAplicada(String(concilDataFim).substring(0,10)); setConcilExibido(true); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Filtrar Período")),
 
             concilExibido && concilTab === "extrato" && h(React.Fragment, null,
@@ -2189,16 +2188,19 @@
 
             concilTab === "ofx" && h(React.Fragment, null, 
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, background: '#FAF8F2', padding: '12px', border: '1px solid var(--line)', borderRadius: '6px', flexWrap: 'wrap', gap: 10 } },
-                h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' } },
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+                  h('div', { style: { fontSize: 12, fontWeight: 'bold', color: 'var(--ink-soft)', marginRight: 4 } }, 'AÇÕES OFX:'),
                   h('input', { type: 'file', accept: '.ofx', ref: ofxInputRef, style: { display: 'none' }, onChange: handleOfxUpload }),
-                  h('button', { type: 'button', className: 'action-btn', onClick: () => ofxInputRef.current && ofxInputRef.current.click() }, "📁 Importar arquivo .OFX"),
-                  h('button', { type: 'button', className: 'danger', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária no filtro antes de excluir movimentações OFX.'); setOfxExcluirDia(ofxFiltrado.length && ofxFiltrado[0].data ? ofxFiltrado[0].data : concilDataIniAplicada); setOfxExcluirDiaModalOpen(true); }, title: 'Excluir somente as movimentações OFX de um dia da conta selecionada' }, h(Trash2, { size: 14 }), " Excluir dia do OFX"),
-                  ofxFiltrado.length > 0 && h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, `${ofxFiltrado.length} registros da conta selecionada.`)
-                ), h('button', { type: 'button', className: 'primary', onClick: handleConciliarMatch, disabled: !ofxSelectedIds.length || !sysSelectedIds.length }, h(CheckCircle, {size: 16}), " Confirmar Conciliação"),
-                h('button', { type: 'button', className: 'danger', onClick: removerConciliacoesSelecionadas, disabled: !(ofxData.some(o => ofxSelectedIds.includes(o.id) && o.conciliado) || movimentacoesConciliacao.some(m => sysSelectedIds.includes(m.id) && m.conciliado)), title: 'Remove a conciliação dos lançamentos selecionados, sem excluir os lançamentos' }, h(Trash2, { size: 14 }), " Remover Conciliação")
+                  h('button', { type: 'button', className: 'primary', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária no filtro antes de importar o OFX.'); if(ofxInputRef.current) ofxInputRef.current.click(); }, title: 'Importar um arquivo OFX para a conta bancária selecionada' }, '📁 Importar OFX'),
+                  h('button', { type: 'button', className: 'danger', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária no filtro antes de excluir movimentações OFX.'); setOfxExcluirDia(ofxFiltrado.length && ofxFiltrado[0].data ? ofxFiltrado[0].data : concilDataIniAplicada); setOfxExcluirDiaModalOpen(true); }, title: 'Excluir somente as movimentações OFX de um dia da conta selecionada' }, h(Trash2, { size: 14 }), ' Excluir dia do OFX'),
+                  h('button', { type: 'button', className: 'action-btn', onClick: () => setOfxArquivosModalOpen(true), title: 'Visualizar os arquivos OFX importados para a conta selecionada', style: { minWidth: 170 } }, h(FileText, { size: 14 }), ` Arquivos OFX (${ofxArquivosImportados.length})`),
+                  ofxFiltrado.length > 0 && h('span', { style: { fontSize: 13, color: 'var(--ink-soft)', marginLeft: 4 } }, `${ofxFiltrado.length} registros da conta selecionada.`)
+                ),
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+                  h('button', { type: 'button', className: 'primary', onClick: handleConciliarMatch, disabled: !ofxSelectedIds.length || !sysSelectedIds.length }, h(CheckCircle, {size: 16}), ' Confirmar Conciliação'),
+                  h('button', { type: 'button', className: 'danger', onClick: removerConciliacoesSelecionadas, disabled: !(ofxData.some(o => ofxSelectedIds.includes(o.id) && o.conciliado) || movimentacoesConciliacao.some(m => sysSelectedIds.includes(m.id) && m.conciliado)), title: 'Remove a conciliação dos lançamentos selecionados, sem excluir os lançamentos' }, h(Trash2, { size: 14 }), ' Remover Conciliação')
+                )
               ),
-              
-              h('button', { type: 'button', className: 'action-btn', onClick: () => setOfxArquivosModalOpen(true), title: 'Visualizar os arquivos OFX importados para a conta selecionada', style: { minWidth: 170 } }, h(FileText, { size: 14 }), ` Arquivos OFX (${ofxArquivosImportados.length})`),
 
               h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' } },
                 
