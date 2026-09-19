@@ -1220,48 +1220,19 @@
 
         if (!contaIdSelecionada) return [];
 
-        const contaSelecionada = contasBancarias.find(c => String(c.id) === contaIdSelecionada);
-        const nomeContaSelecionada = String(contaSelecionada?.nome || '').trim();
-
+        /*
+         * REGRA DEFINITIVA DO OFX:
+         * Depois que o arquivo é importado, a conta do lançamento é definida
+         * EXCLUSIVAMENTE pela conta selecionada no momento da importação.
+         *
+         * Não usamos Banco, Agência, Número da Conta, bancoCode, agenciaOfx,
+         * contaOfx ou qualquer outro conteúdo do arquivo para decidir em qual
+         * conta o lançamento deve aparecer.
+         */
         return ofxData.filter(o => {
-          /*
-           * REGRA DA CONCILIAÇÃO:
-           * O OFX é validado contra Banco/Agência/Conta SOMENTE no momento
-           * da importação. Depois de importado, a tela usa o vínculo salvo
-           * no lançamento (contaId). Não fazemos nova validação bancária aqui.
-           *
-           * Para dados antigos, aceitamos também contaNome. Isso evita que
-           * um OFX legítimo desapareça apenas porque foi gravado por uma
-           * versão anterior do sistema sem contaId.
-           */
-          const idOk = String(o?.contaId || '') === contaIdSelecionada;
-          const nomeOk = !!(nomeContaSelecionada && String(o?.contaNome || '').trim() === nomeContaSelecionada);
-          let pertence = idOk || nomeOk;
+          if (String(o?.contaId || '') !== contaIdSelecionada) return false;
 
-          // Último fallback exclusivamente para registros legados sem contaId
-          // e sem contaNome: usa os dados bancários que já estavam no registro.
-          if (!pertence && !o?.contaId && !o?.contaNome && contaSelecionada) {
-            const bancoSistema = normalizeBankCode(contaSelecionada.bancoCode || contaSelecionada.banco);
-            const bancoOfx = normalizeBankCode(o?.bancoCode || o?.bancoCodeOfx || o?.bancoOfx);
-            const agenciaSistema = normalizeAccountNumber(contaSelecionada.agencia || contaSelecionada.agenciaBancaria);
-            const agenciaOfx = normalizeAccountNumber(o?.agenciaOfx || o?.agencia || o?.branchId);
-            const contaSistema = normalizeAccountNumber(contaSelecionada.numero || contaSelecionada.conta);
-            const contaOfx = normalizeAccountNumber(o?.contaOfx || o?.acctId || o?.conta);
-
-            pertence =
-              !!(bancoOfx || agenciaOfx || contaOfx) &&
-              (!bancoOfx || !bancoSistema || bancoOfx === bancoSistema) &&
-              (!agenciaOfx || !agenciaSistema || agenciaOfx === agenciaSistema) &&
-              (!contaOfx || !contaSistema ||
-                contaOfx === contaSistema ||
-                contaOfx.endsWith(contaSistema) ||
-                contaSistema.endsWith(contaOfx));
-          }
-
-          if (!pertence) return false;
-
-          // Se o usuário ainda não clicou em Filtrar Período, mostramos todos
-          // os OFX da conta. Depois do clique, aplicamos exclusivamente o período.
+          // Sem filtro aplicado, mostra todos os OFX importados para a conta.
           if (!concilDataIniAplicada && !concilDataFimAplicada) return true;
 
           const dataOfx = normalizarDataOfx(o?.data);
@@ -1273,8 +1244,9 @@
           const db = normalizarDataOfx(b?.data);
           return da.localeCompare(db) || (a?.ordemImportacao || 0) - (b?.ordemImportacao || 0);
         });
-      }, [ofxData, concilContaId, concilDataIniAplicada, concilDataFimAplicada, contasBancarias]);
-      const ofxSelecionadoUnico=ofxSelectedIds.length===1?ofxData.find(o=>o.id===ofxSelectedIds[0]&&ofxPertenceContaSelecionada(o,concilContaId)):null;
+      }, [ofxData, concilContaId, concilDataIniAplicada, concilDataFimAplicada]);
+      const ofxSelecionadoUnico=ofxSelectedIds.length===1?ofxData.find(o=>o.id===ofxSelectedIds[0]&&String(o?.contaId || '')===String(concilContaId || '')):null;
+
 
       function handleOfxUpload(e){
         if(!concilContaId){ alert('Selecione a Conta Bancária no filtro antes de importar o arquivo OFX.'); return; }
@@ -1288,31 +1260,10 @@
           const parsed = parseOFX(evt.target.result, arquivoId, file.name);
           if(!parsed.transactions.length) return alert('O arquivo OFX não possui lançamentos válidos.');
 
+          // A conta do OFX é definida exclusivamente pela conta selecionada
+          // na tela. O conteúdo bancário do arquivo não é usado para bloquear
+          // nem para redirecionar a importação.
           const bancoSistema = normalizeBankCode(conta?.bancoCode);
-          const agenciaSistema = normalizeAccountNumber(conta?.agencia);
-          const contaSistema = normalizeAccountNumber(conta?.numero);
-
-          const inconsistencias = [];
-          const metadadosValidacao = parsed.statementsMeta.map((m, i) => {
-            const bancoOfx = normalizeBankCode(m.bancoCodeOfx || m.bancoOfx);
-            const agenciaOfx = normalizeAccountNumber(m.agenciaOfx);
-            const contaOfx = normalizeAccountNumber(m.contaOfx);
-            const bancoOk = !bancoOfx || !bancoSistema || bancoOfx === bancoSistema;
-            const agenciaOk = !agenciaOfx || !agenciaSistema || agenciaOfx === agenciaSistema;
-            const contaOk = !contaOfx || !contaSistema || contaOfx === contaSistema || contaOfx.endsWith(contaSistema) || contaSistema.endsWith(contaOfx);
-            if(!bancoOk) inconsistencias.push(`Banco: OFX ${bancoOfx} x sistema ${bancoSistema}`);
-            if(!agenciaOk) inconsistencias.push(`Agência: OFX ${agenciaOfx} x sistema ${agenciaSistema}`);
-            if(!contaOk) inconsistencias.push(`Conta: OFX ${contaOfx} x sistema ${contaSistema}`);
-            return { ...m, bancoOk, agenciaOk, contaOk };
-          });
-
-          const algumDadoBancario = parsed.statementsMeta.some(m => m.bancoCodeOfx || m.agenciaOfx || m.contaOfx);
-          if(!algumDadoBancario){
-            return alert('Importação bloqueada: o arquivo OFX não trouxe número do banco, agência ou conta suficientes para validar a conta selecionada.');
-          }
-          if(inconsistencias.length){
-            return alert(`Importação bloqueada. O arquivo OFX não corresponde à conta selecionada.\n\n${[...new Set(inconsistencias)].join('\n')}`);
-          }
 
           const transacoes = parsed.transactions.map(t => ({
             ...t,
