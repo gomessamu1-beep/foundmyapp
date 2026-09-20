@@ -166,7 +166,13 @@
       const parts = yyyymm.split("-").map(Number); const d = new Date(parts[0], parts[1] - 1, 1); const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }); return label.charAt(0).toUpperCase() + label.slice(1);
     }
     function formatDateBR(dateString) {
-      if (!dateString) return ""; const parts = dateString.split("-"); return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      if (dateString == null || dateString === "") return "";
+      const s = String(dateString).trim();
+      const m = s.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})/);
+      if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+      const br = s.match(/^(\d{2})[-\/.](\d{2})[-\/.](\d{4})/);
+      if (br) return `${br[1]}/${br[2]}/${br[3]}`;
+      return s;
     }
     function formatBRL(v) {
       return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -1207,48 +1213,107 @@
       const totalDebitosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorDebito, 0);
       const totalCreditosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorCredito, 0);
       const saldoFinalConcil = movimentacoesConciliacao.length ? movimentacoesConciliacao[movimentacoesConciliacao.length - 1].saldo : 0;
+      // Converte qualquer data usada pelo OFX para AAAA-MM-DD.
+      // O OFX normalmente traz DTPOSTED como AAAAMMDDHHMMSS..., mas registros
+      // antigos podem estar salvos em ISO ou no formato brasileiro.
       const normalizarDataOfx = (valor) => {
-        const s = String(valor || '').trim();
-        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
-        const m = s.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})$/);
-        return m ? `${m[3]}-${m[2]}-${m[1]}` : s.substring(0, 10);
+        if (valor == null || valor === '') return '';
+        if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+          const y = valor.getFullYear();
+          const m = String(valor.getMonth() + 1).padStart(2, '0');
+          const d = String(valor.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        }
+
+        const s = String(valor).trim();
+        if (!s) return '';
+
+        // AAAA-MM-DD / AAAA-MM-DDTHH:mm:ss / AAAA-MM-DD HH:mm:ss
+        let m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+        // AAAAMMDD ou AAAAMMDDHHMMSS / AAAAMMDD...
+        m = s.match(/(?:^|\D)(\d{4})(\d{2})(\d{2})(?:\d{2}\d{2}\d{2})?/);
+        if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+        // DD/MM/AAAA, DD-MM-AAAA, DD.MM.AAAA, inclusive com horário depois
+        m = s.match(/(\d{2})[\/.-](\d{2})[\/.-](\d{4})/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+
+        // AAAA/MM/DD ou AAAA.MM.DD
+        m = s.match(/(\d{4})[\/.-](\d{2})[\/.-](\d{2})/);
+        if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+
+        return '';
       };
-      // O filtro do OFX usa SOMENTE o vínculo criado no momento da importação.
-      // Não consulta banco, agência, número da conta, contaNome ou qualquer dado do arquivo
-      // para decidir a qual conta o lançamento pertence.
+
+      const obterDataMovimentoOfx = (o) => {
+        if (!o) return '';
+        const candidatos = [
+          o.data,
+          o.dataMovimento,
+          o.data_movimento,
+          o.date,
+          o.dtPosted,
+          o.DTPOSTED,
+          o.dataPostagem,
+          o.dataLancamento,
+          o.dataLancamentoOfx
+        ];
+        for (const valor of candidatos) {
+          const data = normalizarDataOfx(valor);
+          if (data) return data;
+        }
+        return '';
+      };
+
+      // DIAGNÓSTICO E FILTRO OFX: a consulta é feita localmente sobre os registros já salvos.
+      const ofxConsultaDiagnostico = useMemo(() => {
+        const contaIdSelecionada = String(concilContaId ?? '').trim();
+        const contaSelecionada = contasBancarias.find(c => String(c.id) === contaIdSelecionada);
+        const nomeContaSelecionada = String(contaSelecionada?.nome || '').trim();
+        const ini = normalizarDataOfx(concilDataIniAplicada);
+        const fim = normalizarDataOfx(concilDataFimAplicada);
+        const todos = Array.isArray(ofxData) ? ofxData : [];
+        const daConta = todos.filter(o => {
+          const id = String(o?.contaId ?? '').trim();
+          if (id === contaIdSelecionada) return true;
+          return !id && nomeContaSelecionada && String(o?.contaNome || '').trim() === nomeContaSelecionada;
+        });
+        const comData = daConta.map(o => ({ item: o, data: obterDataMovimentoOfx(o) })).filter(x => x.data);
+        const semData = daConta.filter(o => !obterDataMovimentoOfx(o));
+        const datas = [...new Set(comData.map(x => x.data))].sort();
+        const noPeriodo = comData.filter(x => (!ini || x.data >= ini) && (!fim || x.data <= fim));
+        return { conta: daConta.length, comData: comData.length, semData: semData.length, noPeriodo: noPeriodo.length, ini, fim, primeiraData: datas[0] || '', ultimaData: datas[datas.length - 1] || '' };
+      }, [ofxData, concilContaId, concilDataIniAplicada, concilDataFimAplicada, contasBancarias]);
+
       const ofxFiltrado = useMemo(() => {
         const contaIdSelecionada = String(concilContaId ?? '').trim();
         if (!contaIdSelecionada) return [];
 
-        const ini = concilDataIniAplicada ? normalizarDataOfx(concilDataIniAplicada) : '';
-        const fim = concilDataFimAplicada ? normalizarDataOfx(concilDataFimAplicada) : '';
+        const contaSelecionada = contasBancarias.find(c => String(c.id) === contaIdSelecionada);
+        const nomeContaSelecionada = String(contaSelecionada?.nome || '').trim();
+        const ini = normalizarDataOfx(concilDataIniAplicada);
+        const fim = normalizarDataOfx(concilDataFimAplicada);
 
-        return (Array.isArray(ofxData) ? ofxData : []).filter(o => {
-          // Novos registros usam contaId. Os nomes abaixo são apenas compatibilidade
-          // com eventuais registros salvos por versões intermediárias do sistema.
-          const idVinculado = String(
-            o?.contaId ?? o?.conta_id ?? o?.contaBancariaId ?? o?.conta_bancaria_id ?? ''
-          ).trim();
-
-          if (!idVinculado || idVinculado !== contaIdSelecionada) return false;
-
-          // Se não houver período aplicado, mostra todos os OFXs importados para a conta.
-          if (!ini && !fim) return true;
-
-          const dataOfx = normalizarDataOfx(o?.data);
-
-          // OFX sem data válida não deve desaparecer por causa do filtro de período.
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(dataOfx)) return true;
-
-          if (ini && dataOfx < ini) return false;
-          if (fim && dataOfx > fim) return false;
-          return true;
-        }).slice().sort((a, b) => {
-          const da = normalizarDataOfx(a?.data);
-          const db = normalizarDataOfx(b?.data);
-          return da.localeCompare(db) || Number(a?.ordemImportacao || 0) - Number(b?.ordemImportacao || 0);
-        });
-      }, [ofxData, concilContaId, concilDataIniAplicada, concilDataFimAplicada]);
+        return (Array.isArray(ofxData) ? ofxData : [])
+          .filter(o => {
+            const id = String(o?.contaId ?? '').trim();
+            if (id === contaIdSelecionada) return true;
+            return !id && nomeContaSelecionada && String(o?.contaNome || '').trim() === nomeContaSelecionada;
+          })
+          .filter(o => {
+            const dataOfx = obterDataMovimentoOfx(o);
+            if (!dataOfx) return false;
+            return (!ini || dataOfx >= ini) && (!fim || dataOfx <= fim);
+          })
+          .slice()
+          .sort((a, b) => {
+            const da = obterDataMovimentoOfx(a);
+            const db = obterDataMovimentoOfx(b);
+            return da.localeCompare(db) || Number(a?.ordemImportacao || 0) - Number(b?.ordemImportacao || 0);
+          });
+      }, [ofxData, concilContaId, concilDataIniAplicada, concilDataFimAplicada, contasBancarias]);
       const ofxSelecionadoUnico=ofxSelectedIds.length===1?ofxData.find(o=>o.id===ofxSelectedIds[0]&&String(o?.contaId || '')===String(concilContaId || '')):null;
 
 
@@ -2154,6 +2219,10 @@
             ),
 
             h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(BancoLogo, { code: (() => { const c = contasBancarias.find(x => String(x.id) === String(concilContaId)); return c?.bancoCode || c?.banco || c?.nome; })(), logoData: contasBancarias.find(x => String(x.id) === String(concilContaId))?.logoData || '', size: 38 }), h('select', { value: concilContaId, style: { flex: 1 }, onChange: e => { setConcilContaId(e.target.value); setOfxSelectedIds([]); setSysSelectedIds([]); } }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome))))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => { if (!concilContaId) { alert('Selecione a Conta Bancária no filtro antes de consultar.'); return; } if (!concilDataIni || !concilDataFim) { alert('Informe a Data Inicial e a Data Final.'); return; } if (concilDataIni > concilDataFim) { alert('A Data Inicial não pode ser maior que a Data Final.'); return; } setConcilDataIniAplicada(String(concilDataIni).substring(0,10)); setConcilDataFimAplicada(String(concilDataFim).substring(0,10)); setConcilExibido(true); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Filtrar Período")),
+            h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginBottom: 16, padding: '8px 10px', background: '#F7F5EF', border: '1px solid var(--line)', borderRadius: 5 } },
+              `Consulta aplicada: ${ofxConsultaDiagnostico.ini || '-'} até ${ofxConsultaDiagnostico.fim || '-'} | ${ofxConsultaDiagnostico.conta} registro(s) da conta | ${ofxConsultaDiagnostico.comData} com data | ${ofxConsultaDiagnostico.noPeriodo} no período` +
+              (ofxConsultaDiagnostico.primeiraData ? ` | datas encontradas: ${ofxConsultaDiagnostico.primeiraData} a ${ofxConsultaDiagnostico.ultimaData}` : ' | nenhuma data reconhecida nos registros')
+            ),
 
             concilExibido && concilTab === "extrato" && h(React.Fragment, null,
               h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 20, marginBottom: 20 } },
@@ -2219,19 +2288,35 @@
               h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' } },
                 
                 h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', background: '#fff' } },
-                   h('div', { style: { padding: '12px', borderBottom: '1px solid var(--line)', fontWeight: 'bold', background: 'var(--paper)', borderRadius: '6px 6px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 } }, h('span', null, "Extrato OFX (Banco)"), h('span', { style: { fontSize: 11, color: 'var(--ink-soft)', fontWeight: '500' } }, `${ofxFiltrado.length} lançamento(s)`)), 
+                   h('div', { style: { padding: '12px', borderBottom: '1px solid var(--line)', fontWeight: 'bold', background: 'var(--paper)', borderRadius: '6px 6px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 } }, h('span', null, "Extrato OFX (Banco)"), h('span', { style: { fontSize: 11, color: 'var(--green)', fontWeight: '700' } }, `${ofxFiltrado.length} lançamento(s) encontrados`)), 
                    h('div', { style: { maxHeight: '600px', overflowY: 'auto', padding: '0 8px' } },
                       ofxFiltrado.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, "Nenhuma movimentação OFX importada para o período.") :
-                      h('table', null, 
-                        h('thead', null, h('tr', null, h('th', { style: { width: 42, textAlign: 'center' } }, h('input', { type: 'checkbox', title: 'Selecionar todos', checked: ofxFiltrado.length > 0 && ofxFiltrado.every(o=>ofxSelectedIds.includes(o.id)), onChange: toggleSelectAllOfx })), h('th', { style: { width: 72, textAlign: 'center' } }, "Conciliado"), h('th', null, "Data"), h('th', null, "Descrição"), h('th', { className: 'right' }, "Valor"))),
-                        h('tbody', null, ofxFiltrado.map(o => h('tr', { key: o.id, style: { opacity: o.conciliado ? 0.65 : 1 } }, 
-                          h('td', { style: { width: 42, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: ofxSelectedIds.includes(o.id), onChange: () => toggleOfxSelect(o.id), title: ofxSelectedIds.includes(o.id) ? 'Desmarcar lançamento' : 'Selecionar lançamento' })),
-                          h('td', { style: { width: 72, textAlign: 'center' } }, o.conciliado ? h(CheckCircle, { color: 'var(--green)', size: 16, title: 'Conciliado' }) : h('span', { style: { color: 'var(--ink-soft)' } }, '—')),
-                          h('td', null, formatDateBR(o.data)),
-                          h('td', null, o.descricao),
-                          h('td', { className: 'right num', style: { color: o.valor < 0 ? 'var(--red)' : 'var(--green)' } }, showMoney(Math.abs(o.valor)))
+                      h('table', { style: { width: '100%', tableLayout: 'fixed' } },
+                        h('thead', null,
+                          h('tr', null,
+                            h('th', { style: { width: 42, textAlign: 'center' } }, h('input', { type: 'checkbox', title: 'Selecionar todos', checked: ofxFiltrado.length > 0 && ofxFiltrado.every(o => ofxSelectedIds.includes(o.id)), onChange: toggleSelectAllOfx })),
+                            h('th', { style: { width: 82, textAlign: 'center' } }, 'Conciliado'),
+                            h('th', { style: { width: 100 } }, 'Data'),
+                            h('th', null, 'Descrição'),
+                            h('th', { className: 'right', style: { width: 130 } }, 'Valor')
                           )
-                        )))
+                        ),
+                        h('tbody', null,
+                          ofxFiltrado.map((o, index) => {
+                            const id = o && o.id != null ? String(o.id) : `ofx-${index}`;
+                            const dataLinha = obterDataMovimentoOfx(o) || (o && o.data) || '';
+                            const descricaoLinha = o && (o.descricao || o.memo || o.nome) ? String(o.descricao || o.memo || o.nome) : '-';
+                            const valorLinha = Number(o && o.valor != null ? o.valor : 0);
+                            const selecionado = ofxSelectedIds.includes(o.id);
+                            return h('tr', { key: id, style: { opacity: o && o.conciliado ? 0.65 : 1 } },
+                              h('td', { style: { width: 42, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: selecionado, onChange: () => toggleOfxSelect(o.id), title: selecionado ? 'Desmarcar lançamento' : 'Selecionar lançamento' })),
+                              h('td', { style: { width: 82, textAlign: 'center' } }, o && o.conciliado ? h(CheckCircle, { color: 'var(--green)', size: 16, title: 'Conciliado' }) : h('span', { style: { color: 'var(--ink-soft)' } }, '—')),
+                              h('td', { style: { whiteSpace: 'nowrap' } }, formatDateBR(dataLinha)),
+                              h('td', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: descricaoLinha }, descricaoLinha),
+                              h('td', { className: 'right num', style: { color: valorLinha < 0 ? 'var(--red)' : 'var(--green)' } }, showMoney(Math.abs(valorLinha)))
+                            );
+                          })
+                        )
                       )
                    )
                 ),
@@ -2590,7 +2675,7 @@
           )
         )
 
-      );
+      ));
     }
 
     const container = document.getElementById('root');
