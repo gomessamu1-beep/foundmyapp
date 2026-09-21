@@ -1000,9 +1000,9 @@
               const transId = atual?.transferenciaId;
               updateContasReceber(prev => prev.map(p => {
                 if (p.id !== editingId && !(transId && p.transferenciaId === transId)) return p;
-                return { ...p, ...novoRegistro, id: p.id, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, transferenciaId: p.transferenciaId, isLancamentoDireto: p.isLancamentoDireto };
+                return { ...p, ...novoRegistro, id: p.id, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.isLancamentoDireto ? novoRegistro.dataCompra : p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, transferenciaId: p.transferenciaId, isLancamentoDireto: p.isLancamentoDireto };
               }));
-              if (transId) updateContasPagar(prev => prev.map(p => p.transferenciaId === transId ? { ...p, descricao: novoRegistro.descricao, observacao: novoRegistro.observacao, total: novoRegistro.total, dataCompra: novoRegistro.dataCompra, inicio: novoRegistro.inicio, parcelas: novoRegistro.parcelas, parcelaInicial: novoRegistro.parcelaInicial, recorrente: novoRegistro.recorrente, categoriaId: novoRegistro.categoriaId, subcategoriaId: novoRegistro.subcategoriaId } : p));
+              if (transId) updateContasPagar(prev => prev.map(p => p.transferenciaId === transId ? { ...p, descricao: novoRegistro.descricao, observacao: novoRegistro.observacao, total: novoRegistro.total, dataCompra: novoRegistro.dataCompra, dataBaixa: p.isLancamentoDireto ? novoRegistro.dataCompra : p.dataBaixa, inicio: novoRegistro.inicio, parcelas: novoRegistro.parcelas, parcelaInicial: novoRegistro.parcelaInicial, recorrente: novoRegistro.recorrente, categoriaId: novoRegistro.categoriaId, subcategoriaId: novoRegistro.subcategoriaId } : p));
               setModalOpen(false);
             } else { updateContasReceber(prev => [...prev, novoRegistro]); resetFormAfterSave(); }
         }
@@ -1012,9 +1012,9 @@
               const transId = atual?.transferenciaId;
               updateContasPagar(prev => prev.map(p => {
                 if (p.id !== editingId && !(transId && p.transferenciaId === transId)) return p;
-                return { ...p, ...novoRegistro, id: p.id, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, transferenciaId: p.transferenciaId, isLancamentoDireto: p.isLancamentoDireto };
+                return { ...p, ...novoRegistro, id: p.id, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.isLancamentoDireto ? novoRegistro.dataCompra : p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, transferenciaId: p.transferenciaId, isLancamentoDireto: p.isLancamentoDireto };
               }));
-              if (transId) updateContasReceber(prev => prev.map(p => p.transferenciaId === transId ? { ...p, descricao: novoRegistro.descricao, observacao: novoRegistro.observacao, total: novoRegistro.total, dataCompra: novoRegistro.dataCompra, inicio: novoRegistro.inicio, parcelas: novoRegistro.parcelas, parcelaInicial: novoRegistro.parcelaInicial, recorrente: novoRegistro.recorrente, categoriaId: novoRegistro.categoriaId, subcategoriaId: novoRegistro.subcategoriaId } : p));
+              if (transId) updateContasReceber(prev => prev.map(p => p.transferenciaId === transId ? { ...p, descricao: novoRegistro.descricao, observacao: novoRegistro.observacao, total: novoRegistro.total, dataCompra: novoRegistro.dataCompra, dataBaixa: p.isLancamentoDireto ? novoRegistro.dataCompra : p.dataBaixa, inicio: novoRegistro.inicio, parcelas: novoRegistro.parcelas, parcelaInicial: novoRegistro.parcelaInicial, recorrente: novoRegistro.recorrente, categoriaId: novoRegistro.categoriaId, subcategoriaId: novoRegistro.subcategoriaId } : p));
               setModalOpen(false);
             } else { updateContasPagar(prev => [...prev, novoRegistro]); resetFormAfterSave(); }
         }
