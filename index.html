@@ -974,9 +974,6 @@
             if (isFaturaFechada(faturaMes) && !isCorrigindoFaltaDeCartao) return setFormError(`A fatura inicial deste lançamento (${formatMonthLabel(faturaMes)}) está fechada. Reabra-a para poder editar.`);
         }
 
-        if (!ehLancamentoDiretoEdicao && isDiaFechado(dataLancamento)) return setFormError("Este dia está fechado.");
-        if (!ehLancamentoDiretoEdicao && lancamentoTab !== "cartao" && isMesFechado(faturaMes)) return setFormError("Mês de competência fechado.");
-
         const total = parseValorInput(valorTotal); const n = parseInt(parcelas, 10); const atual = parseInt(parcelaAtual, 10);
         
         const cat = getCategoria(categoriaId);
@@ -1044,9 +1041,6 @@
         }
 
         const faturaMes = lrData.substring(0, 7);
-        if (isDiaFechado(lrData) || isMesFechado(faturaMes)) {
-          return setLrError("Dia ou mês bloqueado/fechado. Abra-o para fazer o lançamento.");
-        }
 
         const transId = lrIsTransferencia ? uid() : null;
 
