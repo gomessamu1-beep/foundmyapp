@@ -1078,13 +1078,13 @@
       }
 
       function executarBaixaIndividual(type, id, bancoId, dataBaixaStr) {
-        if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
+        if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data.");
         if (type === "pagar") updateContasPagar(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); else if (type === "receber") updateContasReceber(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p));
         setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
       }
 
       function executarBaixaLote(type, bancoId, ids, dataBaixaStr) {
-        if (!bancoId || !ids || ids.length === 0 || !dataBaixaStr) return alert("Preencha todos os campos."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
+        if (!bancoId || !ids || ids.length === 0 || !dataBaixaStr) return alert("Preencha todos os campos.");
         if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchReceberIds([]); }
         setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate() });
       }
