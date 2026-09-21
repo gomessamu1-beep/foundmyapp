@@ -1683,6 +1683,27 @@
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `relatorio_${relatorioTab}_${month}.csv`; a.click();
       }
 
+      function abrirEdicaoDaConciliacao(item) {
+        const registro = item?.itemRef;
+        if (!registro || (item.tipoOrigem !== 'pagar' && item.tipoOrigem !== 'receber')) {
+          return alert('Este lançamento não pode ser alterado diretamente por esta tela.');
+        }
+        setEditingId(registro.id);
+        setDescricao(registro.descricao || '');
+        setObservacao(registro.observacao || '');
+        setValorTotal(Number(registro.total || 0).toFixed(2).replace('.', ','));
+        setValorParcelaInput(Number(registro.valorParcela || registro.total || 0).toFixed(2).replace('.', ','));
+        setDataLancamento(registro.dataCompra || currentDate());
+        setFaturaMes(registro.inicio || month);
+        setParcelas(String(registro.parcelas || 1));
+        setParcelaAtual(String(registro.parcelaInicial || 1));
+        setCategoriaId(registro.categoriaId || '');
+        setSubcategoriaId(registro.subcategoriaId || '');
+        setIsRecorrente(!!registro.recorrente);
+        setLancamentoTab(item.tipoOrigem === 'pagar' ? 'pagar' : 'receber');
+        setModalOpen(true);
+      }
+
       function exportConciliacaoExcel() {
         if (movimentacoesConciliacao.length === 0) return alert("Sem movimentações.");
         let csv = `\uFEFFData;Descrição;Observação;Tipo;Débito;Crédito;Saldo;Conciliado\n`;
@@ -2183,7 +2204,7 @@
                 h('span', { style: { fontSize: 11, color: 'var(--ink-soft)', fontWeight: '500' } }, "🔒 Fechamento diário individual por conta")
               ),
 
-              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data, concilContaId) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e, concilContaId) }, isDiaFechado(grupo.data, concilContaId) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { className: 'concil-day-table', style: { marginTop: 0, width: '100%', maxWidth: '100%' } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))
+              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data, concilContaId) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e, concilContaId) }, isDiaFechado(grupo.data, concilContaId) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { className: 'concil-day-table', style: { marginTop: 0, width: '100%', maxWidth: '100%' } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, (item.tipoOrigem === 'pagar' || item.tipoOrigem === 'receber') ? h('button', { type: 'button', className: 'action-btn', onClick: () => abrirEdicaoDaConciliacao(item), title: 'Abrir / Alterar lançamento' }, h(Pencil, { size: 13 }), " Abrir / Alterar") : '-'), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))
             ),
 
 )
