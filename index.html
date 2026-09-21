@@ -507,10 +507,22 @@
         const { data } = await supabaseClient.from('app_data').select('*').eq('user_id', userId).single();
         if (data) {
           const loadedCats = (data.categorias || []).map(c => ({ tipo: c.tipo || 'despesa', isTransferencia: !!c.isTransferencia, ...c }));
-          setPurchases(data.purchases || []); setContasPagar(data.contas_pagar || []); setContasReceber(data.contas_receber || []);
+          // Limpeza definitiva de vínculos antigos da conciliação OFX.
+          // A interface OFX foi removida; lançamentos do sistema não podem
+          // continuar presos a uma conciliação OFX criada em versões antigas.
+          const limparVinculoOfxLegado = (item) => {
+            if (!item || typeof item !== 'object') return item;
+            const { conciliado, conciliacaoId, lancamentoId, ...limpo } = item;
+            return limpo;
+          };
+          const purchasesLimpos = (data.purchases || []).map(limparVinculoOfxLegado);
+          const contasPagarLimpas = (data.contas_pagar || []).map(limparVinculoOfxLegado);
+          const contasReceberLimpas = (data.contas_receber || []).map(limparVinculoOfxLegado);
+          const faturasBaixadasLimpas = Object.fromEntries(Object.entries(data.faturas_baixadas || {}).map(([comp, baixa]) => [comp, limparVinculoOfxLegado(baixa)]));
+          setPurchases(purchasesLimpos); setContasPagar(contasPagarLimpas); setContasReceber(contasReceberLimpas);
           const contasBancariasCarregadas = data.contas_bancarias || [];
           setCartoes(data.cartoes || []); setContasBancarias(contasBancariasCarregadas); setCategorias(loadedCats);
-          setDeparaList(data.depara || []); setFaturasFechadas(data.faturas_fechadas || {}); setFaturasBaixadas(data.faturas_baixadas || {});
+          setDeparaList(data.depara || []); setFaturasFechadas(data.faturas_fechadas || {}); setFaturasBaixadas(faturasBaixadasLimpas);
           setDiasFechados(data.dias_fechados || {}); setMesesFechados(data.meses_fechados || {});
           const ofxCarregado = normalizarIdsOfx(data.ofx_dados || []).map(o => {
             if (!o.contaId && contasBancariasCarregadas.length === 1) {
@@ -888,8 +900,6 @@
         const { type, id, subId, option, purchase } = deleteModal;
         
         const transId = purchase?.transferenciaId;
-        const listaAtual=type==='purchase'?purchases:type==='pagar'?contasPagar:type==='receber'?contasReceber:[]; if(listaAtual.find(p=>p.id===id)?.conciliado)return alert('Não é permitido excluir um lançamento conciliado. Desfaça a conciliação primeiro.');
-        
         const updater = (prev) => {
           if (option === 'current') return prev.map(p => p.id === id ? { ...p, mesesExcluidos: [...(p.mesesExcluidos || []), month] } : p);
           else if (option === 'future') return prev.map(p => p.id === id ? { ...p, canceladoEm: month } : p);
@@ -924,7 +934,7 @@
 
       function handleBatchDeleteConfirm(e) {
         e.preventDefault(); if (batchConfirmText.trim().toUpperCase() !== "EXCLUIR") return alert("Digite EXCLUIR para confirmar.");
-        if (lancamentoTab === "cartao") { if(purchases.some(p=>selectedCartaoIds.includes(p.id)&&p.conciliado))return alert('Não é permitido excluir lançamentos conciliados. Desfaça a conciliação primeiro.'); updatePurchases(prev => prev.filter(p => !selectedCartaoIds.includes(p.id))); setSelectedCartaoIds([]); } else if (lancamentoTab === "pagar") { if(contasPagar.some(p=>batchPagarIds.includes(p.id)&&p.conciliado))return alert('Não é permitido excluir lançamentos conciliados. Desfaça a conciliação primeiro.'); updateContasPagar(prev => prev.filter(p => !batchPagarIds.includes(p.id))); setBatchPagarIds([]); } else if (lancamentoTab === "receber") { if(contasReceber.some(p=>batchReceberIds.includes(p.id)&&p.conciliado))return alert('Não é permitido excluir lançamentos conciliados. Desfaça a conciliação primeiro.'); updateContasReceber(prev => prev.filter(p => !batchReceberIds.includes(p.id))); setBatchReceberIds([]); }
+        if (lancamentoTab === "cartao") { updatePurchases(prev => prev.filter(p => !selectedCartaoIds.includes(p.id))); setSelectedCartaoIds([]); } else if (lancamentoTab === "pagar") { updateContasPagar(prev => prev.filter(p => !batchPagarIds.includes(p.id))); setBatchPagarIds([]); } else if (lancamentoTab === "receber") { updateContasReceber(prev => prev.filter(p => !batchReceberIds.includes(p.id))); setBatchReceberIds([]); }
         setBatchConfirmText(""); setBatchDeleteModalOpen(false);
       }
 
@@ -951,7 +961,7 @@
 
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
-        if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : purchases.find(p => p.id === editingId); if (itemExistente?.conciliado) return setFormError("Não é permitido alterar um lançamento conciliado. Remova a conciliação primeiro."); if ((lancamentoTab === "pagar" || lancamentoTab === "receber") && itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
+        if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : purchases.find(p => p.id === editingId); if ((lancamentoTab === "pagar" || lancamentoTab === "receber") && itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
         
         if (lancamentoTab === "cartao") {
             if (!cartaoId) return setFormError("É obrigatório selecionar um cartão.");
@@ -981,11 +991,11 @@
         };
 
         if (lancamentoTab === "receber") { 
-            if (editingId) { updateContasReceber(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, conciliado: p.conciliado } : p)); setModalOpen(false); } 
+            if (editingId) { updateContasReceber(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
             else { updateContasReceber(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
         }
         else if (lancamentoTab === "pagar") { 
-            if (editingId) { updateContasPagar(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, conciliado: p.conciliado } : p)); setModalOpen(false); } 
+            if (editingId) { updateContasPagar(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
             else { updateContasPagar(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
         }
         else { 
@@ -1084,8 +1094,8 @@
         if (!window.confirm("Deseja estornar baixa?")) return;
         
         let transId = null;
-        if (type === "pagar") { const item = contasPagar.find(p => p.id === id); if(item?.conciliado)return alert('Não é permitido estornar a baixa de um lançamento conciliado. Desfaça a conciliação primeiro.'); transId = item?.transferenciaId; }
-        else if (type === "receber") { const item = contasReceber.find(p => p.id === id); if(item?.conciliado)return alert('Não é permitido estornar a baixa de um lançamento conciliado. Desfaça a conciliação primeiro.'); transId = item?.transferenciaId; }
+        if (type === "pagar") { const item = contasPagar.find(p => p.id === id); transId = item?.transferenciaId; }
+        else if (type === "receber") { const item = contasReceber.find(p => p.id === id); transId = item?.transferenciaId; }
 
         const estornoUpdater = prev => prev.map(p => (p.id === id || (transId && p.transferenciaId === transId)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, conciliado: false } : p);
 
