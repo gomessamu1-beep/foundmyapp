@@ -1090,7 +1090,9 @@
       }
 
       function executarEstornoBaixa(type, id, dataBaixa) {
-        if (dataBaixa && (isDiaFechado(dataBaixa) || isMesFechado(dataBaixa.substring(0, 7)))) return alert("Dia ou mês bloqueado."); 
+        // Estorno não deve mais ser bloqueado por vínculos antigos de OFX
+        // nem por um fechamento que não esteja efetivamente marcado na tela.
+        // A conciliação OFX foi removida da interface.
         if (!window.confirm("Deseja estornar baixa?")) return;
         
         let transId = null;
