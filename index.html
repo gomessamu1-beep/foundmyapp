@@ -1121,24 +1121,25 @@
 
       // Reconciliation OFX logic
       const movimentacoesConciliacao = useMemo(() => {
-        if (!concilExibido) return [];
+        if (!concilExibido || !concilContaId) return [];
+        const contaAtual = String(concilContaId);
         const lista = [];
         contasPagar.forEach(p => {
-          if (p.status === "Baixado" && p.dataBaixa) {
+          if (p.status === "Baixado" && p.dataBaixa && String(p.bancoBaixaId || '') === contaAtual) {
             if (!concilDataIniAplicada || !concilDataFimAplicada || (p.dataBaixa >= concilDataIniAplicada && p.dataBaixa <= concilDataFimAplicada)) {
               lista.push({ id: p.id, tipoOrigem: 'pagar', itemRef: p, data: p.dataBaixa, descricao: p.descricao, observacao: p.observacao, tipo: "Débito", valorDebito: p.recorrente ? p.valorParcela : (p.valorParcela || p.total), valorCredito: 0, conciliado: !!p.conciliado });
             }
           }
         });
         contasReceber.forEach(r => {
-          if (r.status === "Baixado" && r.dataBaixa) {
+          if (r.status === "Baixado" && r.dataBaixa && String(r.bancoBaixaId || '') === contaAtual) {
             if (!concilDataIniAplicada || !concilDataFimAplicada || (r.dataBaixa >= concilDataIniAplicada && r.dataBaixa <= concilDataFimAplicada)) {
               lista.push({ id: r.id, tipoOrigem: 'receber', itemRef: r, data: r.dataBaixa, descricao: r.descricao, observacao: r.observacao, tipo: "Crédito", valorDebito: 0, valorCredito: r.recorrente ? r.valorParcela : (r.valorParcela || r.total), conciliado: !!r.conciliado });
             }
           }
         });
         Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
-          if (baixa && baixa.status === 'Baixado' && baixa.dataBaixa) {
+          if (baixa && baixa.status === 'Baixado' && baixa.dataBaixa && String(baixa.bancoId || '') === contaAtual) {
             if (!concilDataIniAplicada || !concilDataFimAplicada || (baixa.dataBaixa >= concilDataIniAplicada && baixa.dataBaixa <= concilDataFimAplicada)) {
               const totalComp = calcularTotalFaturaCompetencia(comp);
               if (totalComp > 0) lista.push({ id: `fat-${comp}`, tipoOrigem: 'fatura', competenciaRef: comp, baixaRef: baixa, data: baixa.dataBaixa, descricao: `Pagamento Fatura Cartão: ${formatMonthLabel(comp)}`, observacao: '', tipo: "Débito", valorDebito: totalComp, valorCredito: 0, conciliado: !!baixa.conciliado });
