@@ -372,7 +372,6 @@
       const [concilExibido, setConcilExibido] = useState(false);
       const [concilCalMes, setConcilCalMes] = useState(currentMonth());
       const [calendarioExpandido, setCalendarioExpandido] = useState(false);
-      const [concilEditModal, setConcilEditModal] = useState({ open: false, item: null });
       const [ofxArquivosModalOpen, setOfxArquivosModalOpen] = useState(false);
       const [ofxImportModal, setOfxImportModal] = useState({ open: false, contaId: '', contaNome: '', arquivoId: '', arquivoNome: '', transacoes: [], datas: [], dataSelecionada: '' });
       const [ofxExcluirDiaModalOpen, setOfxExcluirDiaModalOpen] = useState(false);
@@ -952,7 +951,7 @@
 
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
-        if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : null; if (itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
+        if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : purchases.find(p => p.id === editingId); if (itemExistente?.conciliado) return setFormError("Não é permitido alterar um lançamento conciliado. Remova a conciliação primeiro."); if ((lancamentoTab === "pagar" || lancamentoTab === "receber") && itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
         
         if (lancamentoTab === "cartao") {
             if (!cartaoId) return setFormError("É obrigatório selecionar um cartão.");
@@ -1001,27 +1000,9 @@
         const total = parseValorInput(lrValor);
         const cat = getCategoria(lrCategoriaId);
         const exigeSub = cat && !cat.isTransferencia;
-        const ofxOrigem = ofxSelecionadoUnico;
-        const veioDoOfx = !!ofxOrigem;
 
         if (!lrDescricao.trim() || !Number.isFinite(total) || total <= 0 || !lrData || !lrContaOrigem || !lrCategoriaId || (exigeSub && !lrSubcategoriaId)) {
           return setLrError("Preencha todos os campos obrigatórios corretamente.");
-        }
-
-        if (veioDoOfx && !mesmaContaOfx(ofxOrigem.contaId, concilContaId)) {
-          return setLrError("O lançamento OFX selecionado não pertence à conta bancária atual.");
-        }
-
-        if (veioDoOfx) {
-          const valorOfxCentavos = Math.round(Math.abs(Number(ofxOrigem.valor || 0)) * 100);
-          const valorLancamentoCentavos = Math.round(Math.abs(total) * 100);
-          const direcaoOfx = Number(ofxOrigem.valor || 0) < 0 ? 'despesa' : 'receita';
-          if (valorOfxCentavos !== valorLancamentoCentavos || lrTipo !== direcaoOfx) {
-            return setLrError("O valor e o tipo do lançamento devem ser exatamente iguais ao lançamento OFX selecionado.");
-          }
-          if (ofxOrigem.conciliado) {
-            return setLrError("O lançamento OFX selecionado já está conciliado.");
-          }
         }
 
         if (lrIsTransferencia && !lrContaDestino) {
@@ -1037,9 +1018,7 @@
           return setLrError("Dia ou mês bloqueado/fechado. Abra-o para fazer o lançamento.");
         }
 
-        const conciliacaoId = veioDoOfx ? `conc-${uid()}` : null;
         const transId = lrIsTransferencia ? uid() : null;
-        const conciliadoAutomaticamente = veioDoOfx;
 
         if (lrIsTransferencia) {
           const debitoId = uid();
@@ -1067,24 +1046,12 @@
             inicio: faturaMes, recorrente: false, cartaoId: null, categoriaId: lrCategoriaId,
             subcategoriaId: lrSubcategoriaId, status: "Baixado", criadoEm: Date.now(),
             transferenciaId: null, isLancamentoDireto: true, bancoBaixaId: lrContaOrigem, dataBaixa: lrData,
-            conciliado: conciliadoAutomaticamente, conciliacaoId: conciliacaoId
+            conciliado: false, conciliacaoId: null
           };
           if (lrTipo === 'despesa') updateContasPagar(prev => [...prev, entry]);
           else updateContasReceber(prev => [...prev, entry]);
-
-          if (veioDoOfx) {
-            updateOfxData(prev => prev.map(o =>
-              o.id === ofxOrigem.id && mesmaContaOfx(o.contaId, concilContaId)
-                ? { ...o, conciliado: true, conciliacaoId: conciliacaoId, lancamentoId: entryId }
-                : o
-            ));
-          }
         }
 
-        if (veioDoOfx) {
-          setOfxSelectedIds([]);
-          setSysSelectedIds([]);
-        }
         setLrModalOpen(false);
       }
 
@@ -1154,25 +1121,25 @@
 
       // Reconciliation OFX logic
       const movimentacoesConciliacao = useMemo(() => {
-        if (!concilExibido || !concilContaId) return [];
+        if (!concilExibido) return [];
         const lista = [];
         contasPagar.forEach(p => {
-          if (p.status === "Baixado" && String(p.bancoBaixaId) === String(concilContaId) && p.dataBaixa) {
-            if (p.dataBaixa >= concilDataIniAplicada && p.dataBaixa <= concilDataFimAplicada) {
+          if (p.status === "Baixado" && p.dataBaixa) {
+            if (!concilDataIniAplicada || !concilDataFimAplicada || (p.dataBaixa >= concilDataIniAplicada && p.dataBaixa <= concilDataFimAplicada)) {
               lista.push({ id: p.id, tipoOrigem: 'pagar', itemRef: p, data: p.dataBaixa, descricao: p.descricao, observacao: p.observacao, tipo: "Débito", valorDebito: p.recorrente ? p.valorParcela : (p.valorParcela || p.total), valorCredito: 0, conciliado: !!p.conciliado });
             }
           }
         });
         contasReceber.forEach(r => {
-          if (r.status === "Baixado" && String(r.bancoBaixaId) === String(concilContaId) && r.dataBaixa) {
-            if (r.dataBaixa >= concilDataIniAplicada && r.dataBaixa <= concilDataFimAplicada) {
+          if (r.status === "Baixado" && r.dataBaixa) {
+            if (!concilDataIniAplicada || !concilDataFimAplicada || (r.dataBaixa >= concilDataIniAplicada && r.dataBaixa <= concilDataFimAplicada)) {
               lista.push({ id: r.id, tipoOrigem: 'receber', itemRef: r, data: r.dataBaixa, descricao: r.descricao, observacao: r.observacao, tipo: "Crédito", valorDebito: 0, valorCredito: r.recorrente ? r.valorParcela : (r.valorParcela || r.total), conciliado: !!r.conciliado });
             }
           }
         });
         Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
-          if (baixa && baixa.status === 'Baixado' && String(baixa.bancoId) === String(concilContaId) && baixa.dataBaixa) {
-            if (baixa.dataBaixa >= concilDataIniAplicada && baixa.dataBaixa <= concilDataFimAplicada) {
+          if (baixa && baixa.status === 'Baixado' && baixa.dataBaixa) {
+            if (!concilDataIniAplicada || !concilDataFimAplicada || (baixa.dataBaixa >= concilDataIniAplicada && baixa.dataBaixa <= concilDataFimAplicada)) {
               const totalComp = calcularTotalFaturaCompetencia(comp);
               if (totalComp > 0) lista.push({ id: `fat-${comp}`, tipoOrigem: 'fatura', competenciaRef: comp, baixaRef: baixa, data: baixa.dataBaixa, descricao: `Pagamento Fatura Cartão: ${formatMonthLabel(comp)}`, observacao: '', tipo: "Débito", valorDebito: totalComp, valorCredito: 0, conciliado: !!baixa.conciliado });
             }
@@ -1267,54 +1234,13 @@
         return '';
       };
 
-      // DIAGNÓSTICO E FILTRO OFX: a consulta é feita localmente sobre os registros já salvos.
-      const ofxConsultaDiagnostico = useMemo(() => {
-        const contaIdSelecionada = String(concilContaId ?? '').trim();
-        const contaSelecionada = contasBancarias.find(c => String(c.id) === contaIdSelecionada);
-        const nomeContaSelecionada = String(contaSelecionada?.nome || '').trim();
-        const ini = normalizarDataOfx(concilDataIniAplicada);
-        const fim = normalizarDataOfx(concilDataFimAplicada);
-        const todos = Array.isArray(ofxData) ? ofxData : [];
-        const daConta = todos.filter(o => {
-          const id = String(o?.contaId ?? '').trim();
-          if (id === contaIdSelecionada) return true;
-          return !id && nomeContaSelecionada && String(o?.contaNome || '').trim() === nomeContaSelecionada;
-        });
-        const comData = daConta.map(o => ({ item: o, data: obterDataMovimentoOfx(o) })).filter(x => x.data);
-        const semData = daConta.filter(o => !obterDataMovimentoOfx(o));
-        const datas = [...new Set(comData.map(x => x.data))].sort();
-        const noPeriodo = comData.filter(x => (!ini || x.data >= ini) && (!fim || x.data <= fim));
-        return { conta: daConta.length, comData: comData.length, semData: semData.length, noPeriodo: noPeriodo.length, ini, fim, primeiraData: datas[0] || '', ultimaData: datas[datas.length - 1] || '' };
-      }, [ofxData, concilContaId, concilDataIniAplicada, concilDataFimAplicada, contasBancarias]);
-
+      // OFX sem bloqueio de conta ou período na exibição.
+      // A conta selecionada continua sendo usada na importação.
       const ofxFiltrado = useMemo(() => {
-        const contaIdSelecionada = String(concilContaId ?? '').trim();
-        if (!contaIdSelecionada) return [];
-
-        const contaSelecionada = contasBancarias.find(c => String(c.id) === contaIdSelecionada);
-        const nomeContaSelecionada = String(contaSelecionada?.nome || '').trim();
-        const ini = normalizarDataOfx(concilDataIniAplicada);
-        const fim = normalizarDataOfx(concilDataFimAplicada);
-
         return (Array.isArray(ofxData) ? ofxData : [])
-          .filter(o => {
-            const id = String(o?.contaId ?? '').trim();
-            if (id === contaIdSelecionada) return true;
-            return !id && nomeContaSelecionada && String(o?.contaNome || '').trim() === nomeContaSelecionada;
-          })
-          .filter(o => {
-            const dataOfx = obterDataMovimentoOfx(o);
-            if (!dataOfx) return false;
-            return (!ini || dataOfx >= ini) && (!fim || dataOfx <= fim);
-          })
           .slice()
-          .sort((a, b) => {
-            const da = obterDataMovimentoOfx(a);
-            const db = obterDataMovimentoOfx(b);
-            return da.localeCompare(db) || Number(a?.ordemImportacao || 0) - Number(b?.ordemImportacao || 0);
-          });
-      }, [ofxData, concilContaId, concilDataIniAplicada, concilDataFimAplicada, contasBancarias]);
-      const ofxSelecionadoUnico=ofxSelectedIds.length===1?ofxData.find(o=>o.id===ofxSelectedIds[0]&&String(o?.contaId || '')===String(concilContaId || '')):null;
+          .sort((a,b) => String(a?.data || '').localeCompare(String(b?.data || '')) || Number(a?.ordemImportacao || 0) - Number(b?.ordemImportacao || 0));
+      }, [ofxData]);
 
 
       function handleOfxUpload(e){
@@ -1332,19 +1258,12 @@
           // A conta do OFX é definida exclusivamente pela conta selecionada
           // na tela. O conteúdo bancário do arquivo não é usado para bloquear
           // nem para redirecionar a importação.
-          const bancoSistema = normalizeBankCode(conta?.bancoCode);
-
           const transacoes = parsed.transactions.map(t => ({
             ...t,
             contaId: String(concilContaId),
             contaNome: conta.nome,
-            bancoCode: t.bancoCode || bancoSistema,
-            agenciaOfx: t.agenciaOfx || conta.agencia || '',
-            bancoOfx: t.bancoOfx || conta.bancoCode || '',
             ofxArquivoId: arquivoId,
-            ofxArquivoNome: file.name,
-            ofxContaValidada: true,
-            ofxContaValidadaEm: new Date().toISOString()
+            ofxArquivoNome: file.name
           }));
 
           const datas = [...new Set(transacoes.map(t => t.data).filter(Boolean))].sort();
@@ -1826,16 +1745,15 @@
           
           table { width: 100%; border-collapse: collapse; margin-top: 16px; table-layout: auto; }
           th, td { padding: 10px 6px; border-bottom: 1px solid var(--line); font-size: 13px; text-align: left; vertical-align: middle; }
-          .concil-day-table { width: 100%; table-layout: fixed; }
-          .concil-day-table th, .concil-day-table td { box-sizing: border-box; }
+          .concil-day-table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; }
+          .concil-day-table th, .concil-day-table td { box-sizing: border-box; min-width: 0; overflow: hidden; }
           .concil-day-table th:nth-child(1), .concil-day-table td:nth-child(1) { width: 48%; }
-          .concil-day-table th:nth-child(2), .concil-day-table td:nth-child(2) { width: 9%; }
+          .concil-day-table th:nth-child(2), .concil-day-table td:nth-child(2) { width: 11%; }
           .concil-day-table th:nth-child(3), .concil-day-table td:nth-child(3) { width: 13%; }
-          .concil-day-table th:nth-child(4), .concil-day-table td:nth-child(4) { width: 10%; }
-          .concil-day-table th:nth-child(5), .concil-day-table td:nth-child(5) { width: 7%; }
-          .concil-day-table th:nth-child(6), .concil-day-table td:nth-child(6) { width: 7%; }
-          .concil-day-table th:nth-child(7), .concil-day-table td:nth-child(7) { width: 6%; }
+          .concil-day-table th:nth-child(4), .concil-day-table td:nth-child(4) { width: 13%; }
+          .concil-day-table th:nth-child(5), .concil-day-table td:nth-child(5) { width: 15%; }
           .concil-day-table td:first-child > div:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .concil-day-table .num { white-space: nowrap; font-size: 12px; }
           th.right, td.right { text-align: right; }
           th.center, td.center { text-align: center; }
           .badge { font-size: 11px; padding: 2px 6px; background: var(--paper); border-radius: 4px; color: var(--ink-soft); white-space: nowrap; }
@@ -2196,10 +2114,9 @@
 
           screen === "conciliacao" && h('div', { className: 'form-card' },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
-              h('input', { id: 'ofx-file-input', type: 'file', accept: '.ofx,application/x-ofx,application/octet-stream', style: { display: 'none' }, onChange: handleOfxUpload }),
               h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Conciliação Bancária"),
               h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } },
-                h('button', { type: 'button', className: 'primary', title: ofxSelectedIds.length === 1 ? 'Criar lançamento a partir do OFX selecionado' : 'Criar novo lançamento bancário', onClick: () => { const o = ofxSelectedIds.length === 1 ? ofxSelecionadoUnico : null; if (ofxSelectedIds.length > 1) { setLrError(''); setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError('Selecione apenas um lançamento OFX para criar o lançamento automaticamente, ou desmarque os OFX para fazer um novo lançamento manual.'); setLrModalOpen(true); return; } if (o) { setLrTipo(Number(o.valor || 0) < 0 ? 'despesa' : 'receita'); setLrDescricao(o.descricao || ''); setLrObservacao(''); setLrData(o.data || currentDate()); setLrValor(Math.abs(Number(o.valor || 0)).toFixed(2).replace('.',',')); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); } else { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); } setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
+                h('button', { type: 'button', className: 'primary', title: 'Criar novo lançamento bancário', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
                 concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
                 concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
               )
@@ -2207,23 +2124,10 @@
 
             h('div', { className: 'sub-nav' }, 
               h('button', { className: concilTab === "extrato" ? "active" : "", onClick: () => setConcilTab("extrato") }, "Conciliação Extrato Bancário"),
-              h('button', { className: concilTab === "ofx" ? "active" : "", onClick: () => setConcilTab("ofx") }, "Conciliação OFX")
             ),
 
-            concilTab === "ofx" && h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 14px 0', padding: '12px 14px', background: '#FAF8F2', border: '2px solid var(--line)', borderRadius: 8 } },
-              h('strong', { style: { fontSize: 13 } }, 'AÇÕES DO OFX:'),
-              
-              h('button', { type: 'button', className: 'primary', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária antes de importar o OFX.'); document.getElementById('ofx-file-input')?.click(); } }, '📁 Importar OFX'),
-              h('button', { type: 'button', className: 'danger', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária antes de excluir movimentações OFX.'); setOfxExcluirDia(ofxFiltrado[0]?.data || concilDataIniAplicada || currentDate()); setOfxExcluirDiaModalOpen(true); } }, h(Trash2, { size: 14 }), ' Excluir dia do OFX'),
-              h('button', { type: 'button', className: 'action-btn', onClick: () => setOfxArquivosModalOpen(true) }, h(FileText, { size: 14 }), ` Arquivos OFX (${ofxArquivosImportados.length})`)
-            ),
 
-            h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(BancoLogo, { code: (() => { const c = contasBancarias.find(x => String(x.id) === String(concilContaId)); return c?.bancoCode || c?.banco || c?.nome; })(), logoData: contasBancarias.find(x => String(x.id) === String(concilContaId))?.logoData || '', size: 38 }), h('select', { value: concilContaId, style: { flex: 1 }, onChange: e => { setConcilContaId(e.target.value); setOfxSelectedIds([]); setSysSelectedIds([]); } }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome))))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => { if (!concilContaId) { alert('Selecione a Conta Bancária no filtro antes de consultar.'); return; } if (!concilDataIni || !concilDataFim) { alert('Informe a Data Inicial e a Data Final.'); return; } if (concilDataIni > concilDataFim) { alert('A Data Inicial não pode ser maior que a Data Final.'); return; } setConcilDataIniAplicada(String(concilDataIni).substring(0,10)); setConcilDataFimAplicada(String(concilDataFim).substring(0,10)); setConcilExibido(true); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Filtrar Período")),
-            h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginBottom: 16, padding: '8px 10px', background: '#F7F5EF', border: '1px solid var(--line)', borderRadius: 5 } },
-              `Consulta aplicada: ${ofxConsultaDiagnostico.ini || '-'} até ${ofxConsultaDiagnostico.fim || '-'} | ${ofxConsultaDiagnostico.conta} registro(s) da conta | ${ofxConsultaDiagnostico.comData} com data | ${ofxConsultaDiagnostico.noPeriodo} no período` +
-              (ofxConsultaDiagnostico.primeiraData ? ` | datas encontradas: ${ofxConsultaDiagnostico.primeiraData} a ${ofxConsultaDiagnostico.ultimaData}` : ' | nenhuma data reconhecida nos registros')
-            ),
-
+            h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(BancoLogo, { code: (() => { const c = contasBancarias.find(x => String(x.id) === String(concilContaId)); return c?.bancoCode || c?.banco || c?.nome; })(), logoData: contasBancarias.find(x => String(x.id) === String(concilContaId))?.logoData || '', size: 38 }), h('select', { value: concilContaId, style: { flex: 1 }, onChange: e => { setConcilContaId(e.target.value); setOfxSelectedIds([]); setSysSelectedIds([]); } }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome))))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => { setConcilDataIniAplicada(String(concilDataIni || '').substring(0,10)); setConcilDataFimAplicada(String(concilDataFim || '').substring(0,10)); setConcilExibido(true); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Filtrar Período")),
             concilExibido && concilTab === "extrato" && h(React.Fragment, null,
               h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 20, marginBottom: 20 } },
                 h('div', { className: 'top', style: { margin: 0, padding: 14 } },
@@ -2266,160 +2170,15 @@
                 h('span', { style: { fontSize: 11, color: 'var(--ink-soft)', fontWeight: '500' } }, "🔒 Fechamento diário individual por conta")
               ),
 
-              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data, concilContaId) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e, concilContaId) }, isDiaFechado(grupo.data, concilContaId) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { className: 'concil-day-table', style: { marginTop: 0 } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'center' }, "Conciliado"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('a', { href: '#', style: { color: 'var(--green)', fontWeight: 'bold', textDecoration: 'underline', fontSize: '12px' }, onClick: (e) => { e.preventDefault(); setConcilEditModal({ open: true, item }); } }, "🔗 Abrir / Alterar")), h('td', { className: 'center' }, item.conciliado ? h(CheckCircle, { color: 'var(--green)', size: 16 }) : '-'), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))
+              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data, concilContaId) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e, concilContaId) }, isDiaFechado(grupo.data, concilContaId) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { className: 'concil-day-table', style: { marginTop: 0, width: '100%', maxWidth: '100%' } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))
             ),
 
-            concilTab === "ofx" && h(React.Fragment, null, 
-              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, background: '#FAF8F2', padding: '12px', border: '1px solid var(--line)', borderRadius: '6px', flexWrap: 'wrap', gap: 10 } },
-                h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
-                  h('div', { style: { fontSize: 12, fontWeight: 'bold', color: 'var(--ink-soft)', marginRight: 4 } }, 'AÇÕES OFX:'),
-                  
-                  h('button', { type: 'button', className: 'primary', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária no filtro antes de importar o OFX.'); document.getElementById('ofx-file-input')?.click(); }, title: 'Importar um arquivo OFX para a conta bancária selecionada' }, '📁 Importar OFX'),
-                  h('button', { type: 'button', className: 'danger', onClick: () => { if(!concilContaId) return alert('Selecione a Conta Bancária no filtro antes de excluir movimentações OFX.'); setOfxExcluirDia(ofxFiltrado.length && ofxFiltrado[0].data ? ofxFiltrado[0].data : concilDataIniAplicada); setOfxExcluirDiaModalOpen(true); }, title: 'Excluir somente as movimentações OFX de um dia da conta selecionada' }, h(Trash2, { size: 14 }), ' Excluir dia do OFX'),
-                  h('button', { type: 'button', className: 'action-btn', onClick: () => setOfxArquivosModalOpen(true), title: 'Visualizar os arquivos OFX importados para a conta selecionada', style: { minWidth: 170 } }, h(FileText, { size: 14 }), ` Arquivos OFX (${ofxArquivosImportados.length})`),
-                  ofxFiltrado.length > 0 && h('span', { style: { fontSize: 13, color: 'var(--ink-soft)', marginLeft: 4 } }, `${ofxFiltrado.length} registros da conta selecionada.`)
-                ),
-                h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
-                  h('button', { type: 'button', className: 'primary', onClick: handleConciliarMatch, disabled: !ofxSelectedIds.length || !sysSelectedIds.length }, h(CheckCircle, {size: 16}), ' Confirmar Conciliação'),
-                  h('button', { type: 'button', className: 'danger', onClick: removerConciliacoesSelecionadas, disabled: !(ofxData.some(o => ofxSelectedIds.includes(o.id) && o.conciliado) || movimentacoesConciliacao.some(m => sysSelectedIds.includes(m.id) && m.conciliado)), title: 'Remove a conciliação dos lançamentos selecionados, sem excluir os lançamentos' }, h(Trash2, { size: 14 }), ' Remover Conciliação')
-                )
-              ),
-
-              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' } },
-                
-                h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', background: '#fff' } },
-                   h('div', { style: { padding: '12px', borderBottom: '1px solid var(--line)', fontWeight: 'bold', background: 'var(--paper)', borderRadius: '6px 6px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 } }, h('span', null, "Extrato OFX (Banco)"), h('span', { style: { fontSize: 11, color: 'var(--green)', fontWeight: '700' } }, `${ofxFiltrado.length} lançamento(s) encontrados`)), 
-                   h('div', { style: { maxHeight: '600px', overflowY: 'auto', padding: '0 8px' } },
-                      ofxFiltrado.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, "Nenhuma movimentação OFX importada para o período.") :
-                      h('table', { style: { width: '100%', tableLayout: 'fixed' } },
-                        h('thead', null,
-                          h('tr', null,
-                            h('th', { style: { width: 42, textAlign: 'center' } }, h('input', { type: 'checkbox', title: 'Selecionar todos', checked: ofxFiltrado.length > 0 && ofxFiltrado.every(o => ofxSelectedIds.includes(o.id)), onChange: toggleSelectAllOfx })),
-                            h('th', { style: { width: 82, textAlign: 'center' } }, 'Conciliado'),
-                            h('th', { style: { width: 100 } }, 'Data'),
-                            h('th', null, 'Descrição'),
-                            h('th', { className: 'right', style: { width: 130 } }, 'Valor')
-                          )
-                        ),
-                        h('tbody', null,
-                          ofxFiltrado.map((o, index) => {
-                            const id = o && o.id != null ? String(o.id) : `ofx-${index}`;
-                            const dataLinha = obterDataMovimentoOfx(o) || (o && o.data) || '';
-                            const descricaoLinha = o && (o.descricao || o.memo || o.nome) ? String(o.descricao || o.memo || o.nome) : '-';
-                            const valorLinha = Number(o && o.valor != null ? o.valor : 0);
-                            const selecionado = ofxSelectedIds.includes(o.id);
-                            return h('tr', { key: id, style: { opacity: o && o.conciliado ? 0.65 : 1 } },
-                              h('td', { style: { width: 42, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: selecionado, onChange: () => toggleOfxSelect(o.id), title: selecionado ? 'Desmarcar lançamento' : 'Selecionar lançamento' })),
-                              h('td', { style: { width: 82, textAlign: 'center' } }, o && o.conciliado ? h(CheckCircle, { color: 'var(--green)', size: 16, title: 'Conciliado' }) : h('span', { style: { color: 'var(--ink-soft)' } }, '—')),
-                              h('td', { style: { whiteSpace: 'nowrap' } }, formatDateBR(dataLinha)),
-                              h('td', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: descricaoLinha }, descricaoLinha),
-                              h('td', { className: 'right num', style: { color: valorLinha < 0 ? 'var(--red)' : 'var(--green)' } }, showMoney(Math.abs(valorLinha)))
-                            );
-                          })
-                        )
-                      )
-                   )
-                ),
-
-                h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', background: '#fff' } },
-                   h('div', { style: { padding: '12px', borderBottom: '1px solid var(--line)', fontWeight: 'bold', background: 'var(--paper)', borderRadius: '6px 6px 0 0' } }, h('span', null, 'Lançamentos no Sistema')),
-                   h('div', { style: { maxHeight: '600px', overflowY: 'auto', padding: '0 8px' } },
-                      movimentacoesConciliacao.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, "Nenhuma movimentação baixada neste período.") :
-                      h('table', null, 
-                        h('thead', null, h('tr', null, h('th', { style: { width: 42, textAlign: 'center' } }, h('input', { type: 'checkbox', title: 'Selecionar todos', checked: movimentacoesConciliacao.length > 0 && movimentacoesConciliacao.every(m=>sysSelectedIds.includes(m.id)), onChange: toggleSelectAllSys })), h('th', { style: { width: 72, textAlign: 'center' } }, "Conciliado"), h('th', null, "Data"), h('th', null, "Descrição"), h('th', { className: 'right' }, "Valor"), h('th', { className: 'right' }, "Saldo"))),
-                        h('tbody', null, movimentacoesConciliacao.map(sys => h('tr', { key: sys.id, style: { opacity: sys.conciliado ? 0.65 : 1 } }, 
-                          h('td', { style: { width: 42, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: sysSelectedIds.includes(sys.id), onChange: () => toggleSysSelect(sys.id), title: sysSelectedIds.includes(sys.id) ? 'Desmarcar lançamento' : 'Selecionar lançamento' })),
-                          h('td', { style: { width: 72, textAlign: 'center' } }, sys.conciliado ? h(CheckCircle, { color: 'var(--green)', size: 16, title: 'Conciliado' }) : h('span', { style: { color: 'var(--ink-soft)' } }, '—')),
-                          h('td', null, formatDateBR(sys.data)),
-                          h('td', null, sys.descricao),
-                          h('td', { className: 'right num', style: { color: sys.tipo === 'Débito' ? 'var(--red)' : 'var(--green)' } }, showMoney(sys.valorDebito || sys.valorCredito)),
-                          h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(sys.saldo))
-                        )))
-                      )
-                   )
-                )
-
-              )
-            )
-          )
+)
 
         ),
 
-        ofxImportModal.open && h('div', { className: 'modal-overlay', onClick: () => setOfxImportModal({ open: false, contaId: '', contaNome: '', arquivoId: '', arquivoNome: '', transacoes: [], datas: [], dataSelecionada: '' }) },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 520, width: 'calc(100% - 32px)' } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--line)' } },
-              h('div', null,
-                h('div', { style: { fontSize: 17, fontWeight: 'bold' } }, '📅 Importar movimentações OFX'),
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, `Arquivo: ${ofxImportModal.arquivoNome}`),
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 } }, `Conta: ${ofxImportModal.contaNome}`)
-              ),
-              h('button', { type: 'button', className: 'icon', onClick: () => setOfxImportModal({ open: false, contaId: '', contaNome: '', arquivoId: '', arquivoNome: '', transacoes: [], datas: [], dataSelecionada: '' }), title: 'Fechar' }, h(XIcon))
-            ),
-            h('div', { style: { padding: 12, background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6, marginBottom: 14 } },
-              h('div', { style: { fontSize: 13, fontWeight: 'bold', marginBottom: 5 } }, 'Escolha o dia que deseja importar'),
-              h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `${ofxImportModal.transacoes.length} movimentação(ões) encontrada(s) no arquivo. Serão importadas somente as movimentações do dia escolhido.`)
-            ),
-            h('div', { className: 'field full' },
-              h('label', null, 'Dia para importar *'),
-              h('select', { value: ofxImportModal.dataSelecionada, onChange: e => setOfxImportModal(prev => ({ ...prev, dataSelecionada: e.target.value })), required: true },
-                h('option', { value: '' }, 'Selecione o dia...'),
-                ofxImportModal.datas.map(d => h('option', { key: d, value: d }, `${formatDateBR(d)} — ${ofxImportModal.transacoes.filter(t => t.data === d).length} lançamento(s)`))
-              )
-            ),
-            ofxImportModal.dataSelecionada && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4, padding: 10, border: '1px dashed var(--line)', borderRadius: 5 } }, `Serão importados ${ofxImportModal.transacoes.filter(t => t.data === ofxImportModal.dataSelecionada).length} lançamento(s) de ${formatDateBR(ofxImportModal.dataSelecionada)}.`),
-            h('div', { className: 'submit-row', style: { marginTop: 16 } },
-              h('button', { type: 'button', className: 'action-btn', onClick: () => setOfxImportModal({ open: false, contaId: '', contaNome: '', arquivoId: '', arquivoNome: '', transacoes: [], datas: [], dataSelecionada: '' }) }, 'Cancelar'),
-              h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoOfx, disabled: !ofxImportModal.dataSelecionada }, h(CheckCircle, { size: 15 }), ' Importar dia selecionado')
-            )
-          )
-        ),
 
-        ofxExcluirDiaModalOpen && h('div', { className: 'modal-overlay', onClick: () => setOfxExcluirDiaModalOpen(false) },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 500, width: 'calc(100% - 32px)' } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--line)' } },
-              h('div', null,
-                h('div', { style: { fontSize: 17, fontWeight: 'bold' } }, '🗑️ Excluir dia do OFX'),
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, 'Exclui somente as movimentações OFX da conta selecionada. Os lançamentos do sistema permanecem.')
-              ),
-              h('button', { type: 'button', className: 'icon', onClick: () => setOfxExcluirDiaModalOpen(false), title: 'Fechar' }, h(XIcon))
-            ),
-            h('div', { className: 'field full' }, h('label', null, 'Dia que deseja excluir *'), h('input', { type: 'date', value: ofxExcluirDia, onChange: e => setOfxExcluirDia(e.target.value), required: true })),
-            h('div', { style: { marginTop: 8, padding: 11, background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12, color: 'var(--ink-soft)' } },
-              `Conta selecionada: ${getConta(concilContaId)?.nome || '-'}\n\nAo confirmar, todos os lançamentos OFX dessa conta no dia escolhido serão removidos. Se algum estiver conciliado, a exclusão será bloqueada.`
-            ),
-            h('div', { className: 'submit-row', style: { marginTop: 16 } },
-              h('button', { type: 'button', className: 'action-btn', onClick: () => setOfxExcluirDiaModalOpen(false) }, 'Cancelar'),
-              h('button', { type: 'button', className: 'danger', onClick: excluirMovimentacoesOfxDia }, h(Trash2, { size: 15 }), ' Excluir dia')
-            )
-          )
-        ),
 
-        ofxArquivosModalOpen && h('div', { className: 'modal-overlay', onClick: () => setOfxArquivosModalOpen(false) },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 760, width: 'calc(100% - 32px)', maxHeight: '80vh', overflowY: 'auto' } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--line)' } },
-              h('div', null,
-                h('div', { style: { fontSize: 17, fontWeight: 'bold' } }, '📂 Arquivos OFX importados'),
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, concilContaId ? `Arquivos vinculados à conta: ${getConta(concilContaId)?.nome || 'Conta selecionada'}` : 'Selecione uma conta bancária para visualizar os arquivos.')
-              ),
-              h('button', { type: 'button', className: 'icon', onClick: () => setOfxArquivosModalOpen(false), title: 'Fechar' }, h(XIcon))
-            ),
-            ofxArquivosImportados.length === 0
-              ? h('div', { style: { padding: '35px 20px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, 'Nenhum arquivo OFX importado para esta conta.')
-              : h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-                  ofxArquivosImportados.map(arq => h('div', { key: arq.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, padding: '11px 12px', border: '1px solid var(--line)', borderRadius: 6, background: '#fff' } },
-                    h('div', { style: { minWidth: 0, flex: 1 } },
-                      h('div', { style: { fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: arq.nome }, `📄 ${arq.nome}`),
-                      h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 4, lineHeight: 1.5 } }, `Banco: ${arq.banco || '-'} • Agência: ${arq.agencia || '-'} • Conta: ${arq.conta || '-'}`),
-                      h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 } }, `${arq.qtd} lançamento(s)${arq.conciliados ? ` • ${arq.conciliados} conciliado(s)` : ''}`)
-                    ),
-                    null
-                  ))
-                ),
-            h('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--line)' } },
-              h('button', { type: 'button', className: 'action-btn', onClick: () => setOfxArquivosModalOpen(false) }, 'Fechar')
-            )
-          )
-        ),
 
         lrModalOpen && h('div', { className: 'modal-overlay' },
           h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 480 } },
@@ -2427,8 +2186,8 @@
             h('form', { className: 'modal-form', onSubmit: handleSaveLancamentoRapido },
               
               h('div', { className: 'field full', style: { display: 'flex', flexDirection: 'row', justifyContent: 'center', gap: 24, marginBottom: 16, paddingBottom: 12, borderBottom: '1px dashed var(--line)' } },
-                h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'bold', color: lrTipo === 'despesa' ? 'var(--red)' : 'var(--ink-soft)' } }, h('input', { type: 'radio', name: 'lrTipo', checked: lrTipo === 'despesa', disabled: !!(ofxSelecionadoUnico && lrModalOpen), onChange: () => setLrTipo('despesa'), style: { width: 'auto', margin: 0 } }), "🔴 Saída"),
-                h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'bold', color: lrTipo === 'receita' ? 'var(--green)' : 'var(--ink-soft)' } }, h('input', { type: 'radio', name: 'lrTipo', checked: lrTipo === 'receita', disabled: !!(ofxSelecionadoUnico && lrModalOpen), onChange: () => setLrTipo('receita'), style: { width: 'auto', margin: 0 } }), "🟢 Entrada")
+                h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'bold', color: lrTipo === 'despesa' ? 'var(--red)' : 'var(--ink-soft)' } }, h('input', { type: 'radio', name: 'lrTipo', checked: lrTipo === 'despesa', onChange: () => setLrTipo('despesa'), style: { width: 'auto', margin: 0 } }), "🔴 Saída"),
+                h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'bold', color: lrTipo === 'receita' ? 'var(--green)' : 'var(--ink-soft)' } }, h('input', { type: 'radio', name: 'lrTipo', checked: lrTipo === 'receita', onChange: () => setLrTipo('receita'), style: { width: 'auto', margin: 0 } }), "🟢 Entrada")
               ),
               
               h('div', { className: 'field' }, h('label', null, "Data *"), h('input', { type: 'date', value: lrData, onChange: e => setLrData(e.target.value), required: true })),
@@ -2437,7 +2196,7 @@
               h('div', { className: 'field full' }, h('label', null, "Descrição *"), h('input', { type: 'text', value: lrDescricao, onChange: e => setLrDescricao(e.target.value), required: true, placeholder: 'Ex: Tarifa de Manutenção ou Rendimento' })),
               h('div', { className: 'field full' }, h('label', null, "Observação (Opcional)"), h('input', { type: 'text', value: lrObservacao, onChange: e => setLrObservacao(e.target.value), placeholder: 'Campo de detalhamento livre' })),
               
-              h('div', { className: 'field full' }, h('label', null, "Categoria *"), h('select', { value: lrCategoriaId, onChange: e => handleLrCategoriaChange(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), categorias.filter(c => (c.tipo || 'despesa') === (ofxSelecionadoUnico && lrModalOpen ? (Number(ofxSelecionadoUnico.valor || 0) < 0 ? 'despesa' : 'receita') : lrTipo)).map(c => h('option', { key: c.id, value: c.id }, `${c.nome} ${c.isTransferencia ? '(🔄 Transferência)' : ''}`)))),
+              h('div', { className: 'field full' }, h('label', null, "Categoria *"), h('select', { value: lrCategoriaId, onChange: e => handleLrCategoriaChange(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), categorias.filter(c => (c.tipo || 'despesa') === lrTipo).map(c => h('option', { key: c.id, value: c.id }, `${c.nome} ${c.isTransferencia ? '(🔄 Transferência)' : ''}`)))),
               
               !lrIsTransferencia && h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: lrSubcategoriaId, onChange: e => setLrSubcategoriaId(e.target.value), required: !lrIsTransferencia }, h('option', { value: "" }, "Selecione..."), subcategoriasLrDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome)))),
               !lrIsTransferencia && h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('select', { value: lrContaOrigem, onChange: e => setLrContaOrigem(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
@@ -2447,34 +2206,6 @@
               
               lrError && h('div', { style: { color: 'var(--red)', fontSize: 12, gridColumn: 'span 2' } }, lrError),
               h('div', { className: 'submit-row', style: { marginTop: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setLrModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, h(CheckCircle, {size: 16}), " Lançar"))
-            )
-          )
-        ),
-
-        concilEditModal.open && concilEditModal.item && h('div', { className: 'modal-overlay' },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 12 } }, h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Detalhes do Lançamento"), h('button', { type: 'button', className: 'icon', onClick: () => setConcilEditModal({ open: false, item: null }) }, h(XIcon))),
-            concilEditModal.item.tipoOrigem === 'fatura' ? h('div', null,
-              h('p', null, `Pagamento de Fatura referente à competência: ${formatMonthLabel(concilEditModal.item.competenciaRef)}`), h('p', null, `Data do Pagamento: ${formatDateBR(concilEditModal.item.baixaRef.dataBaixa)}`), h('p', null, `Conta: ${getConta(concilEditModal.item.baixaRef.bancoId)?.nome || '-'}`),
-              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setConcilEditModal({ open: false, item: null }) }, "Fechar"))
-            ) : h('div', null,
-              h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Descrição: "), concilEditModal.item.itemRef.descricao),
-              concilEditModal.item.itemRef.observacao && h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Observação: "), concilEditModal.item.itemRef.observacao),
-              h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Valor: "), showMoney(concilEditModal.item.itemRef.recorrente ? concilEditModal.item.itemRef.valorParcela : (concilEditModal.item.itemRef.valorParcela || concilEditModal.item.itemRef.total))), h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Status: "), concilEditModal.item.itemRef.status), h('div', { style: { fontSize: 14, marginBottom: 16 } }, h('b', null, "Baixado em: "), formatDateBR(concilEditModal.item.itemRef.dataBaixa), ` (${getConta(concilEditModal.item.itemRef.bancoBaixaId)?.nome || '-'})`),
-              
-              (() => {
-                  const isDireto = concilEditModal.item.itemRef.isLancamentoDireto;
-                  return h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 20 } },
-                      isDireto 
-                      ? h('button', { type: 'button', className: 'danger', onClick: () => { setDeleteModal({ open: true, type: concilEditModal.item.tipoOrigem, id: concilEditModal.item.itemRef.id, purchase: concilEditModal.item.itemRef, title: 'Excluir Lançamento Direto', message: 'Este é um lançamento direto e será permanentemente apagado. Deseja excluir?', option: 'all' }); setConcilEditModal({ open: false, item: null }); } }, h(Trash2, { size: 14 }), " Excluir") 
-                      : h('button', { type: 'button', className: 'danger', onClick: () => { const tipo = concilEditModal.item.tipoOrigem; const id = concilEditModal.item.itemRef.id; const dataBaixa = concilEditModal.item.itemRef.dataBaixa; setConcilEditModal({ open: false, item: null }); executarEstornoBaixa(tipo, id, dataBaixa); } }, "Estornar Baixa"),
-                      
-                      h('div', { style: { display: 'flex', gap: 8 } }, 
-                          h('button', { type: 'button', className: 'action-btn', onClick: () => setConcilEditModal({ open: false, item: null }) }, "Cancelar"), 
-                          !isDireto && h('button', { type: 'button', className: 'primary', onClick: () => { const ref = concilEditModal.item.itemRef; const tipo = concilEditModal.item.tipoOrigem; setConcilEditModal({ open: false, item: null }); setEditingId(ref.id); setDescricao(ref.descricao); setObservacao(ref.observacao || ''); setValorTotal(ref.total.toFixed(2).replace('.', ',')); setValorParcelaInput(ref.recorrente ? '' : (ref.valorParcela || ref.total).toFixed(2).replace('.', ',')); setDataLancamento(ref.dataCompra || currentDate()); setFaturaMes(ref.inicio || month); setParcelas(ref.parcelas.toString()); setParcelaAtual((ref.parcelaInicial || 1).toString()); setCategoriaId(ref.categoriaId || ''); setSubcategoriaId(ref.subcategoriaId || ''); setIsRecorrente(!!ref.recorrente); setLancamentoTab(tipo); setModalOpen(true); } }, "Editar")
-                      )
-                  );
-              })()
             )
           )
         ),
