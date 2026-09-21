@@ -961,7 +961,11 @@
 
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
-        if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : purchases.find(p => p.id === editingId); if ((lancamentoTab === "pagar" || lancamentoTab === "receber") && itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
+        const itemExistenteEdicao = editingId ? (lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : purchases.find(p => p.id === editingId)) : null;
+        const ehLancamentoDiretoEdicao = !!itemExistenteEdicao?.isLancamentoDireto;
+        if (editingId && (lancamentoTab === "pagar" || lancamentoTab === "receber") && itemExistenteEdicao && itemExistenteEdicao.status === "Baixado" && !ehLancamentoDiretoEdicao) {
+          return setFormError("Não é permitido alterar lançamentos baixados.");
+        }
         
         if (lancamentoTab === "cartao") {
             if (!cartaoId) return setFormError("É obrigatório selecionar um cartão.");
@@ -970,8 +974,8 @@
             if (isFaturaFechada(faturaMes) && !isCorrigindoFaltaDeCartao) return setFormError(`A fatura inicial deste lançamento (${formatMonthLabel(faturaMes)}) está fechada. Reabra-a para poder editar.`);
         }
 
-        if (isDiaFechado(dataLancamento)) return setFormError("Este dia está fechado."); 
-        if (lancamentoTab !== "cartao" && isMesFechado(faturaMes)) return setFormError("Mês de competência fechado.");
+        if (!ehLancamentoDiretoEdicao && isDiaFechado(dataLancamento)) return setFormError("Este dia está fechado.");
+        if (!ehLancamentoDiretoEdicao && lancamentoTab !== "cartao" && isMesFechado(faturaMes)) return setFormError("Mês de competência fechado.");
 
         const total = parseValorInput(valorTotal); const n = parseInt(parcelas, 10); const atual = parseInt(parcelaAtual, 10);
         
@@ -990,13 +994,29 @@
           status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now(), conciliado: false
         };
 
-        if (lancamentoTab === "receber") { 
-            if (editingId) { updateContasReceber(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
-            else { updateContasReceber(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
+        if (lancamentoTab === "receber") {
+            if (editingId) {
+              const atual = contasReceber.find(p => p.id === editingId);
+              const transId = atual?.transferenciaId;
+              updateContasReceber(prev => prev.map(p => {
+                if (p.id !== editingId && !(transId && p.transferenciaId === transId)) return p;
+                return { ...p, ...novoRegistro, id: p.id, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, transferenciaId: p.transferenciaId, isLancamentoDireto: p.isLancamentoDireto };
+              }));
+              if (transId) updateContasPagar(prev => prev.map(p => p.transferenciaId === transId ? { ...p, descricao: novoRegistro.descricao, observacao: novoRegistro.observacao, total: novoRegistro.total, dataCompra: novoRegistro.dataCompra, inicio: novoRegistro.inicio, parcelas: novoRegistro.parcelas, parcelaInicial: novoRegistro.parcelaInicial, recorrente: novoRegistro.recorrente, categoriaId: novoRegistro.categoriaId, subcategoriaId: novoRegistro.subcategoriaId } : p));
+              setModalOpen(false);
+            } else { updateContasReceber(prev => [...prev, novoRegistro]); resetFormAfterSave(); }
         }
-        else if (lancamentoTab === "pagar") { 
-            if (editingId) { updateContasPagar(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
-            else { updateContasPagar(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
+        else if (lancamentoTab === "pagar") {
+            if (editingId) {
+              const atual = contasPagar.find(p => p.id === editingId);
+              const transId = atual?.transferenciaId;
+              updateContasPagar(prev => prev.map(p => {
+                if (p.id !== editingId && !(transId && p.transferenciaId === transId)) return p;
+                return { ...p, ...novoRegistro, id: p.id, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, transferenciaId: p.transferenciaId, isLancamentoDireto: p.isLancamentoDireto };
+              }));
+              if (transId) updateContasReceber(prev => prev.map(p => p.transferenciaId === transId ? { ...p, descricao: novoRegistro.descricao, observacao: novoRegistro.observacao, total: novoRegistro.total, dataCompra: novoRegistro.dataCompra, inicio: novoRegistro.inicio, parcelas: novoRegistro.parcelas, parcelaInicial: novoRegistro.parcelaInicial, recorrente: novoRegistro.recorrente, categoriaId: novoRegistro.categoriaId, subcategoriaId: novoRegistro.subcategoriaId } : p));
+              setModalOpen(false);
+            } else { updateContasPagar(prev => [...prev, novoRegistro]); resetFormAfterSave(); }
         }
         else { 
             novoRegistro.cartaoId = cartaoId || null; 
@@ -1781,13 +1801,17 @@
           th, td { padding: 10px 6px; border-bottom: 1px solid var(--line); font-size: 13px; text-align: left; vertical-align: middle; }
           .concil-day-table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; }
           .concil-day-table th, .concil-day-table td { box-sizing: border-box; min-width: 0; overflow: hidden; }
-          .concil-day-table th:nth-child(1), .concil-day-table td:nth-child(1) { width: 48%; }
-          .concil-day-table th:nth-child(2), .concil-day-table td:nth-child(2) { width: 11%; }
-          .concil-day-table th:nth-child(3), .concil-day-table td:nth-child(3) { width: 13%; }
+          .concil-day-table th:nth-child(1), .concil-day-table td:nth-child(1) { width: 36%; }
+          .concil-day-table th:nth-child(2), .concil-day-table td:nth-child(2) { width: 10%; }
+          .concil-day-table th:nth-child(3), .concil-day-table td:nth-child(3) { width: 14%; }
           .concil-day-table th:nth-child(4), .concil-day-table td:nth-child(4) { width: 13%; }
-          .concil-day-table th:nth-child(5), .concil-day-table td:nth-child(5) { width: 15%; }
+          .concil-day-table th:nth-child(5), .concil-day-table td:nth-child(5) { width: 13%; }
+          .concil-day-table th:nth-child(6), .concil-day-table td:nth-child(6) { width: 14%; }
           .concil-day-table td:first-child > div:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .concil-day-table .num { white-space: nowrap; font-size: 12px; }
+          .concil-day-table th:nth-child(6), .concil-day-table td:nth-child(6) { white-space: nowrap; }
+          .concil-day-table th { padding: 7px 6px; }
+          .concil-day-table td { padding: 7px 6px; }
           th.right, td.right { text-align: right; }
           th.center, td.center { text-align: center; }
           .badge { font-size: 11px; padding: 2px 6px; background: var(--paper); border-radius: 4px; color: var(--ink-soft); white-space: nowrap; }
