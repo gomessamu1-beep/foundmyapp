@@ -1754,6 +1754,75 @@
       const totalMesPagarRelatorio = useMemo(() => contasPagarFiltradasRelatorio.reduce((s, p) => s + p.valorParcela, 0), [contasPagarFiltradasRelatorio]);
       const totalMesReceberRelatorio = useMemo(() => contasReceberFiltradasRelatorio.reduce((s, p) => s + p.valorParcela, 0), [contasReceberFiltradasRelatorio]);
 
+      const relatorioDashboard = useMemo(() => {
+        const fimMes = `${month}-31`;
+        const pagar = contasPagarForMonth || [];
+        const receber = contasReceberForMonth || [];
+        const soma = (lista, fn) => lista.reduce((s, x) => s + (Number(fn(x)) || 0), 0);
+        const valorItem = p => Number(p.valorParcela ?? p.total ?? 0);
+        const pagarTotal = soma(pagar, valorItem);
+        const receberTotal = soma(receber, valorItem);
+        const pagarBaixado = soma(pagar.filter(p => p.status === 'Baixado'), valorItem);
+        const pagarAberto = soma(pagar.filter(p => (p.status || 'Em aberto') !== 'Baixado'), valorItem);
+        const receberBaixado = soma(receber.filter(p => p.status === 'Baixado'), valorItem);
+        const receberAberto = soma(receber.filter(p => (p.status || 'Em aberto') !== 'Baixado'), valorItem);
+        const faturaTotal = calcularTotalFaturaCompetencia(month);
+        const faturaBaixa = faturasBaixadas[month];
+        const faturaBaixada = !!(faturaBaixa && faturaBaixa.status === 'Baixado');
+
+        const porCategoria = (lista) => {
+          const mapa = {};
+          lista.forEach(p => {
+            const cat = getCategoria(p.categoriaId);
+            const nome = cat?.nome || 'Sem categoria';
+            mapa[nome] = (mapa[nome] || 0) + valorItem(p);
+          });
+          return Object.entries(mapa).sort((a,b) => b[1] - a[1]);
+        };
+
+        const contas = contasBancarias.map(c => {
+          let saldo = Number(c.saldoInicial || 0);
+          contasPagar.forEach(p => {
+            if (p.status === 'Baixado' && String(p.bancoBaixaId) === String(c.id) && p.dataBaixa && p.dataBaixa <= fimMes) saldo -= valorItem(p);
+          });
+          contasReceber.forEach(r => {
+            if (r.status === 'Baixado' && String(r.bancoBaixaId) === String(c.id) && r.dataBaixa && r.dataBaixa <= fimMes) saldo += valorItem(r);
+          });
+          Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
+            if (baixa && baixa.status === 'Baixado' && String(baixa.bancoId) === String(c.id) && baixa.dataBaixa && baixa.dataBaixa <= fimMes) saldo -= Number(calcularTotalFaturaCompetencia(comp)) || 0;
+          });
+          return { ...c, saldo };
+        });
+
+        return { pagarTotal, receberTotal, pagarBaixado, pagarAberto, receberBaixado, receberAberto, faturaTotal, faturaBaixada, faturaBaixa, contas, pagarCategorias: porCategoria(pagar), receberCategorias: porCategoria(receber) };
+      }, [month, contasPagarForMonth, contasReceberForMonth, contasPagar, contasReceber, contasBancarias, faturasBaixadas, purchases]);
+
+      function abrirRelatorioLancamento(tipo, id) {
+        setScreen('lancamentos');
+        setLancamentoTab(tipo);
+        const lista = tipo === 'pagar' ? contasPagar : contasReceber;
+        const item = lista.find(x => x.id === id);
+        if (item) setMonth(item.inicio || String(item.dataCompra || month).substring(0,7));
+      }
+
+      function abrirRelatorioFatura(comp) {
+        setMonth(comp || month);
+        setFaturaAno(String((comp || month).substring(0,4)));
+        setScreen('faturas');
+      }
+
+      function abrirRelatorioConciliacao(contaId, data) {
+        const ini = `${month}-01`;
+        const fim = new Date(Number(month.substring(0,4)), Number(month.substring(5,7)), 0).toISOString().slice(0,10);
+        setConcilContaId(contaId || '');
+        setConcilDataIni(ini);
+        setConcilDataFim(fim);
+        setConcilDataIniAplicada(ini);
+        setConcilDataFimAplicada(fim);
+        setConcilExibido(true);
+        setScreen('conciliacao');
+      }
+
       function exportRelatorioExcel() {
         const lista = relatorioTab === "pagar" ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio; if (lista.length === 0) return alert("Sem dados para exportar.");
         let csv = `\uFEFFData;Descrição;Observação;Categoria;Parcela;Status;Data Baixa;Valor\n`;
@@ -2214,45 +2283,107 @@
             )
           ),
 
-          screen === "relatorios" && h('div', { className: 'form-card' },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
-              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Relatórios Financeiros"),
-              h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: exportRelatorioExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
-            ),
-            h('div', { className: 'sub-nav' }, h('button', { className: relatorioTab === "pagar" ? "active" : "", onClick: () => setRelatorioTab("pagar") }, "🔴 Contas a Pagar"), h('button', { className: relatorioTab === "receber" ? "active" : "", onClick: () => setRelatorioTab("receber") }, "🟢 Contas a Receber")),
-            h('div', { className: 'nav-month', style: { marginBottom: 16 } }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
-
-            h('div', { style: { background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6, padding: '12px 16px', marginBottom: 16, display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' } },
-              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Lançamento De"), h('input', { type: 'date', value: relFiltroDataIniInput, onChange: e => setRelFiltroDataIniInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
-              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Lançamento Até"), h('input', { type: 'date', value: relFiltroDataFimInput, onChange: e => setRelFiltroDataFimInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
-              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Baixa De"), h('input', { type: 'date', value: relFiltroBaixaIniInput, onChange: e => setRelFiltroBaixaIniInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
-              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Baixa Até"), h('input', { type: 'date', value: relFiltroBaixaFimInput, onChange: e => setRelFiltroBaixaFimInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
-              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Status"), h('select', { value: relFiltroStatusInput, onChange: e => setRelFiltroStatusInput(e.target.value), style: { width: '120px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } }, h('option', { value: "todos" }, "Todos"), h('option', { value: "aberto" }, "Em aberto"), h('option', { value: "baixado" }, "Baixado"))),
-              h('div', { style: { display: 'flex', gap: '6px', height: '34px', alignItems: 'center' } }, 
-                h('button', { type: 'button', className: 'primary', style: { height: '34px', padding: '0 12px', fontSize: '13px', fontWeight: 'bold' }, onClick: () => { setRelFiltroDataIni(relFiltroDataIniInput); setRelFiltroDataFim(relFiltroDataFimInput); setRelFiltroBaixaIni(relFiltroBaixaIniInput); setRelFiltroBaixaFim(relFiltroBaixaFimInput); setRelFiltroStatus(relFiltroStatusInput); } }, "Consultar"), 
-                h('button', { type: 'button', className: 'action-btn', style: { height: '34px', padding: '0 10px', fontSize: '13px' }, onClick: () => { setRelFiltroDataIniInput(""); setRelFiltroDataFimInput(""); setRelFiltroBaixaIniInput(""); setRelFiltroBaixaFimInput(""); setRelFiltroStatusInput("todos"); setRelFiltroDataIni(""); setRelFiltroDataFim(""); setRelFiltroBaixaIni(""); setRelFiltroBaixaFim(""); setRelFiltroStatus("todos"); } }, "Limpar")
+          screen === "relatorios" && h('div', { className: 'form-card', style: { background: '#f4f6f8', border: 'none', boxShadow: 'none', padding: 0 } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 14 } },
+              h('div', null,
+                h('div', { style: { fontSize: 24, fontWeight: '800', letterSpacing: '-0.4px' } }, 'Dashboard Financeiro'),
+                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, 'Visão gerencial integrada aos lançamentos, faturas e conciliação bancária')
+              ),
+              h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
+                h('label', { style: { fontSize: 12, fontWeight: '700', color: 'var(--ink-soft)' } }, 'Competência'),
+                h('input', { type: 'month', value: month, onChange: e => setMonth(e.target.value), style: { height: 38, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 6, background: '#fff', fontWeight: '700' } }),
+                h('button', { type: 'button', className: 'action-btn', onClick: () => setMonth(addMonths(month, -1)) }, h(ChevronLeft, { size: 16 })),
+                h('button', { type: 'button', className: 'action-btn', onClick: () => setMonth(addMonths(month, 1)) }, h(ChevronRight, { size: 16 })),
+                h('button', { type: 'button', className: 'action-btn', onClick: exportRelatorioExcel }, h(FileSpreadsheet, { size: 14 }), ' Excel'),
+                h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), ' Imprimir')
               )
             ),
 
-            relatorioTab === "pagar" && h(React.Fragment, null,
-              h('div', { className: 'total-mes num' }, showMoney(totalMesPagarRelatorio)), h('div', { className: 'total-sub', style: { marginBottom: 12 } }, `Total de Contas a Pagar filtradas para ${formatMonthLabel(month)} (${contasPagarFiltradasRelatorio.length} itens)`),
-              h('table', null,
-                h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'center' }, "Status / Baixa"), h('th', { className: 'right' }, "Valor"))),
-                h('tbody', null, contasPagarFiltradasRelatorio.length === 0 ? h('tr', null, h('td', { colSpan: 6, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum registro encontrado.")) : contasPagarFiltradasRelatorio.map(p => {
-                  const cat = getCategoria(p.categoriaId); return h('tr', { key: `rel-pag-${p.id}` }, h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${p.observacao}`)), h('td', null, cat?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'center' }, h('span', { className: `badge ${p.status === 'Baixado' ? 'baixado' : 'aberto'}` }, p.status === 'Baixado' ? `Baixado (${formatDateBR(p.dataBaixa)})` : 'Em aberto')), h('td', { className: 'right num' }, showMoney(p.valorParcela)));
-                })),
-                h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '5', style: { textAlign: 'right' } }, "Total Filtrado:"), h('td', { className: 'right num' }, showMoney(totalMesPagarRelatorio))))
+            h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 12 } },
+              h('div', { className: 'top', style: { margin: 0, padding: 16, borderTop: '3px solid var(--red)', cursor: 'pointer' }, onClick: () => setRelatorioTab('pagar') },
+                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', fontWeight: '700' } }, 'CONTAS A PAGAR'),
+                h('div', { className: 'num', style: { fontSize: 24, fontWeight: '800', marginTop: 6, color: 'var(--red)' } }, showMoney(relatorioDashboard.pagarTotal)),
+                h('div', { style: { fontSize: 11, marginTop: 6 } }, `${contasPagarForMonth.length} lançamento(s) • `, h('span', { style: { color: 'var(--green)', fontWeight: '700' } }, `${showMoney(relatorioDashboard.pagarBaixado)} baixado`), ` • ${showMoney(relatorioDashboard.pagarAberto)} aberto`)
+              ),
+              h('div', { className: 'top', style: { margin: 0, padding: 16, borderTop: '3px solid var(--green)', cursor: 'pointer' }, onClick: () => setRelatorioTab('receber') },
+                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', fontWeight: '700' } }, 'CONTAS A RECEBER'),
+                h('div', { className: 'num', style: { fontSize: 24, fontWeight: '800', marginTop: 6, color: 'var(--green)' } }, showMoney(relatorioDashboard.receberTotal)),
+                h('div', { style: { fontSize: 11, marginTop: 6 } }, `${contasReceberForMonth.length} lançamento(s) • `, h('span', { style: { color: 'var(--green)', fontWeight: '700' } }, `${showMoney(relatorioDashboard.receberBaixado)} baixado`), ` • ${showMoney(relatorioDashboard.receberAberto)} aberto`)
+              ),
+              h('div', { className: 'top', style: { margin: 0, padding: 16, borderTop: '3px solid var(--amber)', cursor: 'pointer' }, onClick: () => abrirRelatorioFatura(month) },
+                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', fontWeight: '700' } }, 'FATURA DA COMPETÊNCIA'),
+                h('div', { className: 'num', style: { fontSize: 24, fontWeight: '800', marginTop: 6 } }, showMoney(relatorioDashboard.faturaTotal)),
+                h('div', { style: { fontSize: 11, marginTop: 6, color: relatorioDashboard.faturaBaixada ? 'var(--green)' : 'var(--amber)', fontWeight: '700' } }, relatorioDashboard.faturaBaixada ? `Baixada em ${formatDateBR(relatorioDashboard.faturaBaixa.dataBaixa)}` : 'Em aberto')
+              ),
+              h('div', { className: 'top', style: { margin: 0, padding: 16, borderTop: '3px solid #3C5A73' } },
+                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', fontWeight: '700' } }, 'FLUXO PREVISTO'),
+                h('div', { className: 'num', style: { fontSize: 24, fontWeight: '800', marginTop: 6, color: relatorioDashboard.receberTotal - relatorioDashboard.pagarTotal - relatorioDashboard.faturaTotal >= 0 ? 'var(--green)' : 'var(--red)' } }, showMoney(relatorioDashboard.receberTotal - relatorioDashboard.pagarTotal - relatorioDashboard.faturaTotal)),
+                h('div', { style: { fontSize: 11, marginTop: 6, color: 'var(--ink-soft)' } }, 'Receber − Pagar − Fatura')
               )
             ),
-            relatorioTab === "receber" && h(React.Fragment, null,
-              h('div', { className: 'total-mes num' }, showMoney(totalMesReceberRelatorio)), h('div', { className: 'total-sub', style: { marginBottom: 12 } }, `Total de Contas a Receber filtradas para ${formatMonthLabel(month)} (${contasReceberFiltradasRelatorio.length} itens)`),
-              h('table', null,
-                h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'center' }, "Status / Baixa"), h('th', { className: 'right' }, "Valor"))),
-                h('tbody', null, contasReceberFiltradasRelatorio.length === 0 ? h('tr', null, h('td', { colSpan: 6, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum registro encontrado.")) : contasReceberFiltradasRelatorio.map(p => {
-                  const cat = getCategoria(p.categoriaId); return h('tr', { key: `rel-rec-${p.id}` }, h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${p.observacao}`)), h('td', null, cat?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'center' }, h('span', { className: `badge ${p.status === 'Baixado' ? 'baixado' : 'aberto'}` }, p.status === 'Baixado' ? `Baixado (${formatDateBR(p.dataBaixa)})` : 'Em aberto')), h('td', { className: 'right num' }, showMoney(p.valorParcela)));
-                })),
-                h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '5', style: { textAlign: 'right' } }, "Total Filtrado:"), h('td', { className: 'right num' }, showMoney(totalMesReceberRelatorio))))
+
+            h('div', { style: { display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: 12, marginBottom: 12 } },
+              h('div', { className: 'top', style: { margin: 0, padding: 16 } },
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
+                  h('div', { style: { fontWeight: '800', fontSize: 15 } }, 'Contas a pagar x receber'),
+                  h('span', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatMonthLabel(month))
+                ),
+                [
+                  ['Contas a Pagar', relatorioDashboard.pagarTotal, 'var(--red)'],
+                  ['Contas a Receber', relatorioDashboard.receberTotal, 'var(--green)'],
+                  ['Fatura', relatorioDashboard.faturaTotal, 'var(--amber)']
+                ].map(([label, value, color]) => h('div', { key: label, style: { marginBottom: 12, cursor: 'pointer' }, onClick: () => label === 'Fatura' ? abrirRelatorioFatura(month) : setRelatorioTab(label === 'Contas a Pagar' ? 'pagar' : 'receber') },
+                  h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 } }, h('span', null, label), h('span', { className: 'num', style: { fontWeight: '700' } }, showMoney(value))),
+                  h('div', { style: { height: 12, background: '#edf0f2', borderRadius: 99, overflow: 'hidden' } }, h('div', { style: { height: '100%', width: `${Math.min(100, Math.max(2, (value / Math.max(relatorioDashboard.pagarTotal, relatorioDashboard.receberTotal, relatorioDashboard.faturaTotal, 1)) * 100))}%`, background: color, borderRadius: 99 } })
+                )))
+              ),
+              h('div', { className: 'top', style: { margin: 0, padding: 16 } },
+                h('div', { style: { fontWeight: '800', fontSize: 15, marginBottom: 12 } }, 'Status dos lançamentos'),
+                h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
+                  h('div', { style: { padding: 12, background: '#fff4f3', borderRadius: 8, cursor: 'pointer' }, onClick: () => { setRelatorioTab('pagar'); setRelFiltroStatus('aberto'); setRelFiltroStatusInput('aberto'); } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Pagar em aberto'), h('div', { className: 'num', style: { fontSize: 19, fontWeight: '800', color: 'var(--red)', marginTop: 4 } }, showMoney(relatorioDashboard.pagarAberto))),
+                  h('div', { style: { padding: 12, background: '#f0f9f3', borderRadius: 8, cursor: 'pointer' }, onClick: () => { setRelatorioTab('receber'); setRelFiltroStatus('aberto'); setRelFiltroStatusInput('aberto'); } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Receber em aberto'), h('div', { className: 'num', style: { fontSize: 19, fontWeight: '800', color: 'var(--green)', marginTop: 4 } }, showMoney(relatorioDashboard.receberAberto))),
+                  h('div', { style: { padding: 12, background: '#f6f7f8', borderRadius: 8, cursor: 'pointer' }, onClick: () => { setRelatorioTab('pagar'); setRelFiltroStatus('baixado'); setRelFiltroStatusInput('baixado'); } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Pagar baixado'), h('div', { className: 'num', style: { fontSize: 19, fontWeight: '800', marginTop: 4 } }, showMoney(relatorioDashboard.pagarBaixado))),
+                  h('div', { style: { padding: 12, background: '#f6f7f8', borderRadius: 8, cursor: 'pointer' }, onClick: () => { setRelatorioTab('receber'); setRelFiltroStatus('baixado'); setRelFiltroStatusInput('baixado'); } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Receber baixado'), h('div', { className: 'num', style: { fontSize: 19, fontWeight: '800', marginTop: 4 } }, showMoney(relatorioDashboard.receberBaixado)))
+                )
               )
+            ),
+
+            h('div', { className: 'top', style: { margin: '0 0 12px', padding: 16 } },
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } }, h('div', { style: { fontWeight: '800', fontSize: 15 } }, 'Saldo das contas bancárias'), h('span', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `posição até ${formatMonthLabel(month)}`)),
+              relatorioDashboard.contas.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 12 } }, 'Nenhuma conta bancária cadastrada.') :
+              h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 } }, relatorioDashboard.contas.map(c => h('div', { key: c.id, style: { border: '1px solid var(--line)', borderRadius: 8, padding: 12, background: '#fff', cursor: 'pointer' }, onClick: () => abrirRelatorioConciliacao(c.id) },
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8 } }, h('strong', { style: { fontSize: 13 } }, c.nome), h('span', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, c.bancoCode || c.banco || '')),
+                h('div', { className: 'num', style: { fontSize: 20, fontWeight: '800', marginTop: 9, color: c.saldo >= 0 ? 'var(--green)' : 'var(--red)' } }, showMoney(c.saldo)),
+                h('div', { style: { fontSize: 10, color: 'var(--ink-soft)', marginTop: 4 } }, 'Clique para abrir a conciliação')
+              )))
+            ),
+
+            h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 } },
+              h('div', { className: 'top', style: { margin: 0, padding: 16 } },
+                h('div', { style: { fontWeight: '800', fontSize: 15, marginBottom: 12 } }, 'Despesas por categoria'),
+                relatorioDashboard.pagarCategorias.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 12 } }, 'Sem dados na competência.') : relatorioDashboard.pagarCategorias.slice(0, 8).map(([cat, valor]) => h('div', { key: cat, style: { marginBottom: 9, cursor: 'pointer' }, onClick: () => setRelatorioTab('pagar') }, h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 } }, h('span', null, cat), h('span', { className: 'num', style: { fontWeight: '700' } }, showMoney(valor))), h('div', { style: { height: 8, background: '#edf0f2', borderRadius: 99 } }, h('div', { style: { height: '100%', width: `${Math.min(100, valor / Math.max(relatorioDashboard.pagarTotal, 1) * 100)}%`, background: 'var(--red)', borderRadius: 99 } })))),
+              h('div', { className: 'top', style: { margin: 0, padding: 16 } },
+                h('div', { style: { fontWeight: '800', fontSize: 15, marginBottom: 12 } }, 'Receitas por categoria'),
+                relatorioDashboard.receberCategorias.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 12 } }, 'Sem dados na competência.') : relatorioDashboard.receberCategorias.slice(0, 8).map(([cat, valor]) => h('div', { key: cat, style: { marginBottom: 9, cursor: 'pointer' }, onClick: () => setRelatorioTab('receber') }, h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 } }, h('span', null, cat), h('span', { className: 'num', style: { fontWeight: '700' } }, showMoney(valor))), h('div', { style: { height: 8, background: '#edf0f2', borderRadius: 99 } }, h('div', { style: { height: '100%', width: `${Math.min(100, valor / Math.max(relatorioDashboard.receberTotal, 1) * 100)}%`, background: 'var(--green)', borderRadius: 99 } }))))
+              )
+              )
+            ),
+
+            h('div', { className: 'top', style: { margin: 0, padding: 16 } },
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } }, h('div', { style: { fontWeight: '800', fontSize: 15 } }, 'Lançamentos da competência'), h('div', { className: 'sub-nav', style: { margin: 0 } }, h('button', { className: relatorioTab === 'pagar' ? 'active' : '', onClick: () => setRelatorioTab('pagar') }, 'Contas a Pagar'), h('button', { className: relatorioTab === 'receber' ? 'active' : '', onClick: () => setRelatorioTab('receber') }, 'Contas a Receber'))),
+              h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 0', borderTop: '1px solid var(--line)', marginTop: 4 } },
+                h('button', { type: 'button', className: 'action-btn', onClick: () => { setScreen('lancamentos'); setLancamentoTab('pagar'); } }, 'Abrir Contas a Pagar'),
+                h('button', { type: 'button', className: 'action-btn', onClick: () => { setScreen('lancamentos'); setLancamentoTab('receber'); } }, 'Abrir Contas a Receber'),
+                h('button', { type: 'button', className: 'action-btn', onClick: () => abrirRelatorioFatura(month) }, 'Abrir Fatura'),
+                h('button', { type: 'button', className: 'action-btn', onClick: () => abrirRelatorioConciliacao(relatorioDashboard.contas[0]?.id) }, 'Abrir Conciliação Bancária')
+              ),
+              h('div', { style: { overflowX: 'auto', marginTop: 8 } },
+                h('table', null,
+                  h('thead', null, h('tr', null, h('th', null, 'Data'), h('th', null, 'Descrição'), h('th', null, 'Categoria'), h('th', { className: 'center' }, 'Status'), h('th', { className: 'right' }, 'Valor'))),
+                  h('tbody', null, (relatorioTab === 'pagar' ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio).length === 0 ? h('tr', null, h('td', { colSpan: 5, style: { textAlign: 'center', color: 'var(--ink-soft)', padding: 18 } }, 'Nenhum registro encontrado.')) : (relatorioTab === 'pagar' ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio).slice(0, 25).map(p => { const cat = getCategoria(p.categoriaId); return h('tr', { key: `${relatorioTab}-${p.id}`, style: { cursor: 'pointer' }, onClick: () => abrirRelatorioLancamento(relatorioTab, p.id) }, h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('strong', null, p.descricao), p.observacao && h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, p.observacao)), h('td', null, cat?.nome || '-'), h('td', { className: 'center' }, h('span', { className: `badge ${p.status === 'Baixado' ? 'baixado' : 'aberto'}` }, p.status === 'Baixado' ? 'Baixado' : 'Em aberto')), h('td', { className: 'right num' }, showMoney(p.valorParcela))); }))
+                )
+              ),
+              (relatorioTab === 'pagar' ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio).length > 25 && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 } }, 'Mostrando os primeiros 25 registros. Use a aba acima para acessar todos os lançamentos.')
             )
           ),
 
