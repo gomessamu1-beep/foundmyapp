@@ -474,11 +474,12 @@
       const [isRecorrente, setIsRecorrente] = useState(false);
       const [formError, setFormError] = useState("");
 
-      // Período de Trabalho: uma única data permitida para novos lançamentos
-      // e para alterações de data. Fica disponível para o sistema inteiro.
-      const [periodoTrabalho, setPeriodoTrabalho] = useState(() => localStorage.getItem('unisuper-periodo-trabalho') || "");
+      // Período de Trabalho: intervalo de datas permitido para lançamentos e alterações.
+      const [periodoTrabalhoInicio, setPeriodoTrabalhoInicio] = useState(() => localStorage.getItem('unisuper-periodo-trabalho-inicio') || "");
+      const [periodoTrabalhoFim, setPeriodoTrabalhoFim] = useState(() => localStorage.getItem('unisuper-periodo-trabalho-fim') || "");
       const [periodoTrabalhoModalOpen, setPeriodoTrabalhoModalOpen] = useState(false);
-      const [periodoTrabalhoInput, setPeriodoTrabalhoInput] = useState("");
+      const [periodoTrabalhoInicioInput, setPeriodoTrabalhoInicioInput] = useState("");
+      const [periodoTrabalhoFimInput, setPeriodoTrabalhoFimInput] = useState("");
 
       const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
       const [novaCategoriaCor, setNovaCategoriaCor] = useState(CARD_COLORS[0]);
@@ -488,9 +489,14 @@
       const showMoney = (val) => valoresOcultos ? "*" : formatBRL(val);
 
       useEffect(() => {
-        if (periodoTrabalho) localStorage.setItem('unisuper-periodo-trabalho', periodoTrabalho);
-        else localStorage.removeItem('unisuper-periodo-trabalho');
-      }, [periodoTrabalho]);
+        if (periodoTrabalhoInicio && periodoTrabalhoFim) {
+          localStorage.setItem('unisuper-periodo-trabalho-inicio', periodoTrabalhoInicio);
+          localStorage.setItem('unisuper-periodo-trabalho-fim', periodoTrabalhoFim);
+        } else {
+          localStorage.removeItem('unisuper-periodo-trabalho-inicio');
+          localStorage.removeItem('unisuper-periodo-trabalho-fim');
+        }
+      }, [periodoTrabalhoInicio, periodoTrabalhoFim]);
 
       useEffect(() => {
         if (!supabaseClient) {
@@ -579,23 +585,28 @@
 
       function isMesFechado(compStr) { return !!mesesFechados[compStr]; }
 
+      function periodoTrabalhoAtivo() {
+        return !!(periodoTrabalhoInicio && periodoTrabalhoFim);
+      }
+
       function validarPeriodoTrabalho(dataStr) {
-        if (!periodoTrabalho) return true;
+        if (!periodoTrabalhoAtivo()) return true;
         const data = String(dataStr || '').substring(0, 10);
-        if (data !== periodoTrabalho) {
-          const msg = 'Lançamento Fora do Período de Trabalho.';
-          alert(msg);
+        if (!data || data < periodoTrabalhoInicio || data > periodoTrabalhoFim) {
+          alert('Lançamento Fora do Período de Trabalho.');
           return false;
         }
         return true;
       }
 
       function dataPadraoLancamento() {
-        return periodoTrabalho || currentDate();
+        if (periodoTrabalhoAtivo()) return periodoTrabalhoInicio;
+        return currentDate();
       }
 
       function competenciaPadraoLancamento() {
-        return periodoTrabalho ? periodoTrabalho.substring(0, 7) : month;
+        if (periodoTrabalhoAtivo()) return periodoTrabalhoInicio.substring(0, 7);
+        return month;
       }
 
       const fechadaAtual = isFaturaFechada(month);
@@ -805,7 +816,7 @@
         e.preventDefault();
         if (!fecharFaturaCatId || !fecharFaturaSubId) return alert("Selecione Categoria e Subcategoria para os lançamentos no Contas a Pagar.");
         const { comp, totais, vencimentos } = fecharFaturaModal;
-        if (periodoTrabalho) {
+        if (periodoTrabalhoAtivo()) {
           const fora = totais.some(t => !validarPeriodoTrabalho(vencimentos[t.cartaoId]));
           if (fora) return;
         }
@@ -2022,9 +2033,9 @@
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6 } },
               h('div', null,
                 h('div', { style: { fontWeight: 'bold', fontSize: 14 } }, 'Período de Trabalho'),
-                h('div', { style: { fontSize: 12, color: periodoTrabalho ? 'var(--green)' : 'var(--ink-soft)', marginTop: 3 } }, periodoTrabalho ? `Lançamentos permitidos somente em ${formatDateBR(periodoTrabalho)}` : 'Nenhum período definido. O sistema aceita qualquer data.')
+                h('div', { style: { fontSize: 12, color: periodoTrabalhoAtivo() ? 'var(--green)' : 'var(--ink-soft)', marginTop: 3 } }, periodoTrabalhoAtivo() ? `Lançamentos permitidos de ${formatDateBR(periodoTrabalhoInicio)} até ${formatDateBR(periodoTrabalhoFim)}` : 'Nenhum período definido. O sistema aceita qualquer data.')
               ),
-              h('button', { type: 'button', className: periodoTrabalho ? 'primary' : 'action-btn', onClick: () => { setPeriodoTrabalhoInput(periodoTrabalho || currentDate()); setPeriodoTrabalhoModalOpen(true); } }, '📅', periodoTrabalho ? ` Período: ${formatDateBR(periodoTrabalho)}` : ' Período de Trabalho')
+              h('button', { type: 'button', className: periodoTrabalhoAtivo() ? 'primary' : 'action-btn', onClick: () => { setPeriodoTrabalhoInicioInput(periodoTrabalhoInicio || currentDate()); setPeriodoTrabalhoFimInput(periodoTrabalhoFim || currentDate()); setPeriodoTrabalhoModalOpen(true); } }, '📅', periodoTrabalhoAtivo() ? ` Período: ${formatDateBR(periodoTrabalhoInicio)} a ${formatDateBR(periodoTrabalhoFim)}` : ' Período de Trabalho')
             ),
             h('div', { className: 'sub-nav' },
               h('button', { className: lancamentoTab === "cartao" ? "active" : "", onClick: () => setLancamentoTab("cartao") }, h(CreditCard, { size: 16 }), " Cartão de Crédito"),
@@ -2385,13 +2396,16 @@
             h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 } }, 'Defina a data em que você está trabalhando. O sistema não permitirá criar, alterar ou baixar lançamentos com outra data.'),
             h('div', { className: 'field' },
               h('label', null, 'Data de Trabalho *'),
-              h('input', { type: 'date', value: periodoTrabalhoInput, onChange: e => setPeriodoTrabalhoInput(e.target.value), required: true })
+              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
+                h('div', null, h('label', null, 'Data inicial'), h('input', { type: 'date', value: periodoTrabalhoInicioInput, onChange: e => setPeriodoTrabalhoInicioInput(e.target.value), required: true })),
+                h('div', null, h('label', null, 'Data final'), h('input', { type: 'date', value: periodoTrabalhoFimInput, onChange: e => setPeriodoTrabalhoFimInput(e.target.value), required: true }))
+              )
             ),
             h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 18 } },
               h('button', { type: 'button', className: 'danger', onClick: () => { setPeriodoTrabalho(''); setPeriodoTrabalhoInput(''); setPeriodoTrabalhoModalOpen(false); } }, 'Desativar Trava'),
               h('div', { style: { display: 'flex', gap: 8 } },
                 h('button', { type: 'button', className: 'action-btn', onClick: () => setPeriodoTrabalhoModalOpen(false) }, 'Cancelar'),
-                h('button', { type: 'button', className: 'primary', onClick: () => { if (!periodoTrabalhoInput) return alert('Informe a data do Período de Trabalho.'); setPeriodoTrabalho(periodoTrabalhoInput); setPeriodoTrabalhoModalOpen(false); } }, h(CheckCircle, { size: 15 }), ' Salvar Período')
+                h('button', { type: 'button', className: 'primary', onClick: () => { if (!periodoTrabalhoInicioInput || !periodoTrabalhoFimInput) return alert('Informe a data inicial e a data final do Período de Trabalho.'); if (periodoTrabalhoInicioInput > periodoTrabalhoFimInput) return alert('A data inicial não pode ser maior que a data final.'); setPeriodoTrabalhoInicio(periodoTrabalhoInicioInput); setPeriodoTrabalhoFim(periodoTrabalhoFimInput); setPeriodoTrabalhoModalOpen(false); } }, h(CheckCircle, { size: 15 }), ' Salvar Período')
               )
             )
           )
