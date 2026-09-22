@@ -474,12 +474,23 @@
       const [isRecorrente, setIsRecorrente] = useState(false);
       const [formError, setFormError] = useState("");
 
+      // Período de Trabalho: uma única data permitida para novos lançamentos
+      // e para alterações de data. Fica disponível para o sistema inteiro.
+      const [periodoTrabalho, setPeriodoTrabalho] = useState(() => localStorage.getItem('unisuper-periodo-trabalho') || "");
+      const [periodoTrabalhoModalOpen, setPeriodoTrabalhoModalOpen] = useState(false);
+      const [periodoTrabalhoInput, setPeriodoTrabalhoInput] = useState("");
+
       const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
       const [novaCategoriaCor, setNovaCategoriaCor] = useState(CARD_COLORS[0]);
       const [novaCategoriaIsTransferencia, setNovaCategoriaIsTransferencia] = useState(false);
       const [subInputs, setSubInputs] = useState({});
 
       const showMoney = (val) => valoresOcultos ? "*" : formatBRL(val);
+
+      useEffect(() => {
+        if (periodoTrabalho) localStorage.setItem('unisuper-periodo-trabalho', periodoTrabalho);
+        else localStorage.removeItem('unisuper-periodo-trabalho');
+      }, [periodoTrabalho]);
 
       useEffect(() => {
         if (!supabaseClient) {
@@ -567,6 +578,25 @@
       }
 
       function isMesFechado(compStr) { return !!mesesFechados[compStr]; }
+
+      function validarPeriodoTrabalho(dataStr) {
+        if (!periodoTrabalho) return true;
+        const data = String(dataStr || '').substring(0, 10);
+        if (data !== periodoTrabalho) {
+          const msg = 'Lançamento Fora do Período de Trabalho.';
+          alert(msg);
+          return false;
+        }
+        return true;
+      }
+
+      function dataPadraoLancamento() {
+        return periodoTrabalho || currentDate();
+      }
+
+      function competenciaPadraoLancamento() {
+        return periodoTrabalho ? periodoTrabalho.substring(0, 7) : month;
+      }
 
       const fechadaAtual = isFaturaFechada(month);
 
@@ -775,6 +805,10 @@
         e.preventDefault();
         if (!fecharFaturaCatId || !fecharFaturaSubId) return alert("Selecione Categoria e Subcategoria para os lançamentos no Contas a Pagar.");
         const { comp, totais, vencimentos } = fecharFaturaModal;
+        if (periodoTrabalho) {
+          const fora = totais.some(t => !validarPeriodoTrabalho(vencimentos[t.cartaoId]));
+          if (fora) return;
+        }
         const generatedIds = [];
         const newPagar = totais.map(t => {
           const id = uid();
@@ -972,6 +1006,9 @@
 
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
+        if (!validarPeriodoTrabalho(dataLancamento)) {
+          return setFormError('Lançamento Fora do Período de Trabalho.');
+        }
         const itemExistenteEdicao = editingId ? (lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : purchases.find(p => p.id === editingId)) : null;
         const ehLancamentoDiretoEdicao = !!itemExistenteEdicao?.isLancamentoDireto;
         if (editingId && (lancamentoTab === "pagar" || lancamentoTab === "receber") && itemExistenteEdicao && itemExistenteEdicao.status === "Baixado" && !ehLancamentoDiretoEdicao) {
@@ -1035,6 +1072,9 @@
 
       function handleSaveLancamentoRapido(e) {
         e.preventDefault(); setLrError("");
+        if (!validarPeriodoTrabalho(lrData)) {
+          return setLrError('Lançamento Fora do Período de Trabalho.');
+        }
         const total = parseValorInput(lrValor);
         const cat = getCategoria(lrCategoriaId);
         const exigeSub = cat && !cat.isTransferencia;
@@ -1104,12 +1144,14 @@
 
       function executarBaixaIndividual(type, id, bancoId, dataBaixaStr) {
         if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data.");
+        if (!validarPeriodoTrabalho(dataBaixaStr)) return;
         if (type === "pagar") updateContasPagar(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); else if (type === "receber") updateContasReceber(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p));
         setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
       }
 
       function executarBaixaLote(type, bancoId, ids, dataBaixaStr) {
         if (!bancoId || !ids || ids.length === 0 || !dataBaixaStr) return alert("Preencha todos os campos.");
+        if (!validarPeriodoTrabalho(dataBaixaStr)) return;
         if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchReceberIds([]); }
         setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate() });
       }
@@ -1977,6 +2019,13 @@
           ),
 
           screen === "lancamentos" && h('div', { className: 'form-card' },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6 } },
+              h('div', null,
+                h('div', { style: { fontWeight: 'bold', fontSize: 14 } }, 'Período de Trabalho'),
+                h('div', { style: { fontSize: 12, color: periodoTrabalho ? 'var(--green)' : 'var(--ink-soft)', marginTop: 3 } }, periodoTrabalho ? `Lançamentos permitidos somente em ${formatDateBR(periodoTrabalho)}` : 'Nenhum período definido. O sistema aceita qualquer data.')
+              ),
+              h('button', { type: 'button', className: periodoTrabalho ? 'primary' : 'action-btn', onClick: () => { setPeriodoTrabalhoInput(periodoTrabalho || currentDate()); setPeriodoTrabalhoModalOpen(true); } }, '📅', periodoTrabalho ? ` Período: ${formatDateBR(periodoTrabalho)}` : ' Período de Trabalho')
+            ),
             h('div', { className: 'sub-nav' },
               h('button', { className: lancamentoTab === "cartao" ? "active" : "", onClick: () => setLancamentoTab("cartao") }, h(CreditCard, { size: 16 }), " Cartão de Crédito"),
               h('button', { className: lancamentoTab === "pagar" ? "active" : "", onClick: () => setLancamentoTab("pagar") }, h(ArrowDownCircle, { size: 16 }), " Contas a Pagar"),
@@ -1989,7 +2038,7 @@
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(CreditCard), " Lançamentos do cartão"),
                   h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, 
                     h('button', { className: `lock-btn ${fechadaAtual ? 'closed' : ''}`, onClick: (e) => toggleFaturaFechada(month, e) }, fechadaAtual ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14 }), fechadaAtual ? ' Fatura Fechada' : ' Fatura Aberta'),
-                    h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
+                    h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
                   )
                 ),
                 h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
@@ -2032,7 +2081,7 @@
               h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
                 h('div', { className: 'brand' },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(ArrowDownCircle), " Contas a Pagar"),
-                  h('div', { style: { display: 'flex', gap: 8 } }, batchPagarIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('pagar', batchPagarIds) }, `Estornar Baixa (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchPagarIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('pagar'); setModalOpen(true); } }, h(Plus), " Nova Conta a Pagar"))
+                  h('div', { style: { display: 'flex', gap: 8 } }, batchPagarIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('pagar', batchPagarIds) }, `Estornar Baixa (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchPagarIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('pagar'); setModalOpen(true); } }, h(Plus), " Nova Conta a Pagar"))
                 ),
                 h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
                 h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
@@ -2077,7 +2126,7 @@
               h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
                 h('div', { className: 'brand' },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(ArrowUpCircle), " Contas a Receber"),
-                  h('div', { style: { display: 'flex', gap: 8 } }, batchReceberIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('receber', batchReceberIds) }, `Estornar Baixa (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchReceberIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('receber'); setModalOpen(true); } }, h(Plus), " Nova Conta a Receber"))
+                  h('div', { style: { display: 'flex', gap: 8 } }, batchReceberIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('receber', batchReceberIds) }, `Estornar Baixa (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchReceberIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('receber'); setModalOpen(true); } }, h(Plus), " Nova Conta a Receber"))
                 ),
                 h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
                 h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
@@ -2120,7 +2169,7 @@
           ),
 
           screen === "faturas" && h('div', { className: 'form-card' },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } }, h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Resumo de Faturas por Ano"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")),
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } }, h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Resumo de Faturas por Ano"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")),
             h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 20 } }, "Navegue pelos anos e clique em um mês para visualizar e gerenciar seus lançamentos logo abaixo."),
             h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 } }, h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) - 1).toString()) }, h(ChevronLeft)), h('div', { style: { fontSize: 22, fontWeight: 'bold' } }, faturaAno), h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) + 1).toString()) }, h(ChevronRight))),
             h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' } }, Array.from({ length: 12 }).map((_, i) => {
@@ -2132,7 +2181,7 @@
                 h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, `Lançamentos da Fatura: ${formatMonthLabel(month)}`),
                 h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
                   h('button', { className: `lock-btn ${fechadaAtual ? 'closed' : ''}`, onClick: (e) => toggleFaturaFechada(month, e) }, fechadaAtual ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14 }), fechadaAtual ? ' Fatura Fechada' : ' Fatura Aberta'),
-                  h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 8px' }, onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
+                  h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 8px' }, onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
                 )
               ),
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 10, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
@@ -2200,7 +2249,7 @@
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
               h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Conciliação Bancária"),
               h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } },
-                h('button', { type: 'button', className: 'primary', title: 'Criar novo lançamento bancário', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
+                h('button', { type: 'button', className: 'primary', title: 'Criar novo lançamento bancário', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(dataPadraoLancamento()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
                 concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
                 concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
               )
@@ -2323,6 +2372,27 @@
               formError && h('div', { style: { color: 'var(--red)', fontSize: 12, gridColumn: 'span 2' } }, formError),
               formSuccess && h('div', { style: { color: 'var(--green)', fontSize: 13, gridColumn: 'span 2', fontWeight: 'bold', background: '#D1FAE5', padding: '6px 10px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 6 } }, h(CheckCircle, {size: 14}), formSuccess),
               h('div', { className: 'submit-row' }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setModalOpen(false); setFormSuccess(""); } }, "Fechar"), h('button', { type: 'submit', className: 'primary' }, h(Plus), " Salvar Lançamento"))
+            )
+          )
+        ),
+
+        periodoTrabalhoModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+              h('div', { style: { fontSize: 17, fontWeight: 'bold' } }, 'Período de Trabalho'),
+              h('button', { type: 'button', className: 'icon', onClick: () => setPeriodoTrabalhoModalOpen(false) }, h(XIcon))
+            ),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 } }, 'Defina a data em que você está trabalhando. O sistema não permitirá criar, alterar ou baixar lançamentos com outra data.'),
+            h('div', { className: 'field' },
+              h('label', null, 'Data de Trabalho *'),
+              h('input', { type: 'date', value: periodoTrabalhoInput, onChange: e => setPeriodoTrabalhoInput(e.target.value), required: true })
+            ),
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 18 } },
+              h('button', { type: 'button', className: 'danger', onClick: () => { setPeriodoTrabalho(''); setPeriodoTrabalhoInput(''); setPeriodoTrabalhoModalOpen(false); } }, 'Desativar Trava'),
+              h('div', { style: { display: 'flex', gap: 8 } },
+                h('button', { type: 'button', className: 'action-btn', onClick: () => setPeriodoTrabalhoModalOpen(false) }, 'Cancelar'),
+                h('button', { type: 'button', className: 'primary', onClick: () => { if (!periodoTrabalhoInput) return alert('Informe a data do Período de Trabalho.'); setPeriodoTrabalho(periodoTrabalhoInput); setPeriodoTrabalhoModalOpen(false); } }, h(CheckCircle, { size: 15 }), ' Salvar Período')
+              )
             )
           )
         ),
