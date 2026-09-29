@@ -19,7 +19,16 @@
   </script>
 </head>
 <body style="margin: 0; background-color: #ECE8DD;">
-  <div id="root"></div>
+  <div id="root"><div style="padding:40px;text-align:center;font-family:Arial,sans-serif;color:#333">Carregando FoundMyApp...</div></div>
+  <script>
+    window.addEventListener("error", function(event) {
+      var root = document.getElementById("root");
+      if (root && (!window.React || !window.ReactDOM)) {
+        root.innerHTML = '<div style="padding:40px;font-family:Arial,sans-serif;color:#9b1c1c;background:#fff4f4"><h2>Erro ao abrir o FoundMyApp</h2><p>Um recurso necessário não foi carregado. Atualize a página com Ctrl+F5.</p><p style="font-size:12px;word-break:break-word">' + String(event.message || "Erro de carregamento") + '</p></div>';
+      }
+    });
+    window.addEventListener("unhandledrejection", function(event) { console.error("Promise rejeitada:", event.reason); });
+  </script>
 
   <script>
     const { createElement: h, useState, useEffect, useMemo, useRef } = React;
@@ -2618,11 +2627,27 @@
       ));
     }
 
+    class FoundMyAppErrorBoundary extends React.Component {
+      constructor(props) { super(props); this.state = { error: null }; }
+      static getDerivedStateFromError(error) { return { error }; }
+      componentDidCatch(error, info) { console.error("ERRO DE RENDERIZAÇÃO DO FOUNDMYAPP:", error, info); }
+      render() {
+        if (this.state.error) return h('div', { style: { padding: '40px', fontFamily: 'Arial,sans-serif', color: '#9b1c1c', background: '#fff4f4', minHeight: '100vh', boxSizing: 'border-box' } },
+          h('h2', null, 'Erro ao abrir o FoundMyApp'),
+          h('p', null, 'O sistema carregou, mas ocorreu um erro interno ao montar a tela.'),
+          h('p', { style: { fontSize: 12, wordBreak: 'break-word' } }, String(this.state.error?.message || this.state.error || 'Erro desconhecido')),
+          h('button', { onClick: () => location.reload(), style: { padding: '10px 16px', cursor: 'pointer' } }, 'Recarregar sistema')
+        );
+        return this.props.children;
+      }
+    }
+
     const container = document.getElementById('root');
+    const appElement = h(FoundMyAppErrorBoundary, null, h(FaturaApp));
     if (ReactDOM.createRoot) {
-      ReactDOM.createRoot(container).render(h(FaturaApp));
+      ReactDOM.createRoot(container).render(appElement);
     } else {
-      ReactDOM.render(h(FaturaApp), container);
+      ReactDOM.render(appElement, container);
     }
   </script>
 </body>
