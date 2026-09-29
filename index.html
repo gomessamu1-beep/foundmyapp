@@ -382,6 +382,12 @@
       const [ofxData, setOfxData] = useState([]);
       const [ofxSelectedIds, setOfxSelectedIds] = useState([]);
       const [sysSelectedIds, setSysSelectedIds] = useState([]);
+      const [ofxImportContaId, setOfxImportContaId] = useState("");
+      const [ofxImportDataIni, setOfxImportDataIni] = useState("");
+      const [ofxImportDataFim, setOfxImportDataFim] = useState("");
+      const [ofxImportConsultado, setOfxImportConsultado] = useState(false);
+      const [ofxImportPreview, setOfxImportPreview] = useState({ open:false, contaId:"", contaNome:"", arquivoId:"", arquivoNome:"", transacoes:[], datas:[], dataSelecionada:"" });
+      const [ofxImportLoading, setOfxImportLoading] = useState(false);
 
       const [baixaModal, setBaixaModal] = useState({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
       const [batchBaixaModal, setBatchBaixaModal] = useState({ open: false, bancoId: "", dataBaixa: currentDate() });
@@ -524,44 +530,39 @@
         const { data } = await supabaseClient.from('app_data').select('*').eq('user_id', userId).single();
         if (data) {
           const loadedCats = (data.categorias || []).map(c => ({ tipo: c.tipo || 'despesa', isTransferencia: !!c.isTransferencia, ...c }));
-          // Limpeza definitiva de vínculos antigos da conciliação OFX.
-          // A interface OFX foi removida; lançamentos do sistema não podem
-          // continuar presos a uma conciliação OFX criada em versões antigas.
-          const limparVinculoOfxLegado = (item) => {
-            if (!item || typeof item !== 'object') return item;
-            const { conciliado, conciliacaoId, lancamentoId, ...limpo } = item;
-            return limpo;
-          };
-          const purchasesLimpos = (data.purchases || []).map(limparVinculoOfxLegado);
-          const contasPagarLimpas = (data.contas_pagar || []).map(limparVinculoOfxLegado);
-          const contasReceberLimpas = (data.contas_receber || []).map(limparVinculoOfxLegado);
-          const faturasBaixadasLimpas = Object.fromEntries(Object.entries(data.faturas_baixadas || {}).map(([comp, baixa]) => [comp, limparVinculoOfxLegado(baixa)]));
-          setPurchases(purchasesLimpos); setContasPagar(contasPagarLimpas); setContasReceber(contasReceberLimpas);
+          setPurchases(data.purchases || []); setContasPagar(data.contas_pagar || []); setContasReceber(data.contas_receber || []);
           const contasBancariasCarregadas = data.contas_bancarias || [];
           setCartoes(data.cartoes || []); setContasBancarias(contasBancariasCarregadas); setCategorias(loadedCats);
-          setDeparaList(data.depara || []); setFaturasFechadas(data.faturas_fechadas || {}); setFaturasBaixadas(faturasBaixadasLimpas);
+          setDeparaList(data.depara || []); setFaturasFechadas(data.faturas_fechadas || {}); setFaturasBaixadas(data.faturas_baixadas || {});
           setDiasFechados(data.dias_fechados || {}); setMesesFechados(data.meses_fechados || {});
-          const ofxCarregado = normalizarIdsOfx(data.ofx_dados || []).map(o => {
-            if (!o.contaId && contasBancariasCarregadas.length === 1) {
-              const unica = contasBancariasCarregadas[0];
-              return { ...o, contaId: String(unica.id), contaNome: unica.nome || '' };
-            }
-            return o;
-          });
-          setOfxData(ofxCarregado); setOfxSelectedIds([]); setSysSelectedIds([]);
+          const [{data:ofxMovDb,error:ofxMovErr},{data:ofxArqDb,error:ofxArqErr}]=await Promise.all([
+            supabaseClient.from('ofx_movimentacoes').select('*').eq('user_id',userId).order('data_movimento',{ascending:true}),
+            supabaseClient.from('ofx_arquivos').select('id,nome_arquivo').eq('user_id',userId)
+          ]);
+          if(ofxMovErr||ofxArqErr)console.error('Erro ao carregar OFX:',ofxMovErr||ofxArqErr);
+          const contaMap=new Map(contasBancariasCarregadas.map(c=>[String(c.id),c]));
+          setOfxData(normalizarIdsOfx((ofxMovDb||[]).map(o=>{
+            const conta=contaMap.get(String(o.conta_bancaria_id));
+            return {id:String(o.id),dbId:String(o.id),contaId:String(o.conta_bancaria_id||''),contaNome:conta?.nome||'',data:o.data_movimento,valor:Number(o.valor||0),
+              descricao:o.descricao||o.nome||'Transação OFX',nome:o.nome||'',tipo:o.tipo||'',fitid:o.fitid||'',bancoOfx:o.banco_id||'',bancoCode:o.banco_id||'',agenciaOfx:o.agencia||'',contaOfx:o.conta_ofx||'',
+              ofxArquivoId:String(o.arquivo_id||''),ofxArquivoNome:(ofxArqDb||[]).find(a=>String(a.id)===String(o.arquivo_id))?.nome_arquivo||'',conciliado:!!o.conciliado,conciliacaoId:o.conciliacao_id||null,lancamentoId:o.lancamento_sistema_id||null};
+          })));
+          setOfxSelectedIds([]); setSysSelectedIds([]);
+          if(contasBancariasCarregadas.length===1){const unica=String(contasBancariasCarregadas[0].id);setConcilContaId(p=>p||unica);setOfxImportContaId(p=>p||unica);}
         } else {
           await supabaseClient.from('app_data').upsert({
             user_id: userId, purchases: [], contas_pagar: [], contas_receber: [], cartoes: [], contas_bancarias: [],
-            categorias: [], depara: [], faturas_fechadas: {}, faturas_baixadas: {}, dias_fechados: {}, meses_fechados: {}, ofx_dados: []
+            categorias: [], depara: [], faturas_fechadas: {}, faturas_baixadas: {}, dias_fechados: {}, meses_fechados: {}
           });
+          setOfxData([]);
         }
         setDataReady(true); setDataLoading(false);
       }
 
       const saveTimerRef=useRef(null), savingRef=useRef(false), pendingSaveRef=useRef(false);
-      async function saveDataToSupabase(){ if(!session||!dataReady||!supabaseClient)return; const payload={user_id:session.user.id,purchases,contas_pagar:contasPagar,contas_receber:contasReceber,cartoes,contas_bancarias:contasBancarias,categorias,depara:deparaList,faturas_fechadas:faturasFechadas,faturas_baixadas:faturasBaixadas,dias_fechados:diasFechados,meses_fechados:mesesFechados,ofx_dados:ofxData,updated_at:new Date().toISOString()}; if(savingRef.current){pendingSaveRef.current=true;return;} savingRef.current=true; const {error}=await supabaseClient.from('app_data').upsert(payload,{onConflict:'user_id'}); savingRef.current=false; if(error){console.error('ERRO AO SALVAR:',error);alert('Erro ao salvar! '+error.message);} if(pendingSaveRef.current){pendingSaveRef.current=false;scheduleSave();}}
+      async function saveDataToSupabase(){ if(!session||!dataReady||!supabaseClient)return; const payload={user_id:session.user.id,purchases,contas_pagar:contasPagar,contas_receber:contasReceber,cartoes,contas_bancarias:contasBancarias,categorias,depara:deparaList,faturas_fechadas:faturasFechadas,faturas_baixadas:faturasBaixadas,dias_fechados:diasFechados,meses_fechados:mesesFechados,updated_at:new Date().toISOString()}; if(savingRef.current){pendingSaveRef.current=true;return;} savingRef.current=true; const {error}=await supabaseClient.from('app_data').upsert(payload,{onConflict:'user_id'}); savingRef.current=false; if(error){console.error('ERRO AO SALVAR:',error);alert('Erro ao salvar! '+error.message);} if(pendingSaveRef.current){pendingSaveRef.current=false;scheduleSave();}}
       function scheduleSave(){if(!session||!dataReady)return;if(saveTimerRef.current)clearTimeout(saveTimerRef.current);saveTimerRef.current=setTimeout(()=>{saveTimerRef.current=null;saveDataToSupabase();},250);}
-      useEffect(()=>{if(!session||!dataReady)return;scheduleSave();return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};},[session,dataReady,purchases,contasPagar,contasReceber,cartoes,contasBancarias,categorias,deparaList,faturasFechadas,faturasBaixadas,diasFechados,mesesFechados,ofxData]);
+      useEffect(()=>{if(!session||!dataReady)return;scheduleSave();return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};},[session,dataReady,purchases,contasPagar,contasReceber,cartoes,contasBancarias,categorias,deparaList,faturasFechadas,faturasBaixadas,diasFechados,mesesFechados]);
       function updatePurchases(u){setPurchases(p=>typeof u==='function'?u(p):u);} function updateContasPagar(u){setContasPagar(p=>typeof u==='function'?u(p):u);} function updateContasReceber(u){setContasReceber(p=>typeof u==='function'?u(p):u);} function updateCartoes(u){setCartoes(p=>typeof u==='function'?u(p):u);} function updateContasBancarias(u){setContasBancarias(p=>typeof u==='function'?u(p):u);} function updateCategorias(u){setCategorias(p=>typeof u==='function'?u(p):u);} function updateDepara(u){setDeparaList(p=>typeof u==='function'?u(p):u);} function updateFechadas(u){setFaturasFechadas(p=>typeof u==='function'?u(p):u);} function updateFaturasBaixadas(u){setFaturasBaixadas(p=>typeof u==='function'?u(p):u);} function updateDiasFechados(u){setDiasFechados(p=>typeof u==='function'?u(p):u);} function updateMesesFechados(u){setMesesFechados(p=>typeof u==='function'?u(p):u);} function updateOfxData(u){setOfxData(p=>typeof u==='function'?u(p):u);}
 
       function getCartao(id) { return cartoes.find(c => c.id === id) || null; }
@@ -1334,122 +1335,117 @@
       }, [ofxData]);
 
 
-      function handleOfxUpload(e){
-        if(!concilContaId){ alert('Selecione a Conta Bancária no filtro antes de importar o arquivo OFX.'); return; }
-        const conta = contasBancarias.find(c => String(c.id) === String(concilContaId));
-        const file = e.target.files[0];
-        if(!file) return;
 
-        const reader = new FileReader();
-        reader.onload = evt => {
-          const arquivoId = `ofx-arq-${Date.now()}-${uid()}`;
-          const parsed = parseOFX(evt.target.result, arquivoId, file.name);
-          if(!parsed.transactions.length) return alert('O arquivo OFX não possui lançamentos válidos.');
-
-          // A conta do OFX é definida exclusivamente pela conta selecionada
-          // na tela. O conteúdo bancário do arquivo não é usado para bloquear
-          // nem para redirecionar a importação.
-          const transacoes = parsed.transactions.map(t => ({
-            ...t,
-            contaId: String(concilContaId),
-            contaNome: conta.nome,
-            ofxArquivoId: arquivoId,
-            ofxArquivoNome: file.name
-          }));
-
-          const datas = [...new Set(transacoes.map(t => t.data).filter(Boolean))].sort();
-          if(!datas.length) return alert('Não foi possível identificar as datas das movimentações do arquivo OFX.');
-
-          setOfxImportModal({
-            open: true,
-            contaId: String(concilContaId),
-            contaNome: conta.nome,
-            arquivoId,
-            arquivoNome: file.name,
-            transacoes,
-            datas,
-            dataSelecionada: datas.length === 1 ? datas[0] : ''
-          });
-        };
-        reader.readAsText(file);
-        if(ofxInputRef.current) ofxInputRef.current.value='';
-      }
-
-      function confirmarImportacaoOfx(){
-        if(!ofxImportModal.open) return;
-        const data = ofxImportModal.dataSelecionada;
-        if(!data) return alert('Selecione o dia que deseja importar.');
-        const transacoesDia = ofxImportModal.transacoes.filter(t => t.data === data);
-        if(!transacoesDia.length) return alert('Não existem movimentações nesse dia no arquivo OFX.');
-
-        const jaImportadas = ofxData.filter(o =>
-          mesmaContaOfx(o.contaId, ofxImportModal.contaId) &&
-          o.data === data
-        );
-        if(jaImportadas.length){
-          const conciliadas = jaImportadas.filter(o => o.conciliado);
-          if(conciliadas.length){
-            return alert(`O dia ${formatDateBR(data)} já possui ${jaImportadas.length} lançamento(s) OFX importado(s), sendo ${conciliadas.length} conciliado(s). Desfaça as conciliações antes de importar novamente esse dia.`);
-          }
-          if(!window.confirm(`Já existem ${jaImportadas.length} lançamento(s) OFX dessa conta no dia ${formatDateBR(data)}.\n\nDeseja importar novamente mesmo assim? Isso criará lançamentos duplicados.`)) return;
-        }
-
-        updateOfxData(prev => [...prev, ...transacoesDia]);
-        setOfxSelectedIds([]);
-        setSysSelectedIds([]);
-        setOfxImportModal({ open: false, contaId: '', contaNome: '', arquivoId: '', arquivoNome: '', transacoes: [], datas: [], dataSelecionada: '' });
-        alert(`${transacoesDia.length} lançamento(s) do dia ${formatDateBR(data)} importado(s) para ${ofxImportModal.contaNome}.\nBanco: ${transacoesDia[0].bancoOfx || '-'} | Agência: ${transacoesDia[0].agenciaOfx || '-'} | Conta: ${transacoesDia[0].contaOfx || '-'}`);
-      }
-
-      function excluirMovimentacoesOfxDia(){
-        if(!concilContaId) return alert('Selecione a Conta Bancária no filtro antes de excluir movimentações OFX.');
-        if(!ofxExcluirDia) return alert('Selecione o dia que deseja excluir.');
-
-        const registros = ofxData.filter(o =>
-          mesmaContaOfx(o.contaId, concilContaId) && o.data === ofxExcluirDia
-        );
-        if(!registros.length) return alert(`Não existem movimentações OFX para a conta selecionada no dia ${formatDateBR(ofxExcluirDia)}.`);
-        const conciliados = registros.filter(o => o.conciliado);
-        if(conciliados.length){
-          return alert(`Não é possível excluir o dia ${formatDateBR(ofxExcluirDia)} porque ${conciliados.length} lançamento(s) OFX estão conciliados. Desfaça as conciliações primeiro.`);
-        }
-
-        const arquivos = [...new Set(registros.map(o => o.ofxArquivoNome).filter(Boolean))];
-        const detalheArquivos = arquivos.length ? `\nArquivo(s): ${arquivos.join(', ')}` : '';
-        if(!window.confirm(`Excluir TODOS os ${registros.length} lançamento(s) OFX da conta selecionada no dia ${formatDateBR(ofxExcluirDia)}?\n${detalheArquivos}\n\nOs lançamentos do sistema não serão excluídos.`)) return;
-
-        updateOfxData(prev => prev.filter(o => !(mesmaContaOfx(o.contaId, concilContaId) && o.data === ofxExcluirDia)));
-        setOfxSelectedIds([]);
-        setSysSelectedIds([]);
-        setOfxExcluirDiaModalOpen(false);
-        alert(`Movimentações OFX do dia ${formatDateBR(ofxExcluirDia)} excluídas com sucesso.`);
-      }
-
-      function excluirArquivoOfx(arquivoId){
-        if(!arquivoId) return alert('Este lançamento OFX não possui identificação do arquivo de origem.');
-        const registros = ofxData.filter(o => o.ofxArquivoId === arquivoId);
-        if(!registros.length) return alert('Arquivo OFX não encontrado.');
-        if(registros.some(o => o.conciliado)) return alert('Não é possível excluir este arquivo porque existem lançamentos OFX conciliados. Desfaça as conciliações primeiro.');
-        const nome = registros.find(o => o.ofxArquivoNome)?.ofxArquivoNome || 'arquivo OFX';
-        if(!window.confirm(`Excluir o arquivo OFX "${nome}" e seus ${registros.length} lançamento(s)? Esta ação não exclui lançamentos do sistema.`)) return;
-        updateOfxData(prev => prev.filter(o => o.ofxArquivoId !== arquivoId));
-        setOfxSelectedIds([]);
-        setSysSelectedIds([]);
-        alert('Arquivo OFX excluído com sucesso.');
-      }
-
-      const ofxArquivosImportados = useMemo(() => {
-        const mapa = new Map();
-        ofxData.filter(o => mesmaContaOfx(o.contaId, concilContaId)).forEach(o => {
-          const id = o.ofxArquivoId || `legado-${o.id}`;
-          if(!mapa.has(id)) mapa.set(id, { id, nome: o.ofxArquivoNome || 'Arquivo OFX legado', contaNome: o.contaNome || '', banco: o.bancoCode || o.bancoOfx || '', agencia: o.agenciaOfx || '', conta: o.contaOfx || '', qtd: 0, conciliados: 0 });
-          const arq = mapa.get(id);
-          arq.qtd++;
-          if(o.conciliado) arq.conciliados++;
+      const ofxImportadosFiltrados=useMemo(()=>{
+        let lista=Array.isArray(ofxData)?ofxData.slice():[];
+        if(ofxImportContaId)lista=lista.filter(o=>mesmaContaOfx(o.contaId,ofxImportContaId));
+        if(ofxImportDataIni)lista=lista.filter(o=>String(o.data||'')>=ofxImportDataIni);
+        if(ofxImportDataFim)lista=lista.filter(o=>String(o.data||'')<=ofxImportDataFim);
+        return lista;
+      },[ofxData,ofxImportContaId,ofxImportDataIni,ofxImportDataFim]);
+      const ofxArquivosImportados=useMemo(()=>{
+        const mapa=new Map();
+        ofxImportadosFiltrados.forEach(o=>{
+          const id=o.ofxArquivoId||o.id;
+          if(!mapa.has(id))mapa.set(id,{id,nome:o.ofxArquivoNome||'Arquivo OFX',contaId:o.contaId||'',contaNome:o.contaNome||'',banco:o.bancoCode||o.bancoOfx||'',datas:[],qtd:0,conciliados:0});
+          const a=mapa.get(id);a.qtd++;if(o.conciliado)a.conciliados++;if(o.data&&!a.datas.includes(o.data))a.datas.push(o.data);
         });
-        return Array.from(mapa.values());
-      }, [ofxData, concilContaId]);
-
+        return Array.from(mapa.values()).sort((a,b)=>String(b.datas[0]||'').localeCompare(String(a.datas[0]||'')));
+      },[ofxImportadosFiltrados]);
+      const ofxMovimentacoesExibidas=useMemo(()=>{
+        if(!concilContaId||!concilExibido)return [];
+        return ofxData.filter(o=>mesmaContaOfx(o.contaId,concilContaId))
+          .filter(o=>!concilDataIniAplicada||String(o.data||'')>=concilDataIniAplicada)
+          .filter(o=>!concilDataFimAplicada||String(o.data||'')<=concilDataFimAplicada)
+          .sort((a,b)=>String(a.data||'').localeCompare(String(b.data||'')));
+      },[ofxData,concilContaId,concilDataIniAplicada,concilDataFimAplicada,concilExibido]);
+      async function recarregarOfxDoSupabase(){
+        if(!session?.user?.id||!supabaseClient)return;
+        const [{data,error},{data:arqs}]=await Promise.all([
+          supabaseClient.from('ofx_movimentacoes').select('*').eq('user_id',session.user.id).order('data_movimento',{ascending:true}),
+          supabaseClient.from('ofx_arquivos').select('id,nome_arquivo').eq('user_id',session.user.id)
+        ]);
+        if(error){console.error(error);return;}
+        const mapa=new Map(contasBancarias.map(c=>[String(c.id),c]));
+        setOfxData(normalizarIdsOfx((data||[]).map(o=>({id:String(o.id),dbId:String(o.id),contaId:String(o.conta_bancaria_id||''),contaNome:mapa.get(String(o.conta_bancaria_id))?.nome||'',data:o.data_movimento,valor:Number(o.valor||0),descricao:o.descricao||o.nome||'Transação OFX',nome:o.nome||'',tipo:o.tipo||'',fitid:o.fitid||'',bancoOfx:o.banco_id||'',bancoCode:o.banco_id||'',agenciaOfx:o.agencia||'',contaOfx:o.conta_ofx||'',ofxArquivoId:String(o.arquivo_id||''),ofxArquivoNome:(arqs||[]).find(a=>String(a.id)===String(o.arquivo_id))?.nome_arquivo||'',conciliado:!!o.conciliado,conciliacaoId:o.conciliacao_id||null,lancamentoId:o.lancamento_sistema_id||null}))));
+      }
+      function handleOfxUpload(e){
+        const contaId=ofxImportContaId;if(!contaId)return alert('Selecione a conta bancária para importar o OFX.');
+        const conta=contasBancarias.find(c=>String(c.id)===String(contaId));const file=e.target.files?.[0];if(!file||!conta)return;
+        const reader=new FileReader();
+        reader.onload=evt=>{
+          const arquivoId=uid();const parsed=parseOFX(evt.target.result,arquivoId,file.name);
+          if(!parsed.transactions.length)return alert('O arquivo OFX não possui lançamentos válidos.');
+          const transacoes=parsed.transactions.map(t=>({...t,contaId:String(contaId),contaNome:conta.nome,ofxArquivoId:arquivoId,ofxArquivoNome:file.name}));
+          const datas=[...new Set(transacoes.map(t=>t.data).filter(Boolean))].sort();
+          if(!datas.length)return alert('Não foi possível identificar as datas das movimentações do arquivo OFX.');
+          setOfxImportPreview({open:true,contaId:String(contaId),contaNome:conta.nome,arquivoId,arquivoNome:file.name,transacoes,datas,dataSelecionada:datas.length===1?datas[0]:''});
+        };
+        reader.readAsText(file);if(ofxInputRef.current)ofxInputRef.current.value='';
+      }
+      async function confirmarImportacaoOfx(){
+        if(!ofxImportPreview.open||!session?.user?.id)return;
+        const data=ofxImportPreview.dataSelecionada;if(!data)return alert('Selecione o dia que deseja importar.');
+        const transacoesDia=ofxImportPreview.transacoes.filter(t=>t.data===data);if(!transacoesDia.length)return alert('Não existem movimentações nesse dia no arquivo OFX.');
+        setOfxImportLoading(true);
+        try{
+          const {data:existentes,error:exErr}=await supabaseClient.from('ofx_movimentacoes').select('id,conciliado').eq('user_id',session.user.id).eq('conta_bancaria_id',String(ofxImportPreview.contaId)).eq('data_movimento',data);
+          if(exErr)throw exErr;
+          if((existentes||[]).length){if((existentes||[]).some(x=>x.conciliado))return alert('O dia selecionado já possui lançamentos OFX conciliados. Desfaça as conciliações antes de importar novamente.');if(!window.confirm('Já existem '+existentes.length+' lançamento(s) OFX nessa conta e data. Deseja importar novamente?'))return;}
+          const arq=transacoesDia[0];
+          const {data:arquivoInserido,error:arqErr}=await supabaseClient.from('ofx_arquivos').insert({user_id:session.user.id,conta_bancaria_id:String(ofxImportPreview.contaId),nome_arquivo:ofxImportPreview.arquivoNome,banco_id:arq.bancoCode||arq.bancoOfx||null,banco_nome:BANCOS_FEBRABAN.find(b=>b.code===(arq.bancoCode||arq.bancoOfx))?.name||null,agencia:arq.agenciaOfx||null,conta_ofx:arq.contaOfx||null,periodo_inicio:data,periodo_fim:data,dias_importados:[data],total_movimentacoes:transacoesDia.length,status:'importado'}).select().single();
+          if(arqErr)throw arqErr;
+          const rows=transacoesDia.map(t=>({user_id:session.user.id,arquivo_id:arquivoInserido.id,conta_bancaria_id:String(ofxImportPreview.contaId),data_movimento:t.data,tipo:t.tipo||null,valor:Number(t.valor||0),descricao:t.descricao||null,nome:t.nome||null,fitid:t.fitid||null,banco_id:t.bancoCode||t.bancoOfx||null,agencia:t.agenciaOfx||null,conta_ofx:t.contaOfx||null,conciliado:false}));
+          const {data:ins,error:insErr}=await supabaseClient.from('ofx_movimentacoes').insert(rows).select();
+          if(insErr){await supabaseClient.from('ofx_arquivos').delete().eq('id',arquivoInserido.id).eq('user_id',session.user.id);throw insErr;}
+          const nomeConta=ofxImportPreview.contaNome;setOfxImportPreview({open:false,contaId:'',contaNome:'',arquivoId:'',arquivoNome:'',transacoes:[],datas:[],dataSelecionada:''});await recarregarOfxDoSupabase();setOfxImportConsultado(true);
+          alert((ins?.length||rows.length)+' lançamento(s) importado(s) para '+nomeConta+' em '+formatDateBR(data)+'.');
+        }catch(err){console.error(err);alert('Erro ao importar OFX: '+(err?.message||err));}finally{setOfxImportLoading(false);}
+      }
+      async function excluirArquivoOfx(arquivoId){
+        if(!arquivoId||!session?.user?.id)return;
+        const regs=ofxData.filter(o=>String(o.ofxArquivoId)===String(arquivoId));if(!regs.length)return alert('Arquivo OFX não encontrado.');
+        if(regs.some(o=>o.conciliado))return alert('Não é possível excluir este arquivo porque existem lançamentos OFX conciliados.');
+        const fechados=[...new Set(regs.map(o=>o.data).filter(Boolean))].filter(d=>isDiaFechado(d,regs[0]?.contaId));
+        if(fechados.length)return alert('Não é possível excluir este arquivo porque o(s) dia(s) '+fechados.map(formatDateBR).join(', ')+' está(ão) fechado(s).');
+        if(!window.confirm('Excluir o arquivo OFX "'+(regs[0]?.ofxArquivoNome||'Arquivo OFX')+'" e suas '+regs.length+' movimentações?'))return;
+        try{const {error}=await supabaseClient.from('ofx_arquivos').delete().eq('id',arquivoId).eq('user_id',session.user.id);if(error)throw error;await recarregarOfxDoSupabase();setOfxSelectedIds([]);setSysSelectedIds([]);alert('Arquivo OFX excluído com sucesso.');}catch(err){console.error(err);alert('Erro ao excluir arquivo OFX: '+(err?.message||err));}
+      }
+      async function handleConciliarMatch(){
+        if(!ofxSelectedIds.length||!sysSelectedIds.length)return alert('Selecione pelo menos um lançamento OFX e um lançamento do sistema.');
+        const os=ofxData.filter(o=>ofxSelectedIds.includes(o.id)&&mesmaContaOfx(o.contaId,concilContaId)&&!o.conciliado),ss=movimentacoesConciliacao.filter(m=>sysSelectedIds.includes(m.id)&&!m.conciliado);
+        if(!os.length||!ss.length)return alert('Selecione lançamentos ainda não conciliados.');
+        const aTipos=os.map(o=>Number(o.valor)<0?'debito':'credito'),bTipos=ss.map(m=>m.tipo==='Débito'?'debito':'credito');
+        if(new Set(aTipos).size!==1||new Set(bTipos).size!==1||aTipos[0]!==bTipos[0])return alert('Os lançamentos selecionados precisam ser do mesmo tipo: débito com débito ou crédito com crédito.');
+        const totalBanco=os.reduce((s,o)=>s+Math.round(Math.abs(Number(o.valor||0))*100),0),totalSistema=ss.reduce((s,m)=>s+Math.round(Number(m.valorDebito||m.valorCredito||0)*100),0);
+        if(totalBanco!==totalSistema)return alert('Os valores não conferem. Banco: '+formatBRL(totalBanco/100)+' | Sistema: '+formatBRL(totalSistema/100)+' | Diferença: '+formatBRL(Math.abs(totalBanco-totalSistema)/100));
+        const cid=crypto.randomUUID();try{
+          const {error:cErr}=await supabaseClient.from('ofx_conciliacoes').insert({id:cid,user_id:session.user.id,conta_bancaria_id:String(concilContaId),valor_banco:totalBanco/100,valor_sistema:totalSistema/100,diferenca:0,quantidade_banco:os.length,quantidade_sistema:ss.length,status:'conciliada'});if(cErr)throw cErr;
+          const itens=[];os.forEach(o=>ss.forEach(m=>itens.push({user_id:session.user.id,conciliacao_id:cid,ofx_movimentacao_id:o.dbId||o.id,lancamento_sistema_id:String(m.id),valor_banco:Math.abs(Number(o.valor||0)),valor_sistema:Number(m.valorDebito||m.valorCredito||0)})));
+          const {error:iErr}=await supabaseClient.from('ofx_conciliacao_itens').insert(itens);if(iErr)throw iErr;
+          const {error:uErr}=await supabaseClient.from('ofx_movimentacoes').update({conciliado:true,conciliacao_id:cid}).in('id',os.map(o=>o.dbId||o.id));if(uErr)throw uErr;
+          const pi=ss.filter(m=>m.tipoOrigem==='pagar').map(m=>m.itemRef.id),ri=ss.filter(m=>m.tipoOrigem==='receber').map(m=>m.itemRef.id),fi=ss.filter(m=>m.tipoOrigem==='fatura');
+          if(pi.length)updateContasPagar(p=>p.map(x=>pi.includes(x.id)?{...x,conciliado:true,conciliacaoId:cid}:x));
+          if(ri.length)updateContasReceber(p=>p.map(x=>ri.includes(x.id)?{...x,conciliado:true,conciliacaoId:cid}:x));
+          if(fi.length)updateFaturasBaixadas(p=>{const n={...p};fi.forEach(m=>n[m.competenciaRef]={...n[m.competenciaRef],conciliado:true,conciliacaoId:cid});return n;});
+          await recarregarOfxDoSupabase();setOfxSelectedIds([]);setSysSelectedIds([]);alert('Conciliação OFX realizada com sucesso.');
+        }catch(err){console.error(err);alert('Erro ao gravar conciliação OFX: '+(err?.message||err));}
+      }
+      async function desfazerConciliacaoPorId(cid){
+        if(!cid||!session?.user?.id)return;if(!window.confirm('Deseja remover esta conciliação? Os lançamentos continuarão no sistema.'))return;
+        try{
+          const {error}=await supabaseClient.from('ofx_movimentacoes').update({conciliado:false,conciliacao_id:null,lancamento_sistema_id:null}).eq('conciliacao_id',cid).eq('user_id',session.user.id);if(error)throw error;
+          await supabaseClient.from('ofx_conciliacao_itens').delete().eq('conciliacao_id',cid).eq('user_id',session.user.id);
+          await supabaseClient.from('ofx_conciliacoes').update({status:'removida'}).eq('id',cid).eq('user_id',session.user.id);
+          updateContasPagar(p=>p.map(x=>x.conciliacaoId===cid?{...x,conciliado:false,conciliacaoId:null}:x));
+          updateContasReceber(p=>p.map(x=>x.conciliacaoId===cid?{...x,conciliado:false,conciliacaoId:null}:x));
+          updateFaturasBaixadas(p=>{const n={...p};Object.keys(n).forEach(k=>{if(n[k]?.conciliacaoId===cid)n[k]={...n[k],conciliado:false,conciliacaoId:null};});return n;});
+          await recarregarOfxDoSupabase();setOfxSelectedIds([]);setSysSelectedIds([]);alert('Conciliação removida com sucesso.');
+        }catch(err){console.error(err);alert('Erro ao remover conciliação: '+(err?.message||err));}
+      }
+      async function removerConciliacoesSelecionadas(){const ids=[...new Set(ofxSelectedIds.map(id=>ofxData.find(o=>o.id===id)?.conciliacaoId).filter(Boolean))];if(!ids.length)return alert('Selecione pelo menos um lançamento OFX conciliado.');for(const id of ids)await desfazerConciliacaoPorId(id);}
+      const ofxTotalSelecionado=ofxData.filter(o=>ofxSelectedIds.includes(o.id)).reduce((s,o)=>s+Math.abs(Number(o.valor||0)),0);
+      const sysTotalSelecionado=movimentacoesConciliacao.filter(m=>sysSelectedIds.includes(m.id)).reduce((s,m)=>s+Number(m.valorDebito||m.valorCredito||0),0);
       const saldoInicialConciliacao = useMemo(() => {
         if (!concilContaId || !concilDataIniAplicada) return 0;
         const contaSelecionada = contasBancarias.find(c => String(c.id) === String(concilContaId));
@@ -2040,7 +2036,7 @@
               screen === 'cadastros' ? 'Cadastros e Configurações' :
               screen === 'lancamentos' ? 'Gestão de Lançamentos' :
               screen === 'faturas' ? 'Faturas de Cartão' :
-              screen === 'relatorios' ? 'Relatórios Financeiros' : 'Conciliação Bancária'
+              screen === 'relatorios' ? 'Relatórios Financeiros' : screen === 'conciliacao' && concilTab === 'ofx' ? 'Conciliação OFX' : screen === 'conciliacao' && concilTab === 'ofx-importacao' ? 'Importação OFX' : 'Conciliação Bancária'
             ),
             h('button', {
               className: 'action-btn',
@@ -2398,11 +2394,13 @@
             ),
 
             h('div', { className: 'sub-nav' }, 
-              h('button', { className: concilTab === "extrato" ? "active" : "", onClick: () => setConcilTab("extrato") }, "Conciliação Extrato Bancário"),
+              h('button', { className: concilTab === "extrato" ? "active" : "", onClick: () => { setConcilTab("extrato"); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Conciliação Extrato Bancário"),
+              h('button', { className: concilTab === "ofx" ? "active" : "", onClick: () => { setConcilTab("ofx"); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Conciliação OFX"),
+              h('button', { className: concilTab === "ofx-importacao" ? "active" : "", onClick: () => { setConcilTab("ofx-importacao"); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Importação OFX"),
             ),
 
 
-            h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(BancoLogo, { code: (() => { const c = contasBancarias.find(x => String(x.id) === String(concilContaId)); return c?.bancoCode || c?.banco || c?.nome; })(), logoData: contasBancarias.find(x => String(x.id) === String(concilContaId))?.logoData || '', size: 38 }), h('select', { value: concilContaId, style: { flex: 1 }, onChange: e => { setConcilContaId(e.target.value); setOfxSelectedIds([]); setSysSelectedIds([]); } }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome))))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => { setConcilDataIniAplicada(String(concilDataIni || '').substring(0,10)); setConcilDataFimAplicada(String(concilDataFim || '').substring(0,10)); setConcilExibido(true); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Filtrar Período")),
+            concilTab !== "ofx-importacao" && h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(BancoLogo, { code: (() => { const c = contasBancarias.find(x => String(x.id) === String(concilContaId)); return c?.bancoCode || c?.banco || c?.nome; })(), logoData: contasBancarias.find(x => String(x.id) === String(concilContaId))?.logoData || '', size: 38 }), h('select', { value: concilContaId, style: { flex: 1 }, onChange: e => { setConcilContaId(e.target.value); setOfxSelectedIds([]); setSysSelectedIds([]); } }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome))))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => { setConcilDataIniAplicada(String(concilDataIni || '').substring(0,10)); setConcilDataFimAplicada(String(concilDataFim || '').substring(0,10)); setConcilExibido(true); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Filtrar Período")),
             concilExibido && concilTab === "extrato" && h(React.Fragment, null,
               h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 20, marginBottom: 20 } },
                 h('div', { className: 'top', style: { margin: 0, padding: 14 } },
@@ -2450,7 +2448,45 @@
 
 )
 
-        ),
+        ),,
+            concilTab === "ofx" && h(React.Fragment,null,
+              !concilExibido ? h('div',{style:{padding:40,textAlign:'center',color:'var(--ink-soft)'}},'Selecione a conta e o período e clique em Filtrar Período.') :
+              h(React.Fragment,null,
+                h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:10}},
+                  h('div',null,h('div',{style:{fontSize:17,fontWeight:'bold'}},'Conciliação OFX'),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},ofxMovimentacoesExibidas.length+' OFX • '+movimentacoesConciliacao.length+' do sistema')),
+                  h('div',{style:{display:'flex',gap:8}},
+                    h('button',{type:'button',className:'primary',disabled:!(ofxSelectedIds.length&&sysSelectedIds.length&&Math.round(ofxTotalSelecionado*100)===Math.round(sysTotalSelecionado*100)),onClick:handleConciliarMatch},'✓ Conciliar'),
+                    h('button',{type:'button',className:'action-btn delete',disabled:!ofxSelectedIds.some(id=>ofxData.find(o=>o.id===id)?.conciliacaoId),onClick:removerConciliacoesSelecionadas},'↩ Remover Conciliação')
+                  )
+                ),
+                h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}},
+                  h('div',{style:{border:'1px solid var(--line)',borderRadius:8,background:'#fff',overflow:'hidden'}},
+                    h('div',{style:{padding:10,background:'#F2EFE9',display:'flex',justifyContent:'space-between'}},h('b',null,'🏦 Lançamentos Importados do Banco'),h('span',null,formatBRL(ofxTotalSelecionado))),
+                    h('div',{style:{padding:8,borderBottom:'1px solid var(--line)'}},h('input',{type:'checkbox',checked:ofxMovimentacoesExibidas.filter(o=>!o.conciliado).length>0&&ofxMovimentacoesExibidas.filter(o=>!o.conciliado).every(o=>ofxSelectedIds.includes(o.id)),onChange:e=>setOfxSelectedIds(e.target.checked?ofxMovimentacoesExibidas.filter(o=>!o.conciliado).map(o=>o.id):[])}),' Selecionar todos'),
+                    h('div',{style:{maxHeight:520,overflow:'auto'}},h('table',{className:'concil-day-table',style:{margin:0,width:'100%'}},h('thead',null,h('tr',null,h('th',null,'✓'),h('th',null,'Data'),h('th',null,'Descrição'),h('th',{className:'right'},'Valor'),h('th',{className:'center'},'Status'))),h('tbody',null,ofxMovimentacoesExibidas.length===0?h('tr',null,h('td',{colSpan:5,style:{textAlign:'center',padding:25}},'Nenhum OFX no período.')):ofxMovimentacoesExibidas.map(o=>h('tr',{key:o.id},h('td',null,h('input',{type:'checkbox',checked:ofxSelectedIds.includes(o.id),disabled:o.conciliado,onChange:e=>setOfxSelectedIds(p=>e.target.checked?[...p,o.id]:p.filter(id=>id!==o.id))})),h('td',null,formatDateBR(o.data)),h('td',null,o.descricao),h('td',{className:'right num'},showMoney(Math.abs(Number(o.valor||0)))),h('td',{className:'center'},o.conciliado?'Conciliado':'Pendente'))))))),
+                  h('div',{style:{border:'1px solid var(--line)',borderRadius:8,background:'#fff',overflow:'hidden'}},
+                    h('div',{style:{padding:10,background:'#F2EFE9',display:'flex',justifyContent:'space-between'}},h('b',null,'📒 Lançamentos do Sistema'),h('span',null,formatBRL(sysTotalSelecionado))),
+                    h('div',{style:{padding:8,borderBottom:'1px solid var(--line)'}},h('input',{type:'checkbox',checked:movimentacoesConciliacao.filter(m=>!m.conciliado).length>0&&movimentacoesConciliacao.filter(m=>!m.conciliado).every(m=>sysSelectedIds.includes(m.id)),onChange:e=>setSysSelectedIds(e.target.checked?movimentacoesConciliacao.filter(m=>!m.conciliado).map(m=>m.id):[])}),' Selecionar todos'),
+                    h('div',{style:{maxHeight:520,overflow:'auto'}},h('table',{className:'concil-day-table',style:{margin:0,width:'100%'}},h('thead',null,h('tr',null,h('th',null,'✓'),h('th',null,'Data'),h('th',null,'Descrição'),h('th',null,'Tipo'),h('th',{className:'right'},'Valor'),h('th',{className:'center'},'Status'))),h('tbody',null,movimentacoesConciliacao.length===0?h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:25}},'Nenhum lançamento no período.')):movimentacoesConciliacao.map(m=>h('tr',{key:m.id},h('td',null,h('input',{type:'checkbox',checked:sysSelectedIds.includes(m.id),disabled:m.conciliado,onChange:e=>setSysSelectedIds(p=>e.target.checked?[...p,m.id]:p.filter(id=>id!==m.id))})),h('td',null,formatDateBR(m.data)),h('td',null,m.descricao),h('td',null,m.tipo),h('td',{className:'right num'},showMoney(Number(m.valorDebito||m.valorCredito||0))),h('td',{className:'center'},m.conciliado?'Conciliado':'Pendente')))))))
+                  )
+                )
+              )
+            ),
+            concilTab === "ofx-importacao" && h(React.Fragment,null,
+              h('div',{style:{display:'grid',gridTemplateColumns:'1.4fr 1fr 1fr auto',gap:10,alignItems:'end',marginBottom:18}},
+                h('div',{className:'field'},h('label',null,'Conta Bancária'),h('select',{value:ofxImportContaId,onChange:e=>setOfxImportContaId(e.target.value)},h('option',{value:''},'Todas as contas'),contasBancarias.map(c=>h('option',{key:c.id,value:c.id},c.nome)))),
+                h('div',{className:'field'},h('label',null,'Data Inicial'),h('input',{type:'date',value:ofxImportDataIni,onChange:e=>setOfxImportDataIni(e.target.value)})),
+                h('div',{className:'field'},h('label',null,'Data Final'),h('input',{type:'date',value:ofxImportDataFim,onChange:e=>setOfxImportDataFim(e.target.value)})),
+                h('button',{type:'button',className:'primary',style:{height:38},onClick:()=>setOfxImportConsultado(true)},'Consultar')
+              ),
+              h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+                h('div',null,h('b',null,'Arquivos OFX Importados'),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},ofxArquivosImportados.length+' arquivo(s)')),
+                h('div',null,h('input',{ref:ofxInputRef,type:'file',accept:'.ofx,.txt',style:{display:'none'},onChange:handleOfxUpload}),h('button',{type:'button',className:'primary',disabled:ofxImportLoading,onClick:()=>{if(!ofxImportContaId)return alert('Selecione uma conta antes de importar.');ofxInputRef.current?.click();}},ofxImportLoading?'Importando...':'＋ Importar OFX'))
+              ),
+              h('div',{style:{border:'1px solid var(--line)',borderRadius:8,background:'#fff',overflow:'auto'}},h('table',{className:'concil-day-table',style:{margin:0,width:'100%'}},h('thead',null,h('tr',null,h('th',null,'Arquivo'),h('th',null,'Conta'),h('th',null,'Dias'),h('th',{className:'center'},'Lançamentos'),h('th',{className:'center'},'Conciliados'),h('th',{className:'center'},'Ação'))),h('tbody',null,!ofxImportConsultado?h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:30}},'Defina os filtros e clique em Consultar.')):ofxArquivosImportados.length===0?h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:30}},'Nenhum arquivo OFX encontrado.')):ofxArquivosImportados.map(a=>h('tr',{key:a.id},h('td',null,a.nome),h('td',null,a.contaNome||'-'),h('td',null,a.datas.slice().sort().map(d=>formatDateBR(d)).join(', ')),h('td',{className:'center'},a.qtd),h('td',{className:'center'},a.conciliados),h('td',{className:'center'},h('button',{type:'button',className:'action-btn delete',disabled:a.conciliados>0||a.datas.some(d=>isDiaFechado(d,a.contaId)),title:a.conciliados?'Existem lançamentos conciliados':a.datas.some(d=>isDiaFechado(d,a.contaId))?'Dia fechado':'Excluir',onClick:()=>excluirArquivoOfx(a.id)},h(Trash2,{size:14})))))))
+              ))
+            )
+
 
 
 
