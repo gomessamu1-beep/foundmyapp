@@ -6,17 +6,11 @@
   <title>Lançamentos e Gestão Financeira</title>
   
   <!-- Supabase JS Client -->
-  <script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=JMTHn9_8c51KlpRMMCw5FKz0WS4vZU97WQ0jp5308SmCFIKnGjIF-MdNztqngHPwRkT4sA0bew4fMM7trMZ4omzCRT1rq18wT81nuqAyIT7oIpvGAS1sD-MW2vTKDpGkzqz9T-9a2nMUUdxnV8URVBGwFfe9aZg5KpIIFxePp1MpXpwv3x83n8McsHNZtX945wvf9CfDSDb0uABmyZBwjZVIVtEbtahxe2HmXsneVUbGzzDx2YDBvTF8Mo7-z20OJvq91RzZjXvijn_q1v8L-Yhdk5Mrkyr-jP-tA4sJbmLsBm3SOrZZ0yECz_TGXZS4ivC0nk23FD8Ru6mig8NiMwIv_AawyVBsZmk-X5Cf_bE" charset="UTF-8"></script><script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
   <!-- React & ReactDOM -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    if (window.pdfjsLib) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 </head>
 <body style="margin: 0; background-color: #ECE8DD;">
   <div id="root"></div>
@@ -525,6 +519,12 @@
         return () => subscription.unsubscribe();
       }, []);
 
+      // Carregamento sob demanda do OFX: a página inicial não espera os lançamentos bancários.
+      useEffect(() => {
+        if (!session || !dataReady || screen !== 'conciliacao' || !supabaseClient) return;
+        recarregarOfxDoSupabase();
+      }, [session, dataReady, screen]);
+
       async function loadDataFromSupabase(userId) {
         setDataLoading(true);
         const { data } = await supabaseClient.from('app_data').select('*').eq('user_id', userId).single();
@@ -535,18 +535,9 @@
           setCartoes(data.cartoes || []); setContasBancarias(contasBancariasCarregadas); setCategorias(loadedCats);
           setDeparaList(data.depara || []); setFaturasFechadas(data.faturas_fechadas || {}); setFaturasBaixadas(data.faturas_baixadas || {});
           setDiasFechados(data.dias_fechados || {}); setMesesFechados(data.meses_fechados || {});
-          const [{data:ofxMovDb,error:ofxMovErr},{data:ofxArqDb,error:ofxArqErr}]=await Promise.all([
-            supabaseClient.from('ofx_movimentacoes').select('*').eq('user_id',userId).order('data_movimento',{ascending:true}),
-            supabaseClient.from('ofx_arquivos').select('id,nome_arquivo').eq('user_id',userId)
-          ]);
-          if(ofxMovErr||ofxArqErr)console.error('Erro ao carregar OFX:',ofxMovErr||ofxArqErr);
-          const contaMap=new Map(contasBancariasCarregadas.map(c=>[String(c.id),c]));
-          setOfxData(normalizarIdsOfx((ofxMovDb||[]).map(o=>{
-            const conta=contaMap.get(String(o.conta_bancaria_id));
-            return {id:String(o.id),dbId:String(o.id),contaId:String(o.conta_bancaria_id||''),contaNome:conta?.nome||'',data:o.data_movimento,valor:Number(o.valor||0),
-              descricao:o.descricao||o.nome||'Transação OFX',nome:o.nome||'',tipo:o.tipo||'',fitid:o.fitid||'',bancoOfx:o.banco_id||'',bancoCode:o.banco_id||'',agenciaOfx:o.agencia||'',contaOfx:o.conta_ofx||'',
-              ofxArquivoId:String(o.arquivo_id||''),ofxArquivoNome:(ofxArqDb||[]).find(a=>String(a.id)===String(o.arquivo_id))?.nome_arquivo||'',conciliado:!!o.conciliado,conciliacaoId:o.conciliacao_id||null,lancamentoId:o.lancamento_sistema_id||null};
-          })));
+          // OFX é carregado sob demanda somente quando a tela de Conciliação OFX é aberta.
+          // Isso evita trazer potencialmente milhares de movimentações na inicialização do sistema.
+          setOfxData([]);
           setOfxSelectedIds([]); setSysSelectedIds([]);
           if(contasBancariasCarregadas.length===1){const unica=String(contasBancariasCarregadas[0].id);setConcilContaId(p=>p||unica);setOfxImportContaId(p=>p||unica);}
         } else {
@@ -1361,13 +1352,25 @@
       },[ofxData,concilContaId,concilDataIniAplicada,concilDataFimAplicada,concilExibido]);
       async function recarregarOfxDoSupabase(){
         if(!session?.user?.id||!supabaseClient)return;
-        const [{data,error},{data:arqs}]=await Promise.all([
-          supabaseClient.from('ofx_movimentacoes').select('*').eq('user_id',session.user.id).order('data_movimento',{ascending:true}),
-          supabaseClient.from('ofx_arquivos').select('id,nome_arquivo').eq('user_id',session.user.id)
-        ]);
-        if(error){console.error(error);return;}
-        const mapa=new Map(contasBancarias.map(c=>[String(c.id),c]));
-        setOfxData(normalizarIdsOfx((data||[]).map(o=>({id:String(o.id),dbId:String(o.id),contaId:String(o.conta_bancaria_id||''),contaNome:mapa.get(String(o.conta_bancaria_id))?.nome||'',data:o.data_movimento,valor:Number(o.valor||0),descricao:o.descricao||o.nome||'Transação OFX',nome:o.nome||'',tipo:o.tipo||'',fitid:o.fitid||'',bancoOfx:o.banco_id||'',bancoCode:o.banco_id||'',agenciaOfx:o.agencia||'',contaOfx:o.conta_ofx||'',ofxArquivoId:String(o.arquivo_id||''),ofxArquivoNome:(arqs||[]).find(a=>String(a.id)===String(o.arquivo_id))?.nome_arquivo||'',conciliado:!!o.conciliado,conciliacaoId:o.conciliacao_id||null,lancamentoId:o.lancamento_sistema_id||null}))));
+        try{
+          const camposOfx='id,arquivo_id,conta_bancaria_id,data_movimento,tipo,valor,descricao,nome,fitid,banco_id,agencia,conta_ofx,conciliado,conciliacao_id,lancamento_sistema_id';
+          let movQuery=supabaseClient.from('ofx_movimentacoes').select(camposOfx).eq('user_id',session.user.id).order('data_movimento',{ascending:true});
+          if(concilContaId) movQuery=movQuery.eq('conta_bancaria_id',String(concilContaId));
+          const [{data,error},{data:arqs,error:arqError}]=await Promise.all([
+            movQuery,
+            supabaseClient.from('ofx_arquivos').select('id,nome_arquivo').eq('user_id',session.user.id)
+          ]);
+          if(error||arqError)throw(error||arqError);
+          const mapa=new Map(contasBancarias.map(c=>[String(c.id),c]));
+          const arqMap=new Map((arqs||[]).map(a=>[String(a.id),a.nome_arquivo||'']));
+          setOfxData(normalizarIdsOfx((data||[]).map(o=>({
+            id:String(o.id),dbId:String(o.id),contaId:String(o.conta_bancaria_id||''),contaNome:mapa.get(String(o.conta_bancaria_id))?.nome||'',
+            data:o.data_movimento,valor:Number(o.valor||0),descricao:o.descricao||o.nome||'Transação OFX',nome:o.nome||'',tipo:o.tipo||'',
+            fitid:o.fitid||'',bancoOfx:o.banco_id||'',bancoCode:o.banco_id||'',agenciaOfx:o.agencia||'',contaOfx:o.conta_ofx||'',
+            ofxArquivoId:String(o.arquivo_id||''),ofxArquivoNome:arqMap.get(String(o.arquivo_id||''))||'',
+            conciliado:!!o.conciliado,conciliacaoId:o.conciliacao_id||null,lancamentoId:o.lancamento_sistema_id||null
+          }))));
+        }catch(err){console.error('Erro ao carregar OFX:',err);}
       }
       function handleOfxUpload(e){
         const contaId=ofxImportContaId;if(!contaId)return alert('Selecione a conta bancária para importar o OFX.');
