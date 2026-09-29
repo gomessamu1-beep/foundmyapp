@@ -2308,6 +2308,31 @@
 
 
 
+        ofxImportPreview.open && h('div',{className:'modal-overlay'},
+          h('div',{className:'modal-content',onClick:e=>e.stopPropagation(),style:{maxWidth:560}},
+            h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+              h('div',{style:{fontSize:17,fontWeight:'bold'}},'Importar OFX'),
+              h('button',{type:'button',className:'icon',onClick:()=>setOfxImportPreview({open:false,contaId:'',contaNome:'',arquivoId:'',arquivoNome:'',transacoes:[],datas:[],dataSelecionada:''})},h(XIcon))
+            ),
+            h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},ofxImportPreview.arquivoNome+' • Conta: '+ofxImportPreview.contaNome),
+            h('div',{className:'field'},h('label',null,'Escolha o dia que deseja importar *'),
+              h('select',{value:ofxImportPreview.dataSelecionada,onChange:e=>setOfxImportPreview(p=>({...p,dataSelecionada:e.target.value}))},
+                h('option',{value:''},'Selecione o dia...'),
+                ofxImportPreview.datas.map(d=>h('option',{key:d,value:d},formatDateBR(d)+' • '+ofxImportPreview.transacoes.filter(t=>t.data===d).length+' lançamento(s)'))
+              )
+            ),
+            ofxImportPreview.dataSelecionada && h('div',{style:{marginTop:12,padding:10,background:'#F7F4EC',border:'1px solid var(--line)',borderRadius:6,fontSize:12}},
+              h('b',null,'Resumo do dia: '),
+              ofxImportPreview.transacoes.filter(t=>t.data===ofxImportPreview.dataSelecionada).length+' lançamento(s) • '+
+              formatBRL(ofxImportPreview.transacoes.filter(t=>t.data===ofxImportPreview.dataSelecionada).reduce((s,t)=>s+Math.abs(Number(t.valor||0)),0))
+            ),
+            h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:16}},
+              h('button',{type:'button',className:'action-btn',onClick:()=>setOfxImportPreview({open:false,contaId:'',contaNome:'',arquivoId:'',arquivoNome:'',transacoes:[],datas:[],dataSelecionada:''})},'Cancelar'),
+              h('button',{type:'button',className:'primary',disabled:ofxImportLoading||!ofxImportPreview.dataSelecionada,onClick:confirmarImportacaoOfx},ofxImportLoading?'Importando...':'Confirmar Importação')
+            )
+          )
+        ),
+
         lrModalOpen && h('div', { className: 'modal-overlay' },
           h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 480 } },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 12 } }, h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Lançamento Direto na Conciliação"), h('button', { type: 'button', className: 'icon', onClick: () => setLrModalOpen(false) }, h(XIcon))),
