@@ -492,6 +492,11 @@
       const [novaCategoriaIsTransferencia, setNovaCategoriaIsTransferencia] = useState(false);
       const [subInputs, setSubInputs] = useState({});
 
+      useEffect(() => {
+        if (!session?.user?.id || !dataReady || screen !== 'conciliacao') return;
+        recarregarOfxDoSupabase();
+      }, [session, dataReady, screen]);
+
       const showMoney = (val) => valoresOcultos ? "*" : formatBRL(val);
 
       useEffect(() => {
@@ -508,10 +513,30 @@
         if (!supabaseClient) {
           setAuthLoading(false); return;
         }
-        supabaseClient.auth.getSession().then(({ data: { session } }) => {
-          setSession(session); setAuthLoading(false);
-          if (session) loadDataFromSupabase(session.user.id);
-        });
+        let finalizado = false;
+        const finalizarAuth = (sessionAtual) => {
+          if (finalizado) return;
+          finalizado = true;
+          setSession(sessionAtual || null);
+          setAuthLoading(false);
+          if (sessionAtual) loadDataFromSupabase(sessionAtual.user.id);
+        };
+
+        supabaseClient.auth.getSession()
+          .then(({ data: { session } }) => finalizarAuth(session))
+          .catch((err) => {
+            console.error('Erro ao recuperar sessão:', err);
+            finalizarAuth(null);
+          });
+
+        // Nunca deixe a tela presa indefinidamente caso o Auth esteja
+        // temporariamente indisponível.
+        setTimeout(() => {
+          if (!finalizado) {
+            console.warn('Tempo limite ao recuperar sessão do Supabase.');
+            finalizarAuth(null);
+          }
+        }, 8000);
 
         const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
           setSession(session);
@@ -527,7 +552,10 @@
 
       async function loadDataFromSupabase(userId) {
         setDataLoading(true);
-        const { data } = await supabaseClient.from('app_data').select('*').eq('user_id', userId).single();
+        setDataReady(false);
+        try {
+          const { data, error: appDataError } = await supabaseClient.from('app_data').select('*').eq('user_id', userId).single();
+          if (appDataError) throw appDataError;
         if (data) {
           const loadedCats = (data.categorias || []).map(c => ({ tipo: c.tipo || 'despesa', isTransferencia: !!c.isTransferencia, ...c }));
           setPurchases(data.purchases || []); setContasPagar(data.contas_pagar || []); setContasReceber(data.contas_receber || []);
@@ -535,18 +563,9 @@
           setCartoes(data.cartoes || []); setContasBancarias(contasBancariasCarregadas); setCategorias(loadedCats);
           setDeparaList(data.depara || []); setFaturasFechadas(data.faturas_fechadas || {}); setFaturasBaixadas(data.faturas_baixadas || {});
           setDiasFechados(data.dias_fechados || {}); setMesesFechados(data.meses_fechados || {});
-          const [{data:ofxMovDb,error:ofxMovErr},{data:ofxArqDb,error:ofxArqErr}]=await Promise.all([
-            supabaseClient.from('ofx_movimentacoes').select('*').eq('user_id',userId).order('data_movimento',{ascending:true}),
-            supabaseClient.from('ofx_arquivos').select('id,nome_arquivo').eq('user_id',userId)
-          ]);
-          if(ofxMovErr||ofxArqErr)console.error('Erro ao carregar OFX:',ofxMovErr||ofxArqErr);
-          const contaMap=new Map(contasBancariasCarregadas.map(c=>[String(c.id),c]));
-          setOfxData(normalizarIdsOfx((ofxMovDb||[]).map(o=>{
-            const conta=contaMap.get(String(o.conta_bancaria_id));
-            return {id:String(o.id),dbId:String(o.id),contaId:String(o.conta_bancaria_id||''),contaNome:conta?.nome||'',data:o.data_movimento,valor:Number(o.valor||0),
-              descricao:o.descricao||o.nome||'Transação OFX',nome:o.nome||'',tipo:o.tipo||'',fitid:o.fitid||'',bancoOfx:o.banco_id||'',bancoCode:o.banco_id||'',agenciaOfx:o.agencia||'',contaOfx:o.conta_ofx||'',
-              ofxArquivoId:String(o.arquivo_id||''),ofxArquivoNome:(ofxArqDb||[]).find(a=>String(a.id)===String(o.arquivo_id))?.nome_arquivo||'',conciliado:!!o.conciliado,conciliacaoId:o.conciliacao_id||null,lancamentoId:o.lancamento_sistema_id||null};
-          })));
+          // A conciliação OFX é carregada sob demanda. Não fazemos uma
+          // consulta pesada de OFX durante a abertura do sistema.
+          setOfxData([]);
           setOfxSelectedIds([]); setSysSelectedIds([]);
           if(contasBancariasCarregadas.length===1){const unica=String(contasBancariasCarregadas[0].id);setConcilContaId(p=>p||unica);setOfxImportContaId(p=>p||unica);}
         } else {
@@ -556,7 +575,14 @@
           });
           setOfxData([]);
         }
-        setDataReady(true); setDataLoading(false);
+          setDataReady(true);
+          setDataLoading(false);
+        } catch (err) {
+          console.error('ERRO AO CARREGAR DADOS:', err);
+          setDataReady(false);
+          setDataLoading(false);
+          alert('Não foi possível sincronizar os dados com o Supabase. Verifique sua conexão e tente entrar novamente.');
+        }
       }
 
       const saveTimerRef=useRef(null), savingRef=useRef(false), pendingSaveRef=useRef(false);
