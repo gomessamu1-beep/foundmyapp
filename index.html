@@ -2343,7 +2343,7 @@
               ),
               h('div',{style:{border:'1px solid var(--line)',borderRadius:8,background:'#fff',overflow:'auto'}},h('table',{className:'concil-day-table',style:{margin:0,width:'100%'}},h('thead',null,h('tr',null,h('th',null,'Arquivo'),h('th',null,'Conta'),h('th',null,'Dias'),h('th',{className:'center'},'Lançamentos'),h('th',{className:'center'},'Conciliados'),h('th',{className:'center'},'Ação'))),h('tbody',null,!ofxImportConsultado?h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:30}},'Defina os filtros e clique em Consultar.')):ofxArquivosImportados.length===0?h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:30}},'Nenhum arquivo OFX encontrado.')):ofxArquivosImportados.map(a=>h('tr',{key:a.id},h('td',null,a.nome),h('td',null,a.contaNome||'-'),h('td',null,a.datas.slice().sort().map(d=>formatDateBR(d)).join(', ')),h('td',{className:'center'},a.qtd),h('td',{className:'center'},a.conciliados),h('td',{className:'center'},h('button',{type:'button',className:'action-btn delete',disabled:a.conciliados>0||a.datas.some(d=>isDiaFechado(d,a.contaId)),title:a.conciliados?'Existem lançamentos conciliados':a.datas.some(d=>isDiaFechado(d,a.contaId))?'Dia fechado':'Excluir',onClick:()=>excluirArquivoOfx(a.id)},h(Trash2,{size:14})))))))
               ))
-            )
+
 
 
 
