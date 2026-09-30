@@ -523,22 +523,12 @@
           setAuthLoading(false); return;
         }
         let finalizado = false;
-        let usuarioCarregadoId = null;
-
-        const carregarUsuarioUmaVez = (sessionAtual) => {
-          if (!sessionAtual?.user?.id) return;
-          const userId = sessionAtual.user.id;
-          if (usuarioCarregadoId === userId) return;
-          usuarioCarregadoId = userId;
-          loadDataFromSupabase(userId);
-        };
-
         const finalizarAuth = (sessionAtual) => {
           if (finalizado) return;
           finalizado = true;
           setSession(sessionAtual || null);
           setAuthLoading(false);
-          carregarUsuarioUmaVez(sessionAtual);
+          if (sessionAtual) loadDataFromSupabase(sessionAtual.user.id);
         };
 
         supabaseClient.auth.getSession()
@@ -559,15 +549,8 @@
 
         const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
           setSession(session);
-
-          if (session) {
-            // O Supabase pode emitir INITIAL_SESSION logo após getSession().
-            // Não carregamos app_data duas vezes para o mesmo usuário.
-            carregarUsuarioUmaVez(session);
-          } else {
-            usuarioCarregadoId = null;
-            setDataLoading(false);
-            setDataReady(false);
+          if (session) loadDataFromSupabase(session.user.id);
+          else {
             setPurchases([]); setContasPagar([]); setContasReceber([]); setCartoes([]); setContasBancarias([]);
             setCategorias([]); setDeparaList([]); setFaturasFechadas({}); setFaturasBaixadas({}); setDiasFechados({}); setMesesFechados({}); setOfxData([]);
           }
@@ -580,23 +563,7 @@
         setDataLoading(true);
         setDataReady(false);
         try {
-          // Evita que uma requisição ao Supabase fique prendendo a abertura
-          // indefinidamente se a rede ou o PostgREST estiverem indisponíveis.
-          const consultaAppData = supabaseClient
-            .from('app_data')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
-
-          const timeoutSupabase = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Tempo limite ao conectar ao Supabase.')), 12000)
-          );
-
-          const { data, error: appDataError } = await Promise.race([
-            consultaAppData,
-            timeoutSupabase
-          ]);
-
+          const { data, error: appDataError } = await supabaseClient.from('app_data').select('*').eq('user_id', userId).single();
           if (appDataError) throw appDataError;
         if (data) {
           const loadedCats = (data.categorias || []).map(c => ({ tipo: c.tipo || 'despesa', isTransferencia: !!c.isTransferencia, ...c }));
