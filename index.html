@@ -6,7 +6,7 @@
   <title>Lançamentos e Gestão Financeira</title>
   
   <!-- Supabase JS Client -->
-  <script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=JMTHn9_8c51KlpRMMCw5FKz0WS4vZU97WQ0jp5308SmCFIKnGjIF-MdNztqngHPwRkT4sA0bew4fMM7trMZ4omzCRT1rq18wT81nuqAyIT7oIpvGAS1sD-MW2vTKDpGkzqz9T-9a2nMUUdxnV8URVBGwFfe9aZg5KpIIFxePp1MpXpwv3x83n8McsHNZtX945wvf9CfDSDb0uABmyZBwjZVIVtEbtahxe2HmXsneVUbGzzDx2YDBvTF8Mo7-z20OJvq91RzZjXvijn_q1v8L-Yhdk5Mrkyr-jP-tA4sJbmLsBm3SOrZZ0yECz_TGXZS4ivC0nk23FD8Ru6mig8NiMwIv_AawyVBsZmk-X5Cf_bE" charset="UTF-8"></script><script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
   <!-- React & ReactDOM -->
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
@@ -58,100 +58,6 @@
       { code: "001", name: "001 - Banco do Brasil S.A." }, { code: "033", name: "033 - Banco Santander (Brasil) S.A." }, { code: "104", name: "104 - Caixa Econômica Federal" }, { code: "237", name: "237 - Banco Bradesco S.A." }, { code: "260", name: "260 - Nu Pagamentos S.A. (Nubank)" }, { code: "077", name: "077 - Banco Inter S.A." }, { code: "341", name: "341 - Itaú Unibanco S.A." }, { code: "208", name: "208 - Banco BTG Pactual S.A." }, { code: "336", name: "336 - C6 Bank S.A." }, { code: "290", name: "290 - PagBank (PagSeguro)" }, { code: "748", name: "748 - Banco Cooperativo Sicredi S.A." }, { code: "756", name: "756 - Banco Cooperativo Sicoob S.A." }, { code: "000", name: "Outro Banco / Caixa / Dinheiro" }
     ];
 
-    // Logos dos bancos. O sistema usa o logo oficial/brand quando disponível
-    // e mantém um fallback com a sigla para não quebrar a tela se o CDN falhar.
-    const BANCO_LOGOS = {
-      "001": { slug: "bancodobrasil", sigla: "BB" },
-      "033": { slug: "santander", sigla: "SAN" },
-      "104": { slug: "caixa", sigla: "CEF" },
-      "237": { slug: "bradesco", sigla: "BRA" },
-      "260": { slug: "nubank", sigla: "NU" },
-      "077": { slug: "inter", sigla: "IN" },
-      "341": { slug: "itau", sigla: "ITA" },
-      "208": { slug: "btgpactual", sigla: "BTG" },
-      "336": { slug: "c6bank", sigla: "C6" },
-      "290": { slug: "pagbank", sigla: "PAG" },
-      "748": { slug: "sicredi", sigla: "SIC" },
-      "756": { slug: "sicoob", sigla: "SIC" }
-    };
-
-    function bancoLogoItem(code) {
-      const normalizado = normalizeBankCode(code);
-      if (BANCO_LOGOS[normalizado]) return BANCO_LOGOS[normalizado];
-
-      const texto = String(code || '').toLowerCase();
-      const porNome = [
-        ['santander', '033'],
-        ['banco do brasil', '001'],
-        ['bradesco', '237'],
-        ['caixa', '104'],
-        ['nubank', '260'],
-        ['nu pagamentos', '260'],
-        ['inter', '077'],
-        ['itau', '341'],
-        ['itaú', '341'],
-        ['btg', '208'],
-        ['c6', '336'],
-        ['pagbank', '290'],
-        ['pagseguro', '290'],
-        ['sicredi', '748'],
-        ['sicoob', '756']
-      ].find(([nome]) => texto.includes(nome));
-
-      return porNome ? BANCO_LOGOS[porNome[1]] : null;
-    }
-
-    function getBancoLogo(code) {
-      const item = bancoLogoItem(code);
-      return item ? `https://cdn.simpleicons.org/${item.slug}` : '';
-    }
-
-    function BancoLogo({ code, size = 32, logoData = '' }) {
-      const item = bancoLogoItem(code);
-      const [erro, setErro] = React.useState(false);
-
-      /*
-       * O logo externo é apenas um recurso visual. Mesmo que o CDN esteja
-       * indisponível, o espaço do logo continua aparecendo com a sigla.
-       * Isso evita que o botão "desapareça" quando a internet/CDN falhar.
-       */
-      return h('div', {
-        style: {
-          width: size, height: size, minWidth: size, borderRadius: 8,
-          background: '#fff', border: '1px solid var(--line)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden', padding: 3, boxSizing: 'border-box',
-          flexShrink: 0
-        },
-        title: item ? item.sigla : 'Banco'
-      },
-        logoData
-          ? h('img', {
-              src: logoData,
-              alt: item?.sigla || 'Logo do banco',
-              title: item?.sigla || 'Logo do banco',
-              style: { width: '100%', height: '100%', objectFit: 'contain', display: 'block' }
-            })
-          : item && !erro
-          ? h('img', {
-              src: getBancoLogo(code),
-              alt: item.sigla,
-              title: item.sigla,
-              style: { width: '100%', height: '100%', objectFit: 'contain', display: 'block' },
-              onError: () => setErro(true)
-            })
-          : h('div', {
-              style: {
-                width: '100%', height: '100%', borderRadius: 6,
-                background: '#F0EDE5',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: size <= 28 ? 9 : 11,
-                fontWeight: 800, color: 'var(--ink)'
-              }
-            }, item?.sigla || 'BANCO')
-      );
-    }
-
     function splitInstallments(total, n) {
       const totalCents = Math.round(total * 100); const base = Math.floor(totalCents / n); let remainder = totalCents - base * n; const result = [];
       for (let i = 0; i < n; i++) { let val = base; if (remainder > 0) { val += 1; remainder -= 1; } result.push(val / 100); } return result;
@@ -166,13 +72,7 @@
       const parts = yyyymm.split("-").map(Number); const d = new Date(parts[0], parts[1] - 1, 1); const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }); return label.charAt(0).toUpperCase() + label.slice(1);
     }
     function formatDateBR(dateString) {
-      if (dateString == null || dateString === "") return "";
-      const s = String(dateString).trim();
-      const m = s.match(/^(\d{4})[-\/](\d{2})[-\/](\d{2})/);
-      if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-      const br = s.match(/^(\d{2})[-\/.](\d{2})[-\/.](\d{4})/);
-      if (br) return `${br[1]}/${br[2]}/${br[3]}`;
-      return s;
+      if (!dateString) return ""; const parts = dateString.split("-"); return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
     function formatBRL(v) {
       return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -190,82 +90,12 @@
       return Math.random().toString(36).slice(2, 10);
     }
 
-    function normalizeBankCode(code) { const digits=String(code||'').replace(/\D/g,''); if(!digits)return ''; return digits.length>=4?digits.slice(-3).padStart(3,'0'):digits.padStart(3,'0'); }
-    function normalizeAccountNumber(value) { return String(value||'').replace(/\D/g,''); }
-    function parseOFX(ofxString, arquivoId = '', arquivoNome = '') {
-      const transactions = [];
-      const statementsMeta = [];
-      let ordemImportacao = 0;
-      const statementRegex = /<STMTRS>([\s\S]*?)(?:<\/STMTRS>|(?=<STMTRS>))/gi;
-      const statements = [];
-      let sm;
-      while ((sm = statementRegex.exec(ofxString)) !== null) statements.push(sm[1]);
-      if (!statements.length) statements.push(ofxString);
-
-      statements.forEach((statement, statementIndex) => {
-        const getTag = (text, tag) => {
-          const m = text.match(new RegExp(`<${tag}>\\s*([^<\\r\\n]+)`, 'i'));
-          return m ? m[1].trim() : '';
-        };
-
-        // Informações da conta bancária que constam no próprio OFX.
-        const rawBankId = getTag(statement, 'BANKID');
-        const bankCode = normalizeBankCode(rawBankId);
-        const branchId = getTag(statement, 'BRANCHID');
-        const acctId = getTag(statement, 'ACCTID');
-        const meta = {
-          arquivoId,
-          arquivoNome,
-          statementIndex,
-          bancoOfx: rawBankId || '',
-          bancoCodeOfx: bankCode || '',
-          agenciaOfx: branchId || '',
-          contaOfx: acctId || ''
-        };
-        statementsMeta.push(meta);
-
-        const rx = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
-        let match;
-        while ((match = rx.exec(statement)) !== null) {
-          const block = match[1];
-          const type = getTag(block, 'TRNTYPE').toUpperCase();
-          const dt = getTag(block, 'DTPOSTED').substring(0, 8);
-          const amt = Number.parseFloat(getTag(block, 'TRNAMT'));
-          const fitid = getTag(block, 'FITID');
-          const memo = getTag(block, 'MEMO');
-          const name = getTag(block, 'NAME');
-          if (!Number.isFinite(amt)) continue;
-          transactions.push({
-            id: `ofx-${Date.now()}-${ordemImportacao}-${uid()}`,
-            fitid: fitid || '',
-            data: dt ? `${dt.substring(0,4)}-${dt.substring(4,6)}-${dt.substring(6,8)}` : '',
-            valor: amt,
-            descricao: name || memo || 'Transação OFX',
-            tipo: type,
-            conciliado: false,
-            conciliacaoId: null,
-            lancamentoId: null,
-            contaOfx: acctId,
-            bancoOfx: rawBankId,
-            bancoCode: bankCode,
-            agenciaOfx: branchId,
-            ofxArquivoId: arquivoId,
-            ofxArquivoNome: arquivoNome,
-            ofxImportadoEm: new Date().toISOString(),
-            ordemImportacao: ordemImportacao++
-          });
-        }
-      });
-      return { transactions, statementsMeta };
-    }
-
     const CARD_COLORS = ["#3C5A73", "#6B4226", "#7A6C46", "#4B4453", "#2F5233", "#8C3B2E"];
 
     function FaturaApp() {
       const [session, setSession] = useState(null);
       const [authLoading, setAuthLoading] = useState(true);
       const [dataLoading, setDataLoading] = useState(false);
-      const [dataReady, setDataReady] = useState(false);
       const [authEmail, setAuthEmail] = useState("");
       const [authPassword, setAuthPassword] = useState("");
       const [authError, setAuthError] = useState("");
@@ -277,21 +107,20 @@
       const [contasReceber, setContasReceber] = useState([]);
       const [cartoes, setCartoes] = useState([]);
       const [contasBancarias, setContasBancarias] = useState([]);
-      const [categorias, setCategorias] = useState([]);
-      const [novaContaLogoData, setNovaContaLogoData] = useState(""); 
+      const [categorias, setCategorias] = useState([]); 
       const [deparaList, setDeparaList] = useState([]);
       const [faturasFechadas, setFaturasFechadas] = useState({});
       const [faturasBaixadas, setFaturasBaixadas] = useState({});
       const [diasFechados, setDiasFechados] = useState({});
       const [mesesFechados, setMesesFechados] = useState({});
       
-      const [screen, setScreen] = useState(() => sessionStorage.getItem('fatura-screen-v2') || "cadastros");
-      const [cadastroTab, setCadastroTab] = useState(() => sessionStorage.getItem('fatura-cadtab-v2') || "cartoes");
+      const [screen, setScreen] = useState(() => localStorage.getItem('fatura-screen-v1') || "cadastros");
+      const [cadastroTab, setCadastroTab] = useState(() => localStorage.getItem('fatura-cadtab-v1') || "cartoes");
       const [categoriaTipoTab, setCategoriaTipoTab] = useState("despesa");
       const [lancamentoTab, setLancamentoTab] = useState("cartao");
       const [relatorioTab, setRelatorioTab] = useState("pagar");
       
-      const [month, setMonth] = useState(() => sessionStorage.getItem('fatura-month-v2') || currentMonth());
+      const [month, setMonth] = useState(() => localStorage.getItem('fatura-month-v1') || currentMonth());
       const [faturaAno, setFaturaAno] = useState(() => new Date().getFullYear().toString());
 
       const [faturaOrdem, setFaturaOrdem] = useState("atual");
@@ -308,86 +137,14 @@
       const [relFiltroBaixaFim, setRelFiltroBaixaFim] = useState("");
       const [relFiltroStatus, setRelFiltroStatus] = useState("todos");
 
-      // Conciliation State
-      const [concilTab, setConcilTab] = useState("extrato");
       const [concilContaId, setConcilContaId] = useState("");
-      const mesmaContaOfx = (a, b) => String(a ?? '') === String(b ?? '');
-      const ofxPertenceContaSelecionada = (o, contaId) => {
-        if (!o || !contaId) return false;
-
-        // Regra principal: se o OFX já possui o vínculo direto com a conta, usa esse vínculo.
-        if (mesmaContaOfx(o.contaId, contaId)) return true;
-
-        // Compatibilidade: OFXs importados em versões anteriores podem ter um contaId
-        // vazio ou incorreto, mas ainda possuem Banco/Agência/Conta no próprio arquivo.
-        // Nesse caso, validamos os dados bancários antes de exibir o movimento.
-        const conta = contasBancarias.find(c => String(c.id) === String(contaId));
-        if (!conta) return false;
-
-        const bancoSistema = normalizeBankCode(conta.bancoCode || conta.banco);
-        const bancoOfx = normalizeBankCode(o.bancoCode || o.bancoCodeOfx || o.bancoOfx);
-        const agenciaSistema = normalizeAccountNumber(conta.agencia || conta.agenciaBancaria);
-        const agenciaOfx = normalizeAccountNumber(o.agenciaOfx || o.agencia || o.branchId);
-        const contaSistema = normalizeAccountNumber(conta.numero || conta.conta);
-        const contaOfx = normalizeAccountNumber(o.contaOfx || o.acctId || o.conta);
-
-        const temDadosOfx = !!(bancoOfx || agenciaOfx || contaOfx);
-        if (!temDadosOfx) return !o.contaId;
-
-        const bancoOk = !bancoOfx || !bancoSistema || bancoOfx === bancoSistema;
-        const agenciaOk = !agenciaOfx || !agenciaSistema || agenciaOfx === agenciaSistema;
-        const contaOk = !contaOfx || !contaSistema || contaOfx === contaSistema || contaOfx.endsWith(contaSistema) || contaSistema.endsWith(contaOfx);
-
-        return bancoOk && agenciaOk && contaOk;
-      };
-      function normalizarIdsOfx(lista) {
-        const usados = new Set();
-        return (Array.isArray(lista) ? lista : []).map((o, idx) => {
-          let id = o?.id != null && String(o.id).trim() ? String(o.id) : `ofx-legado-${Date.now()}-${idx}-${uid()}`;
-          if (usados.has(id)) {
-            let n = 2;
-            const base = id;
-            while (usados.has(`${base}-${n}`)) n++;
-            id = `${base}-${n}`;
-          }
-          usados.add(id);
-          return {
-            ...o,
-            id,
-            contaId: o?.contaId != null ? String(o.contaId) : '',
-            bancoCode: o?.bancoCode || normalizeBankCode(o?.bancoOfx),
-            agenciaOfx: o?.agenciaOfx || o?.branchId || '',
-            ofxArquivoId: o?.ofxArquivoId || '',
-            ofxArquivoNome: o?.ofxArquivoNome || '',
-            conciliado: !!o?.conciliado
-          };
-        });
-      }
       const [concilDataIni, setConcilDataIni] = useState(`${currentMonth()}-01`);
       const [concilDataFim, setConcilDataFim] = useState(currentDate());
-      // Datas digitadas pelo usuário ficam separadas das datas efetivamente consultadas.
-      // Assim, alterar o calendário não atualiza os lançamentos até clicar em Filtrar Período.
-      const [concilDataIniAplicada, setConcilDataIniAplicada] = useState(`${currentMonth()}-01`);
-      const [concilDataFimAplicada, setConcilDataFimAplicada] = useState(currentDate());
       const [concilExibido, setConcilExibido] = useState(false);
       const [concilCalMes, setConcilCalMes] = useState(currentMonth());
       const [calendarioExpandido, setCalendarioExpandido] = useState(false);
-      const [ofxArquivosModalOpen, setOfxArquivosModalOpen] = useState(false);
-      const [ofxImportModal, setOfxImportModal] = useState({ open: false, contaId: '', contaNome: '', arquivoId: '', arquivoNome: '', transacoes: [], datas: [], dataSelecionada: '' });
-      const [ofxExcluirDiaModalOpen, setOfxExcluirDiaModalOpen] = useState(false);
-      const [ofxExcluirDia, setOfxExcluirDia] = useState(currentDate());
 
-      // OFX State
-      const ofxInputRef = useRef(null);
-      const [ofxData, setOfxData] = useState([]);
-      const [ofxSelectedIds, setOfxSelectedIds] = useState([]);
-      const [sysSelectedIds, setSysSelectedIds] = useState([]);
-      const [ofxImportContaId, setOfxImportContaId] = useState("");
-      const [ofxImportDataIni, setOfxImportDataIni] = useState("");
-      const [ofxImportDataFim, setOfxImportDataFim] = useState("");
-      const [ofxImportConsultado, setOfxImportConsultado] = useState(false);
-      const [ofxImportPreview, setOfxImportPreview] = useState({ open:false, contaId:"", contaNome:"", arquivoId:"", arquivoNome:"", transacoes:[], datas:[], dataSelecionada:"" });
-      const [ofxImportLoading, setOfxImportLoading] = useState(false);
+      const [concilEditModal, setConcilEditModal] = useState({ open: false, item: null });
 
       const [baixaModal, setBaixaModal] = useState({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
       const [batchBaixaModal, setBatchBaixaModal] = useState({ open: false, bancoId: "", dataBaixa: currentDate() });
@@ -412,13 +169,10 @@
       const [lrIsTransferencia, setLrIsTransferencia] = useState(false);
       const [lrError, setLrError] = useState('');
 
-      // Preferimos sessionStorage para estado de navegação/filtros.
-      // Assim, cada aba do navegador mantém sua própria tela e mês, sem uma aba
-      // alterar a navegação da outra. Os dados do sistema continuam compartilhados no Supabase.
       useEffect(() => {
-        sessionStorage.setItem('fatura-screen-v2', screen);
-        sessionStorage.setItem('fatura-cadtab-v2', cadastroTab);
-        sessionStorage.setItem('fatura-month-v2', month);
+        localStorage.setItem('fatura-screen-v1', screen);
+        localStorage.setItem('fatura-cadtab-v1', cadastroTab);
+        localStorage.setItem('fatura-month-v1', month);
       }, [screen, cadastroTab, month]);
 
       useEffect(() => {
@@ -480,29 +234,12 @@
       const [isRecorrente, setIsRecorrente] = useState(false);
       const [formError, setFormError] = useState("");
 
-      // Período de Trabalho: intervalo de datas permitido para lançamentos e alterações.
-      const [periodoTrabalhoInicio, setPeriodoTrabalhoInicio] = useState(() => localStorage.getItem('unisuper-periodo-trabalho-inicio') || "");
-      const [periodoTrabalhoFim, setPeriodoTrabalhoFim] = useState(() => localStorage.getItem('unisuper-periodo-trabalho-fim') || "");
-      const [periodoTrabalhoModalOpen, setPeriodoTrabalhoModalOpen] = useState(false);
-      const [periodoTrabalhoInicioInput, setPeriodoTrabalhoInicioInput] = useState("");
-      const [periodoTrabalhoFimInput, setPeriodoTrabalhoFimInput] = useState("");
-
       const [novaCategoriaNome, setNovaCategoriaNome] = useState("");
       const [novaCategoriaCor, setNovaCategoriaCor] = useState(CARD_COLORS[0]);
       const [novaCategoriaIsTransferencia, setNovaCategoriaIsTransferencia] = useState(false);
       const [subInputs, setSubInputs] = useState({});
 
       const showMoney = (val) => valoresOcultos ? "*" : formatBRL(val);
-
-      useEffect(() => {
-        if (periodoTrabalhoInicio && periodoTrabalhoFim) {
-          localStorage.setItem('unisuper-periodo-trabalho-inicio', periodoTrabalhoInicio);
-          localStorage.setItem('unisuper-periodo-trabalho-fim', periodoTrabalhoFim);
-        } else {
-          localStorage.removeItem('unisuper-periodo-trabalho-inicio');
-          localStorage.removeItem('unisuper-periodo-trabalho-fim');
-        }
-      }, [periodoTrabalhoInicio, periodoTrabalhoFim]);
 
       useEffect(() => {
         if (!supabaseClient) {
@@ -518,7 +255,7 @@
           if (session) loadDataFromSupabase(session.user.id);
           else {
             setPurchases([]); setContasPagar([]); setContasReceber([]); setCartoes([]); setContasBancarias([]);
-            setCategorias([]); setDeparaList([]); setFaturasFechadas({}); setFaturasBaixadas({}); setDiasFechados({}); setMesesFechados({}); setOfxData([]);
+            setCategorias([]); setDeparaList([]); setFaturasFechadas({}); setFaturasBaixadas({}); setDiasFechados({}); setMesesFechados({});
           }
         });
 
@@ -531,39 +268,39 @@
         if (data) {
           const loadedCats = (data.categorias || []).map(c => ({ tipo: c.tipo || 'despesa', isTransferencia: !!c.isTransferencia, ...c }));
           setPurchases(data.purchases || []); setContasPagar(data.contas_pagar || []); setContasReceber(data.contas_receber || []);
-          const contasBancariasCarregadas = data.contas_bancarias || [];
-          setCartoes(data.cartoes || []); setContasBancarias(contasBancariasCarregadas); setCategorias(loadedCats);
+          setCartoes(data.cartoes || []); setContasBancarias(data.contas_bancarias || []); setCategorias(loadedCats);
           setDeparaList(data.depara || []); setFaturasFechadas(data.faturas_fechadas || {}); setFaturasBaixadas(data.faturas_baixadas || {});
           setDiasFechados(data.dias_fechados || {}); setMesesFechados(data.meses_fechados || {});
-          const [{data:ofxMovDb,error:ofxMovErr},{data:ofxArqDb,error:ofxArqErr}]=await Promise.all([
-            supabaseClient.from('ofx_movimentacoes').select('*').eq('user_id',userId).order('data_movimento',{ascending:true}),
-            supabaseClient.from('ofx_arquivos').select('id,nome_arquivo').eq('user_id',userId)
-          ]);
-          if(ofxMovErr||ofxArqErr)console.error('Erro ao carregar OFX:',ofxMovErr||ofxArqErr);
-          const contaMap=new Map(contasBancariasCarregadas.map(c=>[String(c.id),c]));
-          setOfxData(normalizarIdsOfx((ofxMovDb||[]).map(o=>{
-            const conta=contaMap.get(String(o.conta_bancaria_id));
-            return {id:String(o.id),dbId:String(o.id),contaId:String(o.conta_bancaria_id||''),contaNome:conta?.nome||'',data:o.data_movimento,valor:Number(o.valor||0),
-              descricao:o.descricao||o.nome||'Transação OFX',nome:o.nome||'',tipo:o.tipo||'',fitid:o.fitid||'',bancoOfx:o.banco_id||'',bancoCode:o.banco_id||'',agenciaOfx:o.agencia||'',contaOfx:o.conta_ofx||'',
-              ofxArquivoId:String(o.arquivo_id||''),ofxArquivoNome:(ofxArqDb||[]).find(a=>String(a.id)===String(o.arquivo_id))?.nome_arquivo||'',conciliado:!!o.conciliado,conciliacaoId:o.conciliacao_id||null,lancamentoId:o.lancamento_sistema_id||null};
-          })));
-          setOfxSelectedIds([]); setSysSelectedIds([]);
-          if(contasBancariasCarregadas.length===1){const unica=String(contasBancariasCarregadas[0].id);setConcilContaId(p=>p||unica);setOfxImportContaId(p=>p||unica);}
         } else {
           await supabaseClient.from('app_data').upsert({
             user_id: userId, purchases: [], contas_pagar: [], contas_receber: [], cartoes: [], contas_bancarias: [],
             categorias: [], depara: [], faturas_fechadas: {}, faturas_baixadas: {}, dias_fechados: {}, meses_fechados: {}
           });
-          setOfxData([]);
         }
-        setDataReady(true); setDataLoading(false);
+        setDataLoading(false);
       }
 
-      const saveTimerRef=useRef(null), savingRef=useRef(false), pendingSaveRef=useRef(false);
-      async function saveDataToSupabase(){ if(!session||!dataReady||!supabaseClient)return; const payload={user_id:session.user.id,purchases,contas_pagar:contasPagar,contas_receber:contasReceber,cartoes,contas_bancarias:contasBancarias,categorias,depara:deparaList,faturas_fechadas:faturasFechadas,faturas_baixadas:faturasBaixadas,dias_fechados:diasFechados,meses_fechados:mesesFechados,updated_at:new Date().toISOString()}; if(savingRef.current){pendingSaveRef.current=true;return;} savingRef.current=true; const {error}=await supabaseClient.from('app_data').upsert(payload,{onConflict:'user_id'}); savingRef.current=false; if(error){console.error('ERRO AO SALVAR:',error);alert('Erro ao salvar! '+error.message);} if(pendingSaveRef.current){pendingSaveRef.current=false;scheduleSave();}}
-      function scheduleSave(){if(!session||!dataReady)return;if(saveTimerRef.current)clearTimeout(saveTimerRef.current);saveTimerRef.current=setTimeout(()=>{saveTimerRef.current=null;saveDataToSupabase();},250);}
-      useEffect(()=>{if(!session||!dataReady)return;scheduleSave();return()=>{if(saveTimerRef.current)clearTimeout(saveTimerRef.current);};},[session,dataReady,purchases,contasPagar,contasReceber,cartoes,contasBancarias,categorias,deparaList,faturasFechadas,faturasBaixadas,diasFechados,mesesFechados]);
-      function updatePurchases(u){setPurchases(p=>typeof u==='function'?u(p):u);} function updateContasPagar(u){setContasPagar(p=>typeof u==='function'?u(p):u);} function updateContasReceber(u){setContasReceber(p=>typeof u==='function'?u(p):u);} function updateCartoes(u){setCartoes(p=>typeof u==='function'?u(p):u);} function updateContasBancarias(u){setContasBancarias(p=>typeof u==='function'?u(p):u);} function updateCategorias(u){setCategorias(p=>typeof u==='function'?u(p):u);} function updateDepara(u){setDeparaList(p=>typeof u==='function'?u(p):u);} function updateFechadas(u){setFaturasFechadas(p=>typeof u==='function'?u(p):u);} function updateFaturasBaixadas(u){setFaturasBaixadas(p=>typeof u==='function'?u(p):u);} function updateDiasFechados(u){setDiasFechados(p=>typeof u==='function'?u(p):u);} function updateMesesFechados(u){setMesesFechados(p=>typeof u==='function'?u(p):u);} function updateOfxData(u){setOfxData(p=>typeof u==='function'?u(p):u);}
+      async function saveDataToSupabase(newPurchases, newPagar, newReceber, newCartoes, newContas, newCategorias, newDepara, newFechadas, newFaturasBaixadas, newDias, newMeses) {
+        if (!session) return; const userId = session.user.id;
+        const { error } = await supabaseClient.from('app_data').upsert({
+          user_id: userId, purchases: newPurchases, contas_pagar: newPagar, contas_receber: newReceber, cartoes: newCartoes,
+          contas_bancarias: newContas, categorias: newCategorias, depara: newDepara, faturas_fechadas: newFechadas,
+          faturas_baixadas: newFaturasBaixadas, dias_fechados: newDias, meses_fechados: newMeses, updated_at: new Date()
+        }, { onConflict: 'user_id' }); 
+        if (error) { console.error("ERRO:", error); alert("Erro ao salvar! " + error.message); }
+      }
+
+      function updatePurchases(updater) { setPurchases(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(next, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
+      function updateContasPagar(updater) { setContasPagar(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, next, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
+      function updateContasReceber(updater) { setContasReceber(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, next, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
+      function updateCartoes(updater) { setCartoes(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, next, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
+      function updateContasBancarias(updater) { setContasBancarias(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, next, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
+      function updateCategorias(updater) { setCategorias(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, next, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
+      function updateDepara(updater) { setDeparaList(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, next, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
+      function updateFechadas(updater) { setFaturasFechadas(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, next, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
+      function updateFaturasBaixadas(updater) { setFaturasBaixadas(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, next, diasFechados, mesesFechados); return next; }); }
+      function updateDiasFechados(updater) { setDiasFechados(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, next, mesesFechados); return next; }); }
+      function updateMesesFechados(updater) { setMesesFechados(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, next); return next; }); }
 
       function getCartao(id) { return cartoes.find(c => c.id === id) || null; }
       function getConta(id) { return contasBancarias.find(c => c.id === id) || null; }
@@ -571,44 +308,8 @@
       function getSubcategoria(catId, subId) { const cat = getCategoria(catId); if (!cat || !cat.subcategorias) return null; return cat.subcategorias.find(s => s.id === subId) || null; }
 
       function isFaturaFechada(comp) { return faturasFechadas[comp] ? true : false; }
-
-      // Fechamento diário da conciliação é individual por conta bancária.
-      // Os fechamentos antigos, sem conta, continuam disponíveis nas telas
-      // gerais; na conciliação, quando uma conta é informada, usamos somente
-      // a chave daquela conta.
-      function chaveDiaFechado(dataStr, contaId) {
-        return contaId ? `${String(contaId)}::${String(dataStr)}` : String(dataStr);
-      }
-
-      function isDiaFechado(dataStr, contaId = null) {
-        return !!diasFechados[chaveDiaFechado(dataStr, contaId)];
-      }
-
+      function isDiaFechado(dataStr) { return !!diasFechados[dataStr]; }
       function isMesFechado(compStr) { return !!mesesFechados[compStr]; }
-
-      function periodoTrabalhoAtivo() {
-        return !!(periodoTrabalhoInicio && periodoTrabalhoFim);
-      }
-
-      function validarPeriodoTrabalho(dataStr) {
-        if (!periodoTrabalhoAtivo()) return true;
-        const data = String(dataStr || '').substring(0, 10);
-        if (!data || data < periodoTrabalhoInicio || data > periodoTrabalhoFim) {
-          alert('Lançamento Fora do Período de Trabalho.');
-          return false;
-        }
-        return true;
-      }
-
-      function dataPadraoLancamento() {
-        if (periodoTrabalhoAtivo()) return periodoTrabalhoInicio;
-        return currentDate();
-      }
-
-      function competenciaPadraoLancamento() {
-        if (periodoTrabalhoAtivo()) return periodoTrabalhoInicio.substring(0, 7);
-        return month;
-      }
 
       const fechadaAtual = isFaturaFechada(month);
 
@@ -774,19 +475,7 @@
       async function handleLogin(e) { e.preventDefault(); setAuthError(""); const { error } = await supabaseClient.auth.signInWithPassword({ email: authEmail, password: authPassword }); if (error) setAuthError("Erro: " + error.message); }
       async function handleLogout() { await supabaseClient.auth.signOut(); }
 
-      function toggleDiaFechado(dataStr, e, contaId = null) {
-        if (e) e.stopPropagation();
-
-        const chave = chaveDiaFechado(dataStr, contaId);
-        const jaFechado = !!diasFechados[chave];
-
-        if (jaFechado && !window.confirm(`Deseja reabrir o dia ${formatDateBR(dataStr)}${contaId ? ' desta conta bancária' : ''}?`)) return;
-
-        updateDiasFechados(prev => ({
-          ...prev,
-          [chave]: !prev[chave]
-        }));
-      }
+      function toggleDiaFechado(dataStr, e) { if (e) e.stopPropagation(); const jaFechado = !!diasFechados[dataStr]; if (jaFechado && !window.confirm(`Deseja reabrir o dia ${formatDateBR(dataStr)}?`)) return; updateDiasFechados(prev => ({ ...prev, [dataStr]: !prev[dataStr] })); }
       function toggleMesFechado(compStr, e) { if (e) e.stopPropagation(); const jaFechado = !!mesesFechados[compStr]; if (jaFechado && !window.confirm(`Deseja reabrir o mês ${formatMonthLabel(compStr)}?`)) return; updateMesesFechados(prev => ({ ...prev, [compStr]: !prev[compStr] })); }
       
       function openFecharFaturaModal(comp) {
@@ -817,10 +506,6 @@
         e.preventDefault();
         if (!fecharFaturaCatId || !fecharFaturaSubId) return alert("Selecione Categoria e Subcategoria para os lançamentos no Contas a Pagar.");
         const { comp, totais, vencimentos } = fecharFaturaModal;
-        if (periodoTrabalhoAtivo()) {
-          const fora = totais.some(t => !validarPeriodoTrabalho(vencimentos[t.cartaoId]));
-          if (fora) return;
-        }
         const generatedIds = [];
         const newPagar = totais.map(t => {
           const id = uid();
@@ -828,11 +513,11 @@
           return {
             id, descricao: `Fatura ${t.nome} - ${formatMonthLabel(comp)}`, observacao: '', total: t.valor, dataCompra: vencimentos[t.cartaoId],
             parcelas: 1, parcelaInicial: 1, inicio: vencimentos[t.cartaoId].substring(0, 7), cartaoId: null, categoriaId: fecharFaturaCatId,
-            subcategoriaId: fecharFaturaSubId, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now(), linkFatura: comp, conciliado: false
+            subcategoriaId: fecharFaturaSubId, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now(), linkFatura: comp
           };
         });
         updateContasPagar(prev => [...prev, ...newPagar]);
-        updateFechadas(prev => ({ ...prev, [comp]: { fechada: true, pagarIds: generatedIds, conciliado: false } }));
+        updateFechadas(prev => ({ ...prev, [comp]: { fechada: true, pagarIds: generatedIds } }));
         setFecharFaturaModal({ open: false, comp: "", totais: [], vencimentos: {} });
       }
 
@@ -857,54 +542,7 @@
       function handleParcelasChange(val) { setParcelas(val); const numParc = parseInt(val, 10) || 1; const numTot = parseValorInput(valorTotal); if (Number.isFinite(numTot) && numTot > 0) setValorParcelaInput((numTot / numParc).toFixed(2).replace(".", ",")); }
 
       function handleSaveCartao(e) { e.preventDefault(); setCartaoError(""); const nome = novoCartaoNome.trim(); if (!nome) return setCartaoError("Dê um nome ao cartão."); const fech = novoCartaoFechamento || "01"; const venc = novoCartaoVencimento || "10"; if (editingCartaoId) updateCartoes(prev => prev.map(c => c.id === editingCartaoId ? { ...c, nome, bancoCode: novoCartaoBanco, cor: novoCartaoCor, fechamento: fech, vencimento: venc } : c)); else updateCartoes(prev => [...prev, { id: uid(), nome, bancoCode: novoCartaoBanco, cor: novoCartaoCor, fechamento: fech, vencimento: venc }]); setCartaoModalOpen(false); }
-
-      function handleContaLogoChange(e) {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        if (!file.type.startsWith('image/')) {
-          setContaError("Selecione uma imagem válida para o logo do banco.");
-          e.target.value = "";
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = () => {
-          setNovaContaLogoData(String(reader.result || ""));
-          setContaError("");
-        };
-        reader.onerror = () => {
-          setContaError("Não foi possível carregar o logo selecionado.");
-        };
-        reader.readAsDataURL(file);
-      }
-
-      function handleSaveConta(e) {
-        e.preventDefault();
-        setContaError("");
-        const nome = novaContaNome.trim();
-        if (!nome) return setContaError("Dê um nome à conta.");
-
-        const dadosConta = {
-          nome,
-          bancoCode: novaContaBanco,
-          tipo: novaContaTipo,
-          agencia: novaContaAgencia.trim(),
-          numero: novaContaNumero.trim(),
-          logoData: novaContaLogoData || ""
-        };
-
-        if (editingContaId) {
-          updateContasBancarias(prev => prev.map(c =>
-            c.id === editingContaId ? { ...c, ...dadosConta } : c
-          ));
-        } else {
-          updateContasBancarias(prev => [...prev, { id: uid(), ...dadosConta }]);
-        }
-
-        setContaModalOpen(false);
-        setNovaContaLogoData("");
-      }
+      function handleSaveConta(e) { e.preventDefault(); setContaError(""); const nome = novaContaNome.trim(); if (!nome) return setContaError("Dê um nome à conta."); if (editingContaId) updateContasBancarias(prev => prev.map(c => c.id === editingContaId ? { ...c, nome, bancoCode: novaContaBanco, tipo: novaContaTipo, agencia: novaContaAgencia.trim(), numero: novaContaNumero.trim() } : c)); else updateContasBancarias(prev => [...prev, { id: uid(), nome, bancoCode: novaContaBanco, tipo: novaContaTipo, agencia: novaContaAgencia.trim(), numero: novaContaNumero.trim() }]); setContaModalOpen(false); }
       
       function handleSaveEditCategoria(e) { 
         e.preventDefault(); 
@@ -935,7 +573,7 @@
           const temTabulacao = linhaOriginal.startsWith("\t") || linhaOriginal.startsWith("    "); const limpa = linhaOriginal.trim(); if (!limpa) return;
           const ehSub = temTabulacao || limpa.startsWith("-") || limpa.startsWith("•"); const nomeItem = limpa.replace(/^[-•]\s*/, "").trim();
           if (!ehSub) { let catExistente = novasCategorias.find(c => c.tipo === categoriaTipoTab && c.nome.toLowerCase() === nomeItem.toLowerCase()); if (!catExistente) { catExistente = { id: uid(), tipo: categoriaTipoTab, nome: nomeItem, cor: CARD_COLORS[novasCategorias.length % CARD_COLORS.length], isTransferencia: false, subcategorias: [] }; novasCategorias.push(catExistente); qtdCatAdicionadas++; } catAtual = catExistente; } 
-          else { if (catAtual) { let subExistente = catAtual.subcategorias.find(s => s.nome.toLowerCase() === nomeItem.toLowerCase()); if (!subExistente) { catAtual.subcategorias.push({ id: uid(), nome: nomeItem }); qtdSubAdicionadas++; } } else { const catsDoTipo = novasCategorias.filter(c => c.tipo === categoriaTipoTab); if (catsDoTipo.length > 0) { catAtual = catsDoTipo[catsDoTipo.length - 1]; let subExistente = catAtual.subcategorias.find(s => s.nome.toLowerCase() === nomeItem.toLowerCase()); if (!subExistente) { catAtual.subcategorias.push({ id: uid(), nome: nomeItem }); qtdSubAdicionadas++; } } } }
+          else { if (catAtual) { let subExistente = catAtual.subcategorias.find(s => s.nome.toLowerCase() === nomeItem.toLowerCase()); if (!subExistente) { catAtual.subcategorias.push({ id: uid(), nome: item => item }); qtdSubAdicionadas++; } } else { const catsDoTipo = novasCategorias.filter(c => c.tipo === categoriaTipoTab); if (catsDoTipo.length > 0) { catAtual = catsDoTipo[catsDoTipo.length - 1]; let subExistente = catAtual.subcategorias.find(s => s.nome.toLowerCase() === nomeItem.toLowerCase()); if (!subExistente) { catAtual.subcategorias.push({ id: uid(), nome: nomeItem }); qtdSubAdicionadas++; } } } }
         });
         updateCategorias(novasCategorias); setTxtCategoriasContent(""); alert(`Concluído!\n- ${qtdCatAdicionadas} categorias\n- ${qtdSubAdicionadas} subcategorias`);
       }
@@ -946,6 +584,7 @@
         const { type, id, subId, option, purchase } = deleteModal;
         
         const transId = purchase?.transferenciaId;
+        
         const updater = (prev) => {
           if (option === 'current') return prev.map(p => p.id === id ? { ...p, mesesExcluidos: [...(p.mesesExcluidos || []), month] } : p);
           else if (option === 'future') return prev.map(p => p.id === id ? { ...p, canceladoEm: month } : p);
@@ -974,17 +613,6 @@
         else if (type === "categoria") updateCategorias(prev => prev.filter(c => c.id !== id)); 
         else if (type === "subcategoria") updateCategorias(prev => prev.map(c => c.id === id ? { ...c, subcategorias: c.subcategorias.filter(s => s.id !== subId) } : c)); 
         else if (type === "depara") updateDepara(prev => prev.filter(d => d.id !== id));
-        else if (type === "concilManual") {
-          const item = purchase;
-          const tid = item?.transferenciaId;
-          if (item?.tipoOrigem === 'pagar' || item?.origem === 'pagar') {
-            updateContasPagar(prev => prev.filter(p => tid ? p.transferenciaId !== tid : p.id !== item.id));
-            if (tid) updateContasReceber(prev => prev.filter(p => p.transferenciaId !== tid));
-          } else if (item?.tipoOrigem === 'receber' || item?.origem === 'receber') {
-            updateContasReceber(prev => prev.filter(p => tid ? p.transferenciaId !== tid : p.id !== item.id));
-            if (tid) updateContasPagar(prev => prev.filter(p => p.transferenciaId !== tid));
-          }
-        }
         
         setDeleteModal({ open: false, type: null, id: null, subId: null, purchase: null, title: "", message: "", option: "all" });
       }
@@ -1018,14 +646,7 @@
 
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
-        if (!validarPeriodoTrabalho(dataLancamento)) {
-          return setFormError('Lançamento Fora do Período de Trabalho.');
-        }
-        const itemExistenteEdicao = editingId ? (lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : purchases.find(p => p.id === editingId)) : null;
-        const ehLancamentoDiretoEdicao = !!itemExistenteEdicao?.isLancamentoDireto;
-        if (editingId && (lancamentoTab === "pagar" || lancamentoTab === "receber") && itemExistenteEdicao && itemExistenteEdicao.status === "Baixado" && !ehLancamentoDiretoEdicao) {
-          return setFormError("Não é permitido alterar lançamentos baixados.");
-        }
+        if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : null; if (itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
         
         if (lancamentoTab === "cartao") {
             if (!cartaoId) return setFormError("É obrigatório selecionar um cartão.");
@@ -1033,6 +654,9 @@
             const isCorrigindoFaltaDeCartao = itemExistente && !itemExistente.cartaoId && cartaoId;
             if (isFaturaFechada(faturaMes) && !isCorrigindoFaltaDeCartao) return setFormError(`A fatura inicial deste lançamento (${formatMonthLabel(faturaMes)}) está fechada. Reabra-a para poder editar.`);
         }
+
+        if (isDiaFechado(dataLancamento)) return setFormError("Este dia está fechado."); 
+        if (lancamentoTab !== "cartao" && isMesFechado(faturaMes)) return setFormError("Mês de competência fechado.");
 
         const total = parseValorInput(valorTotal); const n = parseInt(parcelas, 10); const atual = parseInt(parcelaAtual, 10);
         
@@ -1048,32 +672,16 @@
           id: editingId || uid(), descricao: descricao.trim(), observacao: observacao.trim(), total, dataCompra: dataLancamento || currentDate(), 
           parcelas: isRecorrente ? 1 : n, parcelaInicial: isRecorrente ? 1 : atual, inicio: competenciaInicial, 
           recorrente: isRecorrente, cartaoId: null, categoriaId, subcategoriaId: exigeSubcat ? subcategoriaId : null, 
-          status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now(), conciliado: false
+          status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now() 
         };
 
-        if (lancamentoTab === "receber") {
-            if (editingId) {
-              const atual = contasReceber.find(p => p.id === editingId);
-              const transId = atual?.transferenciaId;
-              updateContasReceber(prev => prev.map(p => {
-                if (p.id !== editingId && !(transId && p.transferenciaId === transId)) return p;
-                return { ...p, ...novoRegistro, id: p.id, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.isLancamentoDireto ? novoRegistro.dataCompra : p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, transferenciaId: p.transferenciaId, isLancamentoDireto: p.isLancamentoDireto };
-              }));
-              if (transId) updateContasPagar(prev => prev.map(p => p.transferenciaId === transId ? { ...p, descricao: novoRegistro.descricao, observacao: novoRegistro.observacao, total: novoRegistro.total, dataCompra: novoRegistro.dataCompra, dataBaixa: p.isLancamentoDireto ? novoRegistro.dataCompra : p.dataBaixa, inicio: novoRegistro.inicio, parcelas: novoRegistro.parcelas, parcelaInicial: novoRegistro.parcelaInicial, recorrente: novoRegistro.recorrente, categoriaId: novoRegistro.categoriaId, subcategoriaId: novoRegistro.subcategoriaId } : p));
-              setModalOpen(false);
-            } else { updateContasReceber(prev => [...prev, novoRegistro]); resetFormAfterSave(); }
+        if (lancamentoTab === "receber") { 
+            if (editingId) { updateContasReceber(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
+            else { updateContasReceber(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
         }
-        else if (lancamentoTab === "pagar") {
-            if (editingId) {
-              const atual = contasPagar.find(p => p.id === editingId);
-              const transId = atual?.transferenciaId;
-              updateContasPagar(prev => prev.map(p => {
-                if (p.id !== editingId && !(transId && p.transferenciaId === transId)) return p;
-                return { ...p, ...novoRegistro, id: p.id, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.isLancamentoDireto ? novoRegistro.dataCompra : p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, transferenciaId: p.transferenciaId, isLancamentoDireto: p.isLancamentoDireto };
-              }));
-              if (transId) updateContasReceber(prev => prev.map(p => p.transferenciaId === transId ? { ...p, descricao: novoRegistro.descricao, observacao: novoRegistro.observacao, total: novoRegistro.total, dataCompra: novoRegistro.dataCompra, dataBaixa: p.isLancamentoDireto ? novoRegistro.dataCompra : p.dataBaixa, inicio: novoRegistro.inicio, parcelas: novoRegistro.parcelas, parcelaInicial: novoRegistro.parcelaInicial, recorrente: novoRegistro.recorrente, categoriaId: novoRegistro.categoriaId, subcategoriaId: novoRegistro.subcategoriaId } : p));
-              setModalOpen(false);
-            } else { updateContasPagar(prev => [...prev, novoRegistro]); resetFormAfterSave(); }
+        else if (lancamentoTab === "pagar") { 
+            if (editingId) { updateContasPagar(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
+            else { updateContasPagar(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
         }
         else { 
             novoRegistro.cartaoId = cartaoId || null; 
@@ -1084,9 +692,6 @@
 
       function handleSaveLancamentoRapido(e) {
         e.preventDefault(); setLrError("");
-        if (!validarPeriodoTrabalho(lrData)) {
-          return setLrError('Lançamento Fora do Período de Trabalho.');
-        }
         const total = parseValorInput(lrValor);
         const cat = getCategoria(lrCategoriaId);
         const exigeSub = cat && !cat.isTransferencia;
@@ -1105,40 +710,41 @@
 
         const faturaMes = lrData.substring(0, 7);
 
+        if (isDiaFechado(lrData) || isMesFechado(faturaMes)) {
+          return setLrError("Dia ou mês bloqueado/fechado. Abra-o para fazer o lançamento.");
+        }
+
         const transId = lrIsTransferencia ? uid() : null;
 
         if (lrIsTransferencia) {
-          const debitoId = uid();
-          const creditoId = uid();
           const debitoEntry = {
-            id: debitoId, descricao: `Transferência enviada: ${lrDescricao.trim()}`, observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
+            id: uid(), descricao: `Transferência enviada: ${lrDescricao.trim()}`, observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
             inicio: faturaMes, recorrente: false, cartaoId: null, categoriaId: lrCategoriaId,
             subcategoriaId: null, status: "Baixado", criadoEm: Date.now(),
-            transferenciaId: transId, isLancamentoDireto: true, bancoBaixaId: lrContaOrigem, dataBaixa: lrData,
-            conciliado: false, conciliacaoId: null
+            transferenciaId: transId, isLancamentoDireto: true, bancoBaixaId: lrContaOrigem, dataBaixa: lrData
           };
+          
           const creditoEntry = {
-            id: creditoId, descricao: `Transferência recebida: ${lrDescricao.trim()}`, observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
+            id: uid(), descricao: `Transferência recebida: ${lrDescricao.trim()}`, observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
             inicio: faturaMes, recorrente: false, cartaoId: null, categoriaId: lrCategoriaId,
             subcategoriaId: null, status: "Baixado", criadoEm: Date.now(),
-            transferenciaId: transId, isLancamentoDireto: true, bancoBaixaId: lrContaDestino, dataBaixa: lrData,
-            conciliado: false, conciliacaoId: null
+            transferenciaId: transId, isLancamentoDireto: true, bancoBaixaId: lrContaDestino, dataBaixa: lrData
           };
+
           updateContasPagar(prev => [...prev, debitoEntry]);
           updateContasReceber(prev => [...prev, creditoEntry]);
         } else {
-          const entryId = uid();
           const entry = {
-            id: entryId, descricao: lrDescricao.trim(), observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
+            id: uid(), descricao: lrDescricao.trim(), observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
             inicio: faturaMes, recorrente: false, cartaoId: null, categoriaId: lrCategoriaId,
             subcategoriaId: lrSubcategoriaId, status: "Baixado", criadoEm: Date.now(),
-            transferenciaId: null, isLancamentoDireto: true, bancoBaixaId: lrContaOrigem, dataBaixa: lrData,
-            conciliado: false, conciliacaoId: null
+            transferenciaId: null, isLancamentoDireto: true, bancoBaixaId: lrContaOrigem, dataBaixa: lrData
           };
+
           if (lrTipo === 'despesa') updateContasPagar(prev => [...prev, entry]);
           else updateContasReceber(prev => [...prev, entry]);
         }
-
+        
         setLrModalOpen(false);
       }
 
@@ -1155,30 +761,26 @@
       }
 
       function executarBaixaIndividual(type, id, bancoId, dataBaixaStr) {
-        if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data.");
-        if (!validarPeriodoTrabalho(dataBaixaStr)) return;
+        if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
         if (type === "pagar") updateContasPagar(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); else if (type === "receber") updateContasReceber(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p));
         setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
       }
 
       function executarBaixaLote(type, bancoId, ids, dataBaixaStr) {
-        if (!bancoId || !ids || ids.length === 0 || !dataBaixaStr) return alert("Preencha todos os campos.");
-        if (!validarPeriodoTrabalho(dataBaixaStr)) return;
+        if (!bancoId || !ids || ids.length === 0 || !dataBaixaStr) return alert("Preencha todos os campos."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
         if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchReceberIds([]); }
         setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate() });
       }
 
       function executarEstornoBaixa(type, id, dataBaixa) {
-        // Estorno não deve mais ser bloqueado por vínculos antigos de OFX
-        // nem por um fechamento que não esteja efetivamente marcado na tela.
-        // A conciliação OFX foi removida da interface.
+        if (dataBaixa && (isDiaFechado(dataBaixa) || isMesFechado(dataBaixa.substring(0, 7)))) return alert("Dia ou mês bloqueado."); 
         if (!window.confirm("Deseja estornar baixa?")) return;
         
         let transId = null;
         if (type === "pagar") { const item = contasPagar.find(p => p.id === id); transId = item?.transferenciaId; }
         else if (type === "receber") { const item = contasReceber.find(p => p.id === id); transId = item?.transferenciaId; }
 
-        const estornoUpdater = prev => prev.map(p => (p.id === id || (transId && p.transferenciaId === transId)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, conciliado: false } : p);
+        const estornoUpdater = prev => prev.map(p => (p.id === id || (transId && p.transferenciaId === transId)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p);
 
         if (type === "pagar") { 
           updateContasPagar(estornoUpdater); 
@@ -1194,75 +796,30 @@
         if (!ids || ids.length === 0) return alert("Nenhum item selecionado."); const listaAlvo = type === "pagar" ? contasPagar : contasReceber;
         for (const id of ids) { const item = listaAlvo.find(i => i.id === id); if (item && item.dataBaixa) { if (isDiaFechado(item.dataBaixa) || isMesFechado(item.dataBaixa.substring(0, 7))) return alert(`Estorno cancelado: Há itens cuja data de baixa (${formatDateBR(item.dataBaixa)}) ou mês está bloqueada.`); } }
         if (!window.confirm(`Deseja estornar a baixa dos ${ids.length} itens?`)) return;
-        if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, conciliado: false } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, conciliado: false } : p)); setBatchReceberIds([]); }
+        if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p)); setBatchReceberIds([]); }
       }
 
-      // Calcula o valor da fatura do cartão em uma competência, reutilizado no saldo corrido.
-      function calcularTotalFaturaCompetencia(comp) {
-        const values = purchases.map(p => {
-          const idx = monthDiff(p.inicio, comp); if (idx < 0) return 0;
-          if (p.canceladoEm && comp >= p.canceladoEm) return 0;
-          const mesesExcluidos = p.mesesExcluidos || []; if (mesesExcluidos.includes(comp)) return 0;
-          if (p.recorrente) return p.total;
-          const pInicial = p.parcelaInicial || 1; const qtdRestante = p.parcelas - pInicial + 1; if (idx >= qtdRestante) return 0;
-          const split = splitInstallments(p.total, p.parcelas); return split[(pInicial - 1) + idx] || 0;
-        });
-        return values.reduce((sum, value) => sum + value, 0);
-      }
-
-      // Reconciliation OFX logic
       const movimentacoesConciliacao = useMemo(() => {
-        if (!concilExibido || !concilContaId) return [];
-        const contaAtual = String(concilContaId);
-        const lista = [];
-        contasPagar.forEach(p => {
-          if (p.status === "Baixado" && p.dataBaixa && String(p.bancoBaixaId || '') === contaAtual) {
-            if (!concilDataIniAplicada || !concilDataFimAplicada || (p.dataBaixa >= concilDataIniAplicada && p.dataBaixa <= concilDataFimAplicada)) {
-              lista.push({ id: p.id, tipoOrigem: 'pagar', itemRef: p, data: p.dataBaixa, descricao: p.descricao, observacao: p.observacao, tipo: "Débito", valorDebito: p.recorrente ? p.valorParcela : (p.valorParcela || p.total), valorCredito: 0, conciliado: !!p.conciliado });
-            }
-          }
-        });
-        contasReceber.forEach(r => {
-          if (r.status === "Baixado" && r.dataBaixa && String(r.bancoBaixaId || '') === contaAtual) {
-            if (!concilDataIniAplicada || !concilDataFimAplicada || (r.dataBaixa >= concilDataIniAplicada && r.dataBaixa <= concilDataFimAplicada)) {
-              lista.push({ id: r.id, tipoOrigem: 'receber', itemRef: r, data: r.dataBaixa, descricao: r.descricao, observacao: r.observacao, tipo: "Crédito", valorDebito: 0, valorCredito: r.recorrente ? r.valorParcela : (r.valorParcela || r.total), conciliado: !!r.conciliado });
-            }
-          }
-        });
+        if (!concilExibido || !concilContaId) return []; const lista = [];
+        contasPagar.forEach(p => { if (p.status === "Baixado" && p.bancoBaixaId === concilContaId && p.dataBaixa) { if (p.dataBaixa >= concilDataIni && p.dataBaixa <= concilDataFim) lista.push({ id: p.id, tipoOrigem: 'pagar', itemRef: p, data: p.dataBaixa, descricao: p.descricao, observacao: p.observacao, tipo: "Débito", valorDebito: p.recorrente ? p.valorParcela : (p.valorParcela || p.total), valorCredito: 0 }); } });
+        contasReceber.forEach(r => { if (r.status === "Baixado" && r.bancoBaixaId === concilContaId && r.dataBaixa) { if (r.dataBaixa >= concilDataIni && r.dataBaixa <= concilDataFim) lista.push({ id: r.id, tipoOrigem: 'receber', itemRef: r, data: r.dataBaixa, descricao: r.descricao, observacao: r.observacao, tipo: "Crédito", valorDebito: 0, valorCredito: r.recorrente ? r.valorParcela : (r.valorParcela || r.total) }); } });
         Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
-          if (baixa && baixa.status === 'Baixado' && baixa.dataBaixa && String(baixa.bancoId || '') === contaAtual) {
-            if (!concilDataIniAplicada || !concilDataFimAplicada || (baixa.dataBaixa >= concilDataIniAplicada && baixa.dataBaixa <= concilDataFimAplicada)) {
-              const totalComp = calcularTotalFaturaCompetencia(comp);
-              if (totalComp > 0) lista.push({ id: `fat-${comp}`, tipoOrigem: 'fatura', competenciaRef: comp, baixaRef: baixa, data: baixa.dataBaixa, descricao: `Pagamento Fatura Cartão: ${formatMonthLabel(comp)}`, observacao: '', tipo: "Débito", valorDebito: totalComp, valorCredito: 0, conciliado: !!baixa.conciliado });
+          if (baixa && baixa.status === 'Baixado' && baixa.bancoId === concilContaId && baixa.dataBaixa) {
+            if (baixa.dataBaixa >= concilDataIni && baixa.dataBaixa <= concilDataFim) {
+              const values = purchases.map(p => { 
+                const idx = monthDiff(p.inicio, comp); if (idx < 0) return 0; 
+                if (p.canceladoEm && comp >= p.canceladoEm) return 0;
+                const mesesExcluidos = p.mesesExcluidos || []; if (mesesExcluidos.includes(comp)) return 0;
+                if (p.recorrente) return p.total;
+                const pInicial = p.parcelaInicial || 1; const qtdRestante = p.parcelas - pInicial + 1; if (idx >= qtdRestante) return 0; 
+                const split = splitInstallments(p.total, p.parcelas); return split[(pInicial - 1) + idx]; 
+              });
+              const totalComp = values.reduce((s, v) => s + v, 0); if (totalComp > 0) lista.push({ id: `fat-${comp}`, tipoOrigem: 'fatura', competenciaRef: comp, baixaRef: baixa, data: baixa.dataBaixa, descricao: `Pagamento Fatura Cartão: ${formatMonthLabel(comp)}`, observacao: '', tipo: "Débito", valorDebito: totalComp, valorCredito: 0 });
             }
           }
         });
-
-        // Saldo anterior: tudo que já entrou/saiu da conta antes do início do período consultado.
-        let saldoAnterior = 0;
-        contasPagar.forEach(p => {
-          if (p.status === "Baixado" && String(p.bancoBaixaId) === String(concilContaId) && p.dataBaixa && p.dataBaixa < concilDataIniAplicada) {
-            saldoAnterior -= Number(p.recorrente ? p.valorParcela : (p.valorParcela || p.total)) || 0;
-          }
-        });
-        contasReceber.forEach(r => {
-          if (r.status === "Baixado" && String(r.bancoBaixaId) === String(concilContaId) && r.dataBaixa && r.dataBaixa < concilDataIniAplicada) {
-            saldoAnterior += Number(r.recorrente ? r.valorParcela : (r.valorParcela || r.total)) || 0;
-          }
-        });
-        Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
-          if (baixa && baixa.status === 'Baixado' && String(baixa.bancoId) === String(concilContaId) && baixa.dataBaixa && baixa.dataBaixa < concilDataIniAplicada) {
-            saldoAnterior -= Number(calcularTotalFaturaCompetencia(comp)) || 0;
-          }
-        });
-
-        lista.sort((a, b) => a.data.localeCompare(b.data));
-        let saldoAcumulado = saldoAnterior + Number(contasBancarias.find(c => String(c.id) === String(concilContaId))?.saldoInicial || 0);
-        return lista.map(item => {
-          saldoAcumulado += (item.valorCredito - item.valorDebito);
-          return { ...item, saldo: saldoAcumulado };
-        });
-      }, [concilExibido, concilContaId, concilDataIniAplicada, concilDataFimAplicada, contasPagar, contasReceber, faturasBaixadas, purchases]);
+        lista.sort((a, b) => a.data.localeCompare(b.data)); let saldoAcumulado = 0; return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); return { ...item, saldo: saldoAcumulado }; });
+      }, [concilExibido, concilContaId, concilDataIni, concilDataFim, contasPagar, contasReceber, faturasBaixadas, purchases]);
 
       const resumoDiarioConcil = useMemo(() => {
         const grupos = {}; movimentacoesConciliacao.forEach(m => { if (!grupos[m.data]) grupos[m.data] = { data: m.data, debitos: 0, creditos: 0, itens: [] }; grupos[m.data].debitos += m.valorDebito; grupos[m.data].creditos += m.valorCredito; grupos[m.data].itens.push(m); });
@@ -1271,282 +828,33 @@
 
       const totalDebitosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorDebito, 0);
       const totalCreditosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorCredito, 0);
-      const saldoFinalConcil = movimentacoesConciliacao.length ? movimentacoesConciliacao[movimentacoesConciliacao.length - 1].saldo : 0;
-      // Converte qualquer data usada pelo OFX para AAAA-MM-DD.
-      // O OFX normalmente traz DTPOSTED como AAAAMMDDHHMMSS..., mas registros
-      // antigos podem estar salvos em ISO ou no formato brasileiro.
-      const normalizarDataOfx = (valor) => {
-        if (valor == null || valor === '') return '';
-        if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
-          const y = valor.getFullYear();
-          const m = String(valor.getMonth() + 1).padStart(2, '0');
-          const d = String(valor.getDate()).padStart(2, '0');
-          return `${y}-${m}-${d}`;
-        }
-
-        const s = String(valor).trim();
-        if (!s) return '';
-
-        // AAAA-MM-DD / AAAA-MM-DDTHH:mm:ss / AAAA-MM-DD HH:mm:ss
-        let m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
-        if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-
-        // AAAAMMDD ou AAAAMMDDHHMMSS / AAAAMMDD...
-        m = s.match(/(?:^|\D)(\d{4})(\d{2})(\d{2})(?:\d{2}\d{2}\d{2})?/);
-        if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-
-        // DD/MM/AAAA, DD-MM-AAAA, DD.MM.AAAA, inclusive com horário depois
-        m = s.match(/(\d{2})[\/.-](\d{2})[\/.-](\d{4})/);
-        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-
-        // AAAA/MM/DD ou AAAA.MM.DD
-        m = s.match(/(\d{4})[\/.-](\d{2})[\/.-](\d{2})/);
-        if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-
-        return '';
-      };
-
-      const obterDataMovimentoOfx = (o) => {
-        if (!o) return '';
-        const candidatos = [
-          o.data,
-          o.dataMovimento,
-          o.data_movimento,
-          o.date,
-          o.dtPosted,
-          o.DTPOSTED,
-          o.dataPostagem,
-          o.dataLancamento,
-          o.dataLancamentoOfx
-        ];
-        for (const valor of candidatos) {
-          const data = normalizarDataOfx(valor);
-          if (data) return data;
-        }
-        return '';
-      };
-
-      // OFX sem bloqueio de conta ou período na exibição.
-      // A conta selecionada continua sendo usada na importação.
-      const ofxFiltrado = useMemo(() => {
-        return (Array.isArray(ofxData) ? ofxData : [])
-          .slice()
-          .sort((a,b) => String(a?.data || '').localeCompare(String(b?.data || '')) || Number(a?.ordemImportacao || 0) - Number(b?.ordemImportacao || 0));
-      }, [ofxData]);
-
-
-
-      const ofxImportadosFiltrados=useMemo(()=>{
-        let lista=Array.isArray(ofxData)?ofxData.slice():[];
-        if(ofxImportContaId)lista=lista.filter(o=>mesmaContaOfx(o.contaId,ofxImportContaId));
-        if(ofxImportDataIni)lista=lista.filter(o=>String(o.data||'')>=ofxImportDataIni);
-        if(ofxImportDataFim)lista=lista.filter(o=>String(o.data||'')<=ofxImportDataFim);
-        return lista;
-      },[ofxData,ofxImportContaId,ofxImportDataIni,ofxImportDataFim]);
-      const ofxArquivosImportados=useMemo(()=>{
-        const mapa=new Map();
-        ofxImportadosFiltrados.forEach(o=>{
-          const id=o.ofxArquivoId||o.id;
-          if(!mapa.has(id))mapa.set(id,{id,nome:o.ofxArquivoNome||'Arquivo OFX',contaId:o.contaId||'',contaNome:o.contaNome||'',banco:o.bancoCode||o.bancoOfx||'',datas:[],qtd:0,conciliados:0});
-          const a=mapa.get(id);a.qtd++;if(o.conciliado)a.conciliados++;if(o.data&&!a.datas.includes(o.data))a.datas.push(o.data);
-        });
-        return Array.from(mapa.values()).sort((a,b)=>String(b.datas[0]||'').localeCompare(String(a.datas[0]||'')));
-      },[ofxImportadosFiltrados]);
-      const ofxMovimentacoesExibidas=useMemo(()=>{
-        if(!concilContaId||!concilExibido)return [];
-        return ofxData.filter(o=>mesmaContaOfx(o.contaId,concilContaId))
-          .filter(o=>!concilDataIniAplicada||String(o.data||'')>=concilDataIniAplicada)
-          .filter(o=>!concilDataFimAplicada||String(o.data||'')<=concilDataFimAplicada)
-          .sort((a,b)=>String(a.data||'').localeCompare(String(b.data||'')));
-      },[ofxData,concilContaId,concilDataIniAplicada,concilDataFimAplicada,concilExibido]);
-      async function recarregarOfxDoSupabase(){
-        if(!session?.user?.id||!supabaseClient)return;
-        const [{data,error},{data:arqs}]=await Promise.all([
-          supabaseClient.from('ofx_movimentacoes').select('*').eq('user_id',session.user.id).order('data_movimento',{ascending:true}),
-          supabaseClient.from('ofx_arquivos').select('id,nome_arquivo').eq('user_id',session.user.id)
-        ]);
-        if(error){console.error(error);return;}
-        const mapa=new Map(contasBancarias.map(c=>[String(c.id),c]));
-        setOfxData(normalizarIdsOfx((data||[]).map(o=>({id:String(o.id),dbId:String(o.id),contaId:String(o.conta_bancaria_id||''),contaNome:mapa.get(String(o.conta_bancaria_id))?.nome||'',data:o.data_movimento,valor:Number(o.valor||0),descricao:o.descricao||o.nome||'Transação OFX',nome:o.nome||'',tipo:o.tipo||'',fitid:o.fitid||'',bancoOfx:o.banco_id||'',bancoCode:o.banco_id||'',agenciaOfx:o.agencia||'',contaOfx:o.conta_ofx||'',ofxArquivoId:String(o.arquivo_id||''),ofxArquivoNome:(arqs||[]).find(a=>String(a.id)===String(o.arquivo_id))?.nome_arquivo||'',conciliado:!!o.conciliado,conciliacaoId:o.conciliacao_id||null,lancamentoId:o.lancamento_sistema_id||null}))));
-      }
-      function handleOfxUpload(e){
-        const contaId=ofxImportContaId;if(!contaId)return alert('Selecione a conta bancária para importar o OFX.');
-        const conta=contasBancarias.find(c=>String(c.id)===String(contaId));const file=e.target.files?.[0];if(!file||!conta)return;
-        const reader=new FileReader();
-        reader.onload=evt=>{
-          const arquivoId=uid();const parsed=parseOFX(evt.target.result,arquivoId,file.name);
-          if(!parsed.transactions.length)return alert('O arquivo OFX não possui lançamentos válidos.');
-          const transacoes=parsed.transactions.map(t=>({...t,contaId:String(contaId),contaNome:conta.nome,ofxArquivoId:arquivoId,ofxArquivoNome:file.name}));
-          const datas=[...new Set(transacoes.map(t=>t.data).filter(Boolean))].sort();
-          if(!datas.length)return alert('Não foi possível identificar as datas das movimentações do arquivo OFX.');
-          setOfxImportPreview({open:true,contaId:String(contaId),contaNome:conta.nome,arquivoId,arquivoNome:file.name,transacoes,datas,dataSelecionada:datas.length===1?datas[0]:''});
-        };
-        reader.readAsText(file);if(ofxInputRef.current)ofxInputRef.current.value='';
-      }
-      async function confirmarImportacaoOfx(){
-        if(!ofxImportPreview.open||!session?.user?.id)return;
-        const data=ofxImportPreview.dataSelecionada;if(!data)return alert('Selecione o dia que deseja importar.');
-        const transacoesDia=ofxImportPreview.transacoes.filter(t=>t.data===data);if(!transacoesDia.length)return alert('Não existem movimentações nesse dia no arquivo OFX.');
-        setOfxImportLoading(true);
-        try{
-          const {data:existentes,error:exErr}=await supabaseClient.from('ofx_movimentacoes').select('id,conciliado').eq('user_id',session.user.id).eq('conta_bancaria_id',String(ofxImportPreview.contaId)).eq('data_movimento',data);
-          if(exErr)throw exErr;
-          if((existentes||[]).length){if((existentes||[]).some(x=>x.conciliado))return alert('O dia selecionado já possui lançamentos OFX conciliados. Desfaça as conciliações antes de importar novamente.');if(!window.confirm('Já existem '+existentes.length+' lançamento(s) OFX nessa conta e data. Deseja importar novamente?'))return;}
-          const arq=transacoesDia[0];
-          const {data:arquivoInserido,error:arqErr}=await supabaseClient.from('ofx_arquivos').insert({user_id:session.user.id,conta_bancaria_id:String(ofxImportPreview.contaId),nome_arquivo:ofxImportPreview.arquivoNome,banco_id:arq.bancoCode||arq.bancoOfx||null,banco_nome:BANCOS_FEBRABAN.find(b=>b.code===(arq.bancoCode||arq.bancoOfx))?.name||null,agencia:arq.agenciaOfx||null,conta_ofx:arq.contaOfx||null,periodo_inicio:data,periodo_fim:data,dias_importados:[data],total_movimentacoes:transacoesDia.length,status:'importado'}).select().single();
-          if(arqErr)throw arqErr;
-          const rows=transacoesDia.map(t=>({user_id:session.user.id,arquivo_id:arquivoInserido.id,conta_bancaria_id:String(ofxImportPreview.contaId),data_movimento:t.data,tipo:t.tipo||null,valor:Number(t.valor||0),descricao:t.descricao||null,nome:t.nome||null,fitid:t.fitid||null,banco_id:t.bancoCode||t.bancoOfx||null,agencia:t.agenciaOfx||null,conta_ofx:t.contaOfx||null,conciliado:false}));
-          const {data:ins,error:insErr}=await supabaseClient.from('ofx_movimentacoes').insert(rows).select();
-          if(insErr){await supabaseClient.from('ofx_arquivos').delete().eq('id',arquivoInserido.id).eq('user_id',session.user.id);throw insErr;}
-          const nomeConta=ofxImportPreview.contaNome;setOfxImportPreview({open:false,contaId:'',contaNome:'',arquivoId:'',arquivoNome:'',transacoes:[],datas:[],dataSelecionada:''});await recarregarOfxDoSupabase();setOfxImportConsultado(true);
-          alert((ins?.length||rows.length)+' lançamento(s) importado(s) para '+nomeConta+' em '+formatDateBR(data)+'.');
-        }catch(err){console.error(err);alert('Erro ao importar OFX: '+(err?.message||err));}finally{setOfxImportLoading(false);}
-      }
-      async function excluirArquivoOfx(arquivoId){
-        if(!arquivoId||!session?.user?.id)return;
-        const regs=ofxData.filter(o=>String(o.ofxArquivoId)===String(arquivoId));if(!regs.length)return alert('Arquivo OFX não encontrado.');
-        if(regs.some(o=>o.conciliado))return alert('Não é possível excluir este arquivo porque existem lançamentos OFX conciliados.');
-        const fechados=[...new Set(regs.map(o=>o.data).filter(Boolean))].filter(d=>isDiaFechado(d,regs[0]?.contaId));
-        if(fechados.length)return alert('Não é possível excluir este arquivo porque o(s) dia(s) '+fechados.map(formatDateBR).join(', ')+' está(ão) fechado(s).');
-        if(!window.confirm('Excluir o arquivo OFX "'+(regs[0]?.ofxArquivoNome||'Arquivo OFX')+'" e suas '+regs.length+' movimentações?'))return;
-        try{const {error}=await supabaseClient.from('ofx_arquivos').delete().eq('id',arquivoId).eq('user_id',session.user.id);if(error)throw error;await recarregarOfxDoSupabase();setOfxSelectedIds([]);setSysSelectedIds([]);alert('Arquivo OFX excluído com sucesso.');}catch(err){console.error(err);alert('Erro ao excluir arquivo OFX: '+(err?.message||err));}
-      }
-      async function handleConciliarMatch(){
-        if(!ofxSelectedIds.length||!sysSelectedIds.length)return alert('Selecione pelo menos um lançamento OFX e um lançamento do sistema.');
-        const os=ofxData.filter(o=>ofxSelectedIds.includes(o.id)&&mesmaContaOfx(o.contaId,concilContaId)&&!o.conciliado),ss=movimentacoesConciliacao.filter(m=>sysSelectedIds.includes(m.id)&&!m.conciliado);
-        if(!os.length||!ss.length)return alert('Selecione lançamentos ainda não conciliados.');
-        const aTipos=os.map(o=>Number(o.valor)<0?'debito':'credito'),bTipos=ss.map(m=>m.tipo==='Débito'?'debito':'credito');
-        if(new Set(aTipos).size!==1||new Set(bTipos).size!==1||aTipos[0]!==bTipos[0])return alert('Os lançamentos selecionados precisam ser do mesmo tipo: débito com débito ou crédito com crédito.');
-        const totalBanco=os.reduce((s,o)=>s+Math.round(Math.abs(Number(o.valor||0))*100),0),totalSistema=ss.reduce((s,m)=>s+Math.round(Number(m.valorDebito||m.valorCredito||0)*100),0);
-        if(totalBanco!==totalSistema)return alert('Os valores não conferem. Banco: '+formatBRL(totalBanco/100)+' | Sistema: '+formatBRL(totalSistema/100)+' | Diferença: '+formatBRL(Math.abs(totalBanco-totalSistema)/100));
-        const cid=crypto.randomUUID();try{
-          const {error:cErr}=await supabaseClient.from('ofx_conciliacoes').insert({id:cid,user_id:session.user.id,conta_bancaria_id:String(concilContaId),valor_banco:totalBanco/100,valor_sistema:totalSistema/100,diferenca:0,quantidade_banco:os.length,quantidade_sistema:ss.length,status:'conciliada'});if(cErr)throw cErr;
-          const itens=[];os.forEach(o=>ss.forEach(m=>itens.push({user_id:session.user.id,conciliacao_id:cid,ofx_movimentacao_id:o.dbId||o.id,lancamento_sistema_id:String(m.id),valor_banco:Math.abs(Number(o.valor||0)),valor_sistema:Number(m.valorDebito||m.valorCredito||0)})));
-          const {error:iErr}=await supabaseClient.from('ofx_conciliacao_itens').insert(itens);if(iErr)throw iErr;
-          const {error:uErr}=await supabaseClient.from('ofx_movimentacoes').update({conciliado:true,conciliacao_id:cid}).in('id',os.map(o=>o.dbId||o.id));if(uErr)throw uErr;
-          const pi=ss.filter(m=>m.tipoOrigem==='pagar').map(m=>m.itemRef.id),ri=ss.filter(m=>m.tipoOrigem==='receber').map(m=>m.itemRef.id),fi=ss.filter(m=>m.tipoOrigem==='fatura');
-          if(pi.length)updateContasPagar(p=>p.map(x=>pi.includes(x.id)?{...x,conciliado:true,conciliacaoId:cid}:x));
-          if(ri.length)updateContasReceber(p=>p.map(x=>ri.includes(x.id)?{...x,conciliado:true,conciliacaoId:cid}:x));
-          if(fi.length)updateFaturasBaixadas(p=>{const n={...p};fi.forEach(m=>n[m.competenciaRef]={...n[m.competenciaRef],conciliado:true,conciliacaoId:cid});return n;});
-          await recarregarOfxDoSupabase();setOfxSelectedIds([]);setSysSelectedIds([]);alert('Conciliação OFX realizada com sucesso.');
-        }catch(err){console.error(err);alert('Erro ao gravar conciliação OFX: '+(err?.message||err));}
-      }
-      async function desfazerConciliacaoPorId(cid){
-        if(!cid||!session?.user?.id)return;if(!window.confirm('Deseja remover esta conciliação? Os lançamentos continuarão no sistema.'))return;
-        try{
-          const {error}=await supabaseClient.from('ofx_movimentacoes').update({conciliado:false,conciliacao_id:null,lancamento_sistema_id:null}).eq('conciliacao_id',cid).eq('user_id',session.user.id);if(error)throw error;
-          await supabaseClient.from('ofx_conciliacao_itens').delete().eq('conciliacao_id',cid).eq('user_id',session.user.id);
-          await supabaseClient.from('ofx_conciliacoes').update({status:'removida'}).eq('id',cid).eq('user_id',session.user.id);
-          updateContasPagar(p=>p.map(x=>x.conciliacaoId===cid?{...x,conciliado:false,conciliacaoId:null}:x));
-          updateContasReceber(p=>p.map(x=>x.conciliacaoId===cid?{...x,conciliado:false,conciliacaoId:null}:x));
-          updateFaturasBaixadas(p=>{const n={...p};Object.keys(n).forEach(k=>{if(n[k]?.conciliacaoId===cid)n[k]={...n[k],conciliado:false,conciliacaoId:null};});return n;});
-          await recarregarOfxDoSupabase();setOfxSelectedIds([]);setSysSelectedIds([]);alert('Conciliação removida com sucesso.');
-        }catch(err){console.error(err);alert('Erro ao remover conciliação: '+(err?.message||err));}
-      }
-      async function removerConciliacoesSelecionadas(){
-        const ids=new Set();
-        ofxSelectedIds.forEach(id=>{const o=ofxData.find(x=>x.id===id);if(o?.conciliacaoId)ids.add(o.conciliacaoId);});
-        sysSelectedIds.forEach(id=>{const m=movimentacoesConciliacao.find(x=>x.id===id);const cid=m?.itemRef?.conciliacaoId||m?.baixaRef?.conciliacaoId||m?.conciliacaoId;if(cid)ids.add(cid);});
-        if(!ids.size)return alert('Selecione pelo menos um lançamento que esteja conciliado para remover a conciliação.');
-        for(const id of ids)await desfazerConciliacaoPorId(id);
-      }
-      const ofxTotalSelecionado=ofxData.filter(o=>ofxSelectedIds.includes(o.id)).reduce((s,o)=>s+Math.abs(Number(o.valor||0)),0);
-      const sysTotalSelecionado=movimentacoesConciliacao.filter(m=>sysSelectedIds.includes(m.id)).reduce((s,m)=>s+Number(m.valorDebito||m.valorCredito||0),0);
-      const saldoInicialConciliacao = useMemo(() => {
-        if (!concilContaId || !concilDataIniAplicada) return 0;
-        const contaSelecionada = contasBancarias.find(c => String(c.id) === String(concilContaId));
-        if (!contaSelecionada) return 0;
-
-        let saldo = Number(contaSelecionada.saldoInicial || 0);
-
-        contasPagar.forEach(p => {
-          if (p.status === "Baixado" && String(p.bancoBaixaId) === String(concilContaId) && p.dataBaixa && p.dataBaixa < concilDataIniAplicada) {
-            saldo -= Number(p.recorrente ? p.valorParcela : (p.valorParcela || p.total)) || 0;
-          }
-        });
-        contasReceber.forEach(r => {
-          if (r.status === "Baixado" && String(r.bancoBaixaId) === String(concilContaId) && r.dataBaixa && r.dataBaixa < concilDataIniAplicada) {
-            saldo += Number(r.recorrente ? r.valorParcela : (r.valorParcela || r.total)) || 0;
-          }
-        });
-        Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
-          if (baixa && baixa.status === 'Baixado' && String(baixa.bancoId) === String(concilContaId) && baixa.dataBaixa && baixa.dataBaixa < concilDataIniAplicada) {
-            saldo -= Number(calcularTotalFaturaCompetencia(comp)) || 0;
-          }
-        });
-
-        return saldo;
-      }, [concilContaId, concilDataIniAplicada, contasBancarias, contasPagar, contasReceber, faturasBaixadas]);
-
-      const totalDebitosConciliacao = movimentacoesConciliacao.reduce(
-        (s, m) => s + Number(m.valorDebito || 0), 0
-      );
-
-      const totalCreditosConciliacao = movimentacoesConciliacao.reduce(
-        (s, m) => s + Number(m.valorCredito || 0), 0
-      );
-
-      const saldoFinalConciliacao =
-        saldoInicialConciliacao + totalCreditosConciliacao - totalDebitosConciliacao;
-
-
-
-      function desfazerConciliacaoPorOfx(ofx){
-        if(!ofx || !ofx.conciliado) return;
-        if(!ofx.conciliacaoId) return alert('Não foi possível identificar a conciliação deste lançamento.');
-        desfazerConciliacaoPorId(ofx.conciliacaoId);
-      }
-
-      function desfazerConciliacao(sys){
-        if(!sys || !sys.conciliado) return;
-        const cid=sys.itemRef?.conciliacaoId || sys.baixaRef?.conciliacaoId || sys.conciliacaoId;
-        if(!cid) return alert('Não foi possível identificar a conciliação deste lançamento.');
-        desfazerConciliacaoPorId(cid);
-      }
+      const saldoFinalConcil = totalCreditosConcil - totalDebitosConcil;
 
       const calendarioDiasDoMes = useMemo(() => {
-        const [ano, mes] = concilCalMes.split("-").map(Number);
-        const ultimoDia = new Date(ano, mes, 0).getDate();
-        const primeiroDia = `${ano}-${String(mes).padStart(2, "0")}-01`;
-        const dias = [];
-        let acumulado = Number(contasBancarias.find(c => String(c.id) === String(concilContaId))?.saldoInicial || 0);
-
-        if (concilContaId) {
-          // Carrega o saldo acumulado de todos os meses anteriores.
-          contasPagar.forEach(p => {
-            if (p.status === "Baixado" && String(p.bancoBaixaId) === String(concilContaId) && p.dataBaixa && p.dataBaixa < primeiroDia) {
-              acumulado -= Number(p.recorrente ? p.valorParcela : (p.valorParcela || p.total)) || 0;
-            }
-          });
-          contasReceber.forEach(r => {
-            if (r.status === "Baixado" && String(r.bancoBaixaId) === String(concilContaId) && r.dataBaixa && r.dataBaixa < primeiroDia) {
-              acumulado += Number(r.recorrente ? r.valorParcela : (r.valorParcela || r.total)) || 0;
-            }
-          });
-          Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
-            if (baixa && baixa.status === 'Baixado' && String(baixa.bancoId) === String(concilContaId) && baixa.dataBaixa && baixa.dataBaixa < primeiroDia) {
-              acumulado -= Number(calcularTotalFaturaCompetencia(comp)) || 0;
-            }
-          });
-        }
-
+        const [ano, mes] = concilCalMes.split("-").map(Number); const ultimoDia = new Date(ano, mes, 0).getDate(); const dias = []; let acumulado = 0;
         for (let d = 1; d <= ultimoDia; d++) {
-          const strD = `${ano}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-          let deb = 0; let cred = 0;
+          const strD = `${ano}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`; let deb = 0; let cred = 0;
           if (concilContaId) {
-            contasPagar.forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === String(concilContaId) && p.dataBaixa === strD) deb += Number(p.recorrente ? (p.valorParcela||p.total) : (p.valorParcela || p.total)) || 0; });
-            contasReceber.forEach(r => { if (r.status === "Baixado" && String(r.bancoBaixaId) === String(concilContaId) && r.dataBaixa === strD) cred += Number(r.recorrente ? (r.valorParcela||r.total) : (r.valorParcela || r.total)) || 0; });
+            contasPagar.forEach(p => { if (p.status === "Baixado" && p.bancoBaixaId === concilContaId && p.dataBaixa === strD) deb += p.recorrente ? (p.valorParcela||p.total) : (p.valorParcela || p.total); });
+            contasReceber.forEach(r => { if (r.status === "Baixado" && r.bancoBaixaId === concilContaId && r.dataBaixa === strD) cred += r.recorrente ? (r.valorParcela||r.total) : (r.valorParcela || r.total); });
             Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
-              if (baixa && baixa.status === 'Baixado' && String(baixa.bancoId) === String(concilContaId) && baixa.dataBaixa === strD) {
-                deb += Number(calcularTotalFaturaCompetencia(comp)) || 0;
+              if (baixa && baixa.status === 'Baixado' && baixa.bancoId === concilContaId && baixa.dataBaixa === strD) {
+                const values = purchases.map(p => { 
+                  const idx = monthDiff(p.inicio, comp); if (idx < 0) return 0;
+                  if (p.canceladoEm && comp >= p.canceladoEm) return 0;
+                  const mesesExcluidos = p.mesesExcluidos || []; if (mesesExcluidos.includes(comp)) return 0;
+                  if(p.recorrente) return p.total;
+                  const pInicial = p.parcelaInicial || 1; const qtdRestante = p.parcelas - pInicial + 1; if (idx >= qtdRestante) return 0; 
+                  const split = splitInstallments(p.total, p.parcelas); return split[(pInicial - 1) + idx]; 
+                });
+                deb += values.reduce((s, v) => s + v, 0);
               }
             });
           }
-          acumulado += (cred - deb);
-          dias.push({ data: strD, diaNum: d, debitos: deb, cred: cred, saldo: acumulado });
+          acumulado += (cred - deb); dias.push({ data: strD, diaNum: d, debitos: deb, cred: cred, saldo: acumulado });
         }
         return dias;
-      }, [concilCalMes, concilContaId, contasBancarias, contasPagar, contasReceber, faturasBaixadas, purchases]);
+      }, [concilCalMes, concilContaId, contasPagar, contasReceber, faturasBaixadas, purchases]);
 
       const contasPagarFiltradasRelatorio = useMemo(() => {
         return contasPagarForMonth.filter(p => {
@@ -1573,75 +881,6 @@
       const totalMesPagarRelatorio = useMemo(() => contasPagarFiltradasRelatorio.reduce((s, p) => s + p.valorParcela, 0), [contasPagarFiltradasRelatorio]);
       const totalMesReceberRelatorio = useMemo(() => contasReceberFiltradasRelatorio.reduce((s, p) => s + p.valorParcela, 0), [contasReceberFiltradasRelatorio]);
 
-      const relatorioDashboard = useMemo(() => {
-        const fimMes = `${month}-31`;
-        const pagar = contasPagarForMonth || [];
-        const receber = contasReceberForMonth || [];
-        const soma = (lista, fn) => lista.reduce((s, x) => s + (Number(fn(x)) || 0), 0);
-        const valorItem = p => Number(p.valorParcela ?? p.total ?? 0);
-        const pagarTotal = soma(pagar, valorItem);
-        const receberTotal = soma(receber, valorItem);
-        const pagarBaixado = soma(pagar.filter(p => p.status === 'Baixado'), valorItem);
-        const pagarAberto = soma(pagar.filter(p => (p.status || 'Em aberto') !== 'Baixado'), valorItem);
-        const receberBaixado = soma(receber.filter(p => p.status === 'Baixado'), valorItem);
-        const receberAberto = soma(receber.filter(p => (p.status || 'Em aberto') !== 'Baixado'), valorItem);
-        const faturaTotal = calcularTotalFaturaCompetencia(month);
-        const faturaBaixa = faturasBaixadas[month];
-        const faturaBaixada = !!(faturaBaixa && faturaBaixa.status === 'Baixado');
-
-        const porCategoria = (lista) => {
-          const mapa = {};
-          lista.forEach(p => {
-            const cat = getCategoria(p.categoriaId);
-            const nome = cat?.nome || 'Sem categoria';
-            mapa[nome] = (mapa[nome] || 0) + valorItem(p);
-          });
-          return Object.entries(mapa).sort((a,b) => b[1] - a[1]);
-        };
-
-        const contas = contasBancarias.map(c => {
-          let saldo = Number(c.saldoInicial || 0);
-          contasPagar.forEach(p => {
-            if (p.status === 'Baixado' && String(p.bancoBaixaId) === String(c.id) && p.dataBaixa && p.dataBaixa <= fimMes) saldo -= valorItem(p);
-          });
-          contasReceber.forEach(r => {
-            if (r.status === 'Baixado' && String(r.bancoBaixaId) === String(c.id) && r.dataBaixa && r.dataBaixa <= fimMes) saldo += valorItem(r);
-          });
-          Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
-            if (baixa && baixa.status === 'Baixado' && String(baixa.bancoId) === String(c.id) && baixa.dataBaixa && baixa.dataBaixa <= fimMes) saldo -= Number(calcularTotalFaturaCompetencia(comp)) || 0;
-          });
-          return { ...c, saldo };
-        });
-
-        return { pagarTotal, receberTotal, pagarBaixado, pagarAberto, receberBaixado, receberAberto, faturaTotal, faturaBaixada, faturaBaixa, contas, pagarCategorias: porCategoria(pagar), receberCategorias: porCategoria(receber) };
-      }, [month, contasPagarForMonth, contasReceberForMonth, contasPagar, contasReceber, contasBancarias, faturasBaixadas, purchases]);
-
-      function abrirRelatorioLancamento(tipo, id) {
-        setScreen('lancamentos');
-        setLancamentoTab(tipo);
-        const lista = tipo === 'pagar' ? contasPagar : contasReceber;
-        const item = lista.find(x => x.id === id);
-        if (item) setMonth(item.inicio || String(item.dataCompra || month).substring(0,7));
-      }
-
-      function abrirRelatorioFatura(comp) {
-        setMonth(comp || month);
-        setFaturaAno(String((comp || month).substring(0,4)));
-        setScreen('faturas');
-      }
-
-      function abrirRelatorioConciliacao(contaId, data) {
-        const ini = `${month}-01`;
-        const fim = new Date(Number(month.substring(0,4)), Number(month.substring(5,7)), 0).toISOString().slice(0,10);
-        setConcilContaId(contaId || '');
-        setConcilDataIni(ini);
-        setConcilDataFim(fim);
-        setConcilDataIniAplicada(ini);
-        setConcilDataFimAplicada(fim);
-        setConcilExibido(true);
-        setScreen('conciliacao');
-      }
-
       function exportRelatorioExcel() {
         const lista = relatorioTab === "pagar" ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio; if (lista.length === 0) return alert("Sem dados para exportar.");
         let csv = `\uFEFFData;Descrição;Observação;Categoria;Parcela;Status;Data Baixa;Valor\n`;
@@ -1649,52 +888,10 @@
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `relatorio_${relatorioTab}_${month}.csv`; a.click();
       }
 
-      function excluirLancamentoDaConciliacao(item) {
-        const registro = item?.itemRef;
-        if (!registro || !registro.isLancamentoDireto) {
-          return alert('A exclusão direta pela Conciliação está disponível somente para lançamentos manuais.');
-        }
-        if (registro.conciliado) {
-          return alert('Este lançamento está conciliado e precisa ter a conciliação removida antes da exclusão.');
-        }
-        setDeleteModal({
-          open: true,
-          type: 'concilManual',
-          id: registro.id,
-          purchase: { ...registro, tipoOrigem: item.tipoOrigem },
-          title: 'Excluir Lançamento Manual',
-          message: registro.transferenciaId
-            ? 'Este lançamento é uma transferência bancária. Excluirá os dois lados da transferência. Deseja continuar?'
-            : 'Deseja realmente excluir este lançamento manual?',
-          option: 'all'
-        });
-      }
-
-      function abrirEdicaoDaConciliacao(item) {
-        const registro = item?.itemRef;
-        if (!registro || (item.tipoOrigem !== 'pagar' && item.tipoOrigem !== 'receber')) {
-          return alert('Este lançamento não pode ser alterado diretamente por esta tela.');
-        }
-        setEditingId(registro.id);
-        setDescricao(registro.descricao || '');
-        setObservacao(registro.observacao || '');
-        setValorTotal(Number(registro.total || 0).toFixed(2).replace('.', ','));
-        setValorParcelaInput(Number(registro.valorParcela || registro.total || 0).toFixed(2).replace('.', ','));
-        setDataLancamento(registro.dataCompra || currentDate());
-        setFaturaMes(registro.inicio || month);
-        setParcelas(String(registro.parcelas || 1));
-        setParcelaAtual(String(registro.parcelaInicial || 1));
-        setCategoriaId(registro.categoriaId || '');
-        setSubcategoriaId(registro.subcategoriaId || '');
-        setIsRecorrente(!!registro.recorrente);
-        setLancamentoTab(item.tipoOrigem === 'pagar' ? 'pagar' : 'receber');
-        setModalOpen(true);
-      }
-
       function exportConciliacaoExcel() {
         if (movimentacoesConciliacao.length === 0) return alert("Sem movimentações.");
-        let csv = `\uFEFFData;Descrição;Observação;Tipo;Débito;Crédito;Saldo;Conciliado\n`;
-        movimentacoesConciliacao.forEach(m => { csv += `${formatDateBR(m.data)};"${m.descricao}";"${m.observacao || ''}";"${m.tipo}";${m.valorDebito ? m.valorDebito.toFixed(2).replace('.', ',') : '0,00'};${m.valorCredito ? m.valorCredito.toFixed(2).replace('.', ',') : '0,00'};${m.saldo.toFixed(2).replace('.', ',')};${m.conciliado ? 'Sim' : 'Não'}\n`; });
+        let csv = `\uFEFFData;Descrição;Observação;Tipo;Débito;Crédito;Saldo\n`;
+        movimentacoesConciliacao.forEach(m => { csv += `${formatDateBR(m.data)};"${m.descricao}";"${m.observacao || ''}";"${m.tipo}";${m.valorDebito ? m.valorDebito.toFixed(2).replace('.', ',') : '0,00'};${m.valorCredito ? m.valorCredito.toFixed(2).replace('.', ',') : '0,00'};${m.saldo.toFixed(2).replace('.', ',')}\n`; });
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `conciliacao_${concilContaId}_${concilDataIni}_ate_${concilDataFim}.csv`; a.click();
       }
 
@@ -1764,21 +961,8 @@
           .total-mes { font-size: 40px; font-weight: bold; margin-top: 10px; }
           .total-sub { color: var(--ink-soft); font-size: 13px; }
           
-          table { width: 100%; border-collapse: collapse; margin-top: 16px; table-layout: auto; }
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; }
           th, td { padding: 10px 6px; border-bottom: 1px solid var(--line); font-size: 13px; text-align: left; vertical-align: middle; }
-          .concil-day-table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; }
-          .concil-day-table th, .concil-day-table td { box-sizing: border-box; min-width: 0; overflow: hidden; }
-          .concil-day-table th:nth-child(1), .concil-day-table td:nth-child(1) { width: 36%; }
-          .concil-day-table th:nth-child(2), .concil-day-table td:nth-child(2) { width: 10%; }
-          .concil-day-table th:nth-child(3), .concil-day-table td:nth-child(3) { width: 14%; }
-          .concil-day-table th:nth-child(4), .concil-day-table td:nth-child(4) { width: 13%; }
-          .concil-day-table th:nth-child(5), .concil-day-table td:nth-child(5) { width: 13%; }
-          .concil-day-table th:nth-child(6), .concil-day-table td:nth-child(6) { width: 14%; }
-          .concil-day-table td:first-child > div:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .concil-day-table .num { white-space: nowrap; font-size: 12px; }
-          .concil-day-table th:nth-child(6), .concil-day-table td:nth-child(6) { white-space: nowrap; }
-          .concil-day-table th { padding: 7px 6px; }
-          .concil-day-table td { padding: 7px 6px; }
           th.right, td.right { text-align: right; }
           th.center, td.center { text-align: center; }
           .badge { font-size: 11px; padding: 2px 6px; background: var(--paper); border-radius: 4px; color: var(--ink-soft); white-space: nowrap; }
@@ -1859,7 +1043,7 @@
               screen === 'cadastros' ? 'Cadastros e Configurações' :
               screen === 'lancamentos' ? 'Gestão de Lançamentos' :
               screen === 'faturas' ? 'Faturas de Cartão' :
-              screen === 'relatorios' ? 'Relatórios Financeiros' : screen === 'conciliacao' && concilTab === 'ofx' ? 'Conciliação OFX' : screen === 'conciliacao' && concilTab === 'ofx-importacao' ? 'Importação OFX' : 'Conciliação Bancária'
+              screen === 'relatorios' ? 'Relatórios Financeiros' : 'Conciliação Bancária'
             ),
             h('button', {
               className: 'action-btn',
@@ -1889,8 +1073,8 @@
               h('div', { className: 'list-vertical', style: { marginTop: 12 } }, cartoes.map((c) => h('div', { className: 'list-item', key: c.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', { className: 'dot', style: { background: c.cor } }), h('div', null, h('div', null, c.nome), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `Fecha dia ${c.fechamento || '01'} • Vence dia ${c.vencimento || '10'}`))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingCartaoId(c.id); setNovoCartaoNome(c.nome); setNovoCartaoBanco(c.bancoCode || "033"); setNovoCartaoCor(c.cor || CARD_COLORS[0]); setNovoCartaoFechamento(c.fechamento || "01"); setNovoCartaoVencimento(c.vencimento || "10"); setCartaoModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'cartao', id: c.id, title: 'Excluir Cartão', message: `Excluir ${c.nome}?`, option: "all" }) }, h(Trash2, { size: 14 })))))))
             ),
             cadastroTab === "contas" && h(React.Fragment, null,
-              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, h('div', { style: { fontSize: 14, color: 'var(--ink-soft)' } }, "Minhas Contas Bancárias e Caixas"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingContaId(null); setNovaContaNome(""); setNovaContaBanco("033"); setNovaContaTipo("corrente"); setNovaContaAgencia(""); setNovaContaNumero(""); setNovaContaLogoData(""); setContaModalOpen(true); } }, h(Plus), " Nova Conta")),
-              h('div', { className: 'list-vertical', style: { marginTop: 12 } }, contasBancarias.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, "Nenhuma conta cadastrada.") : contasBancarias.map((conta) => { const bancoObj = BANCOS_FEBRABAN.find(b => b.code === conta.bancoCode); const tipoLabel = conta.tipo === 'corrente' ? 'Conta Corrente' : conta.tipo === 'investimento' ? 'Investimento' : conta.tipo === 'dinheiro' ? 'Dinheiro / Caixa' : 'Outros'; return h('div', { className: 'list-item', key: conta.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h(BancoLogo, { code: conta.bancoCode || conta.banco, logoData: conta.logoData || '', size: 38 }), h('div', null, h('div', { style: { fontWeight: '600' } }, conta.nome), h('div', { style: { fontSize: '12px', color: 'var(--ink-soft)', marginTop: '2px' } }, `${bancoObj ? bancoObj.name : conta.bancoCode} • ${tipoLabel}` + (conta.agencia || conta.numero ? ` • Ag: ${conta.agencia || '-'} | Conta: ${conta.numero || '-'}` : '')))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingContaId(conta.id); setNovaContaNome(conta.nome); setNovaContaBanco(conta.bancoCode || "033"); setNovaContaTipo(conta.tipo || "corrente"); setNovaContaAgencia(conta.agencia || ""); setNovaContaNumero(conta.numero || ""); setNovaContaLogoData(conta.logoData || ""); setContaModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'conta', id: conta.id, title: 'Excluir Conta', message: `Excluir a conta ${conta.nome}?`, option: "all" }) }, h(Trash2, { size: 14 }))))); }))
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, h('div', { style: { fontSize: 14, color: 'var(--ink-soft)' } }, "Minhas Contas Bancárias e Caixas"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingContaId(null); setNovaContaNome(""); setNovaContaBanco("033"); setNovaContaTipo("corrente"); setNovaContaAgencia(""); setNovaContaNumero(""); setContaModalOpen(true); } }, h(Plus), " Nova Conta")),
+              h('div', { className: 'list-vertical', style: { marginTop: 12 } }, contasBancarias.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, "Nenhuma conta cadastrada.") : contasBancarias.map((conta) => { const bancoObj = BANCOS_FEBRABAN.find(b => b.code === conta.bancoCode); const tipoLabel = conta.tipo === 'corrente' ? 'Conta Corrente' : conta.tipo === 'investimento' ? 'Investimento' : conta.tipo === 'dinheiro' ? 'Dinheiro / Caixa' : 'Outros'; return h('div', { className: 'list-item', key: conta.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h(Landmark, { size: 20 }), h('div', null, h('div', { style: { fontWeight: '600' } }, conta.nome), h('div', { style: { fontSize: '12px', color: 'var(--ink-soft)', marginTop: '2px' } }, `${bancoObj ? bancoObj.name : conta.bancoCode} • ${tipoLabel}` + (conta.agencia || conta.numero ? ` • Ag: ${conta.agencia || '-'} | Conta: ${conta.numero || '-'}` : '')))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingContaId(conta.id); setNovaContaNome(conta.nome); setNovaContaBanco(conta.bancoCode || "033"); setNovaContaTipo(conta.tipo || "corrente"); setNovaContaAgencia(conta.agencia || ""); setNovaContaNumero(conta.numero || ""); setContaModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'conta', id: conta.id, title: 'Excluir Conta', message: `Excluir a conta ${conta.nome}?`, option: "all" }) }, h(Trash2, { size: 14 }))))); }))
             ),
             cadastroTab === "categorias" && h(React.Fragment, null,
               h('div', { style: { display: 'flex', gap: 10, marginBottom: 16 } }, h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'despesa' ? 'active' : ''}`, style: { padding: '6px 14px', fontWeight: categoriaTipoTab === 'despesa' ? 'bold' : 'normal', background: categoriaTipoTab === 'despesa' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'despesa' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('despesa') }, "🔴 Categorias de Despesa"), h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'receita' ? 'active' : ''}`, style: { padding: '6px 14px', fontWeight: categoriaTipoTab === 'receita' ? 'bold' : 'normal', background: categoriaTipoTab === 'receita' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'receita' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('receita') }, "🟢 Categorias de Receita")),
@@ -1918,13 +1102,6 @@
           ),
 
           screen === "lancamentos" && h('div', { className: 'form-card' },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6 } },
-              h('div', null,
-                h('div', { style: { fontWeight: 'bold', fontSize: 14 } }, 'Período de Trabalho'),
-                h('div', { style: { fontSize: 12, color: periodoTrabalhoAtivo() ? 'var(--green)' : 'var(--ink-soft)', marginTop: 3 } }, periodoTrabalhoAtivo() ? `Lançamentos permitidos de ${formatDateBR(periodoTrabalhoInicio)} até ${formatDateBR(periodoTrabalhoFim)}` : 'Nenhum período definido. O sistema aceita qualquer data.')
-              ),
-              h('button', { type: 'button', className: periodoTrabalhoAtivo() ? 'primary' : 'action-btn', onClick: () => { setPeriodoTrabalhoInicioInput(periodoTrabalhoInicio || currentDate()); setPeriodoTrabalhoFimInput(periodoTrabalhoFim || currentDate()); setPeriodoTrabalhoModalOpen(true); } }, '📅', periodoTrabalhoAtivo() ? ` Período: ${formatDateBR(periodoTrabalhoInicio)} a ${formatDateBR(periodoTrabalhoFim)}` : ' Período de Trabalho')
-            ),
             h('div', { className: 'sub-nav' },
               h('button', { className: lancamentoTab === "cartao" ? "active" : "", onClick: () => setLancamentoTab("cartao") }, h(CreditCard, { size: 16 }), " Cartão de Crédito"),
               h('button', { className: lancamentoTab === "pagar" ? "active" : "", onClick: () => setLancamentoTab("pagar") }, h(ArrowDownCircle, { size: 16 }), " Contas a Pagar"),
@@ -1937,7 +1114,7 @@
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(CreditCard), " Lançamentos do cartão"),
                   h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, 
                     h('button', { className: `lock-btn ${fechadaAtual ? 'closed' : ''}`, onClick: (e) => toggleFaturaFechada(month, e) }, fechadaAtual ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14 }), fechadaAtual ? ' Fatura Fechada' : ' Fatura Aberta'),
-                    h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
+                    h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
                   )
                 ),
                 h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
@@ -1980,7 +1157,7 @@
               h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
                 h('div', { className: 'brand' },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(ArrowDownCircle), " Contas a Pagar"),
-                  h('div', { style: { display: 'flex', gap: 8 } }, batchPagarIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('pagar', batchPagarIds) }, `Estornar Baixa (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchPagarIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('pagar'); setModalOpen(true); } }, h(Plus), " Nova Conta a Pagar"))
+                  h('div', { style: { display: 'flex', gap: 8 } }, batchPagarIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('pagar', batchPagarIds) }, `Estornar Baixa (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchPagarIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('pagar'); setModalOpen(true); } }, h(Plus), " Nova Conta a Pagar"))
                 ),
                 h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
                 h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
@@ -2025,7 +1202,7 @@
               h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
                 h('div', { className: 'brand' },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(ArrowUpCircle), " Contas a Receber"),
-                  h('div', { style: { display: 'flex', gap: 8 } }, batchReceberIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('receber', batchReceberIds) }, `Estornar Baixa (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchReceberIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('receber'); setModalOpen(true); } }, h(Plus), " Nova Conta a Receber"))
+                  h('div', { style: { display: 'flex', gap: 8 } }, batchReceberIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('receber', batchReceberIds) }, `Estornar Baixa (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchReceberIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('receber'); setModalOpen(true); } }, h(Plus), " Nova Conta a Receber"))
                 ),
                 h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
                 h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
@@ -2068,7 +1245,7 @@
           ),
 
           screen === "faturas" && h('div', { className: 'form-card' },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } }, h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Resumo de Faturas por Ano"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")),
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } }, h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Resumo de Faturas por Ano"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")),
             h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 20 } }, "Navegue pelos anos e clique em um mês para visualizar e gerenciar seus lançamentos logo abaixo."),
             h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 } }, h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) - 1).toString()) }, h(ChevronLeft)), h('div', { style: { fontSize: 22, fontWeight: 'bold' } }, faturaAno), h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) + 1).toString()) }, h(ChevronRight))),
             h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' } }, Array.from({ length: 12 }).map((_, i) => {
@@ -2080,7 +1257,7 @@
                 h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, `Lançamentos da Fatura: ${formatMonthLabel(month)}`),
                 h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
                   h('button', { className: `lock-btn ${fechadaAtual ? 'closed' : ''}`, onClick: (e) => toggleFaturaFechada(month, e) }, fechadaAtual ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14 }), fechadaAtual ? ' Fatura Fechada' : ' Fatura Aberta'),
-                  h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 8px' }, onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(dataPadraoLancamento()); setFaturaMes(competenciaPadraoLancamento()); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
+                  h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 8px' }, onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
                 )
               ),
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 10, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
@@ -2102,107 +1279,45 @@
             )
           ),
 
-          screen === "relatorios" && h('div', { className: 'form-card', style: { background: '#f4f6f8', border: 'none', boxShadow: 'none', padding: 0 } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 14 } },
-              h('div', null,
-                h('div', { style: { fontSize: 24, fontWeight: '800', letterSpacing: '-0.4px' } }, 'Dashboard Financeiro'),
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, 'Visão gerencial integrada aos lançamentos, faturas e conciliação bancária')
-              ),
-              h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } },
-                h('label', { style: { fontSize: 12, fontWeight: '700', color: 'var(--ink-soft)' } }, 'Competência'),
-                h('input', { type: 'month', value: month, onChange: e => setMonth(e.target.value), style: { height: 38, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 6, background: '#fff', fontWeight: '700' } }),
-                h('button', { type: 'button', className: 'action-btn', onClick: () => setMonth(addMonths(month, -1)) }, h(ChevronLeft, { size: 16 })),
-                h('button', { type: 'button', className: 'action-btn', onClick: () => setMonth(addMonths(month, 1)) }, h(ChevronRight, { size: 16 })),
-                h('button', { type: 'button', className: 'action-btn', onClick: exportRelatorioExcel }, h(FileSpreadsheet, { size: 14 }), ' Excel'),
-                h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), ' Imprimir')
+          screen === "relatorios" && h('div', { className: 'form-card' },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Relatórios Financeiros"),
+              h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: exportRelatorioExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
+            ),
+            h('div', { className: 'sub-nav' }, h('button', { className: relatorioTab === "pagar" ? "active" : "", onClick: () => setRelatorioTab("pagar") }, "🔴 Contas a Pagar"), h('button', { className: relatorioTab === "receber" ? "active" : "", onClick: () => setRelatorioTab("receber") }, "🟢 Contas a Receber")),
+            h('div', { className: 'nav-month', style: { marginBottom: 16 } }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
+
+            h('div', { style: { background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6, padding: '12px 16px', marginBottom: 16, display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' } },
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Lançamento De"), h('input', { type: 'date', value: relFiltroDataIniInput, onChange: e => setRelFiltroDataIniInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Lançamento Até"), h('input', { type: 'date', value: relFiltroDataFimInput, onChange: e => setRelFiltroDataFimInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Baixa De"), h('input', { type: 'date', value: relFiltroBaixaIniInput, onChange: e => setRelFiltroBaixaIniInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Baixa Até"), h('input', { type: 'date', value: relFiltroBaixaFimInput, onChange: e => setRelFiltroBaixaFimInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Status"), h('select', { value: relFiltroStatusInput, onChange: e => setRelFiltroStatusInput(e.target.value), style: { width: '120px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } }, h('option', { value: "todos" }, "Todos"), h('option', { value: "aberto" }, "Em aberto"), h('option', { value: "baixado" }, "Baixado"))),
+              h('div', { style: { display: 'flex', gap: '6px', height: '34px', alignItems: 'center' } }, 
+                h('button', { type: 'button', className: 'primary', style: { height: '34px', padding: '0 12px', fontSize: '13px', fontWeight: 'bold' }, onClick: () => { setRelFiltroDataIni(relFiltroDataIniInput); setRelFiltroDataFim(relFiltroDataFimInput); setRelFiltroBaixaIni(relFiltroBaixaIniInput); setRelFiltroBaixaFim(relFiltroBaixaFimInput); setRelFiltroStatus(relFiltroStatusInput); } }, "Consultar"), 
+                h('button', { type: 'button', className: 'action-btn', style: { height: '34px', padding: '0 10px', fontSize: '13px' }, onClick: () => { setRelFiltroDataIniInput(""); setRelFiltroDataFimInput(""); setRelFiltroBaixaIniInput(""); setRelFiltroBaixaFimInput(""); setRelFiltroStatusInput("todos"); setRelFiltroDataIni(""); setRelFiltroDataFim(""); setRelFiltroBaixaIni(""); setRelFiltroBaixaFim(""); setRelFiltroStatus("todos"); } }, "Limpar")
               )
             ),
 
-            h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 12 } },
-              h('div', { className: 'top', style: { margin: 0, padding: 16, borderTop: '3px solid var(--red)', cursor: 'pointer' }, onClick: () => setRelatorioTab('pagar') },
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', fontWeight: '700' } }, 'CONTAS A PAGAR'),
-                h('div', { className: 'num', style: { fontSize: 24, fontWeight: '800', marginTop: 6, color: 'var(--red)' } }, showMoney(relatorioDashboard.pagarTotal)),
-                h('div', { style: { fontSize: 11, marginTop: 6 } }, `${contasPagarForMonth.length} lançamento(s) • `, h('span', { style: { color: 'var(--green)', fontWeight: '700' } }, `${showMoney(relatorioDashboard.pagarBaixado)} baixado`), ` • ${showMoney(relatorioDashboard.pagarAberto)} aberto`)
-              ),
-              h('div', { className: 'top', style: { margin: 0, padding: 16, borderTop: '3px solid var(--green)', cursor: 'pointer' }, onClick: () => setRelatorioTab('receber') },
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', fontWeight: '700' } }, 'CONTAS A RECEBER'),
-                h('div', { className: 'num', style: { fontSize: 24, fontWeight: '800', marginTop: 6, color: 'var(--green)' } }, showMoney(relatorioDashboard.receberTotal)),
-                h('div', { style: { fontSize: 11, marginTop: 6 } }, `${contasReceberForMonth.length} lançamento(s) • `, h('span', { style: { color: 'var(--green)', fontWeight: '700' } }, `${showMoney(relatorioDashboard.receberBaixado)} baixado`), ` • ${showMoney(relatorioDashboard.receberAberto)} aberto`)
-              ),
-              h('div', { className: 'top', style: { margin: 0, padding: 16, borderTop: '3px solid var(--amber)', cursor: 'pointer' }, onClick: () => abrirRelatorioFatura(month) },
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', fontWeight: '700' } }, 'FATURA DA COMPETÊNCIA'),
-                h('div', { className: 'num', style: { fontSize: 24, fontWeight: '800', marginTop: 6 } }, showMoney(relatorioDashboard.faturaTotal)),
-                h('div', { style: { fontSize: 11, marginTop: 6, color: relatorioDashboard.faturaBaixada ? 'var(--green)' : 'var(--amber)', fontWeight: '700' } }, relatorioDashboard.faturaBaixada ? `Baixada em ${formatDateBR(relatorioDashboard.faturaBaixa.dataBaixa)}` : 'Em aberto')
-              ),
-              h('div', { className: 'top', style: { margin: 0, padding: 16, borderTop: '3px solid #3C5A73' } },
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', fontWeight: '700' } }, 'FLUXO PREVISTO'),
-                h('div', { className: 'num', style: { fontSize: 24, fontWeight: '800', marginTop: 6, color: relatorioDashboard.receberTotal - relatorioDashboard.pagarTotal - relatorioDashboard.faturaTotal >= 0 ? 'var(--green)' : 'var(--red)' } }, showMoney(relatorioDashboard.receberTotal - relatorioDashboard.pagarTotal - relatorioDashboard.faturaTotal)),
-                h('div', { style: { fontSize: 11, marginTop: 6, color: 'var(--ink-soft)' } }, 'Receber − Pagar − Fatura')
+            relatorioTab === "pagar" && h(React.Fragment, null,
+              h('div', { className: 'total-mes num' }, showMoney(totalMesPagarRelatorio)), h('div', { className: 'total-sub', style: { marginBottom: 12 } }, `Total de Contas a Pagar filtradas para ${formatMonthLabel(month)} (${contasPagarFiltradasRelatorio.length} itens)`),
+              h('table', null,
+                h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'center' }, "Status / Baixa"), h('th', { className: 'right' }, "Valor"))),
+                h('tbody', null, contasPagarFiltradasRelatorio.length === 0 ? h('tr', null, h('td', { colSpan: 6, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum registro encontrado.")) : contasPagarFiltradasRelatorio.map(p => {
+                  const cat = getCategoria(p.categoriaId); return h('tr', { key: `rel-pag-${p.id}` }, h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${p.observacao}`)), h('td', null, cat?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'center' }, h('span', { className: `badge ${p.status === 'Baixado' ? 'baixado' : 'aberto'}` }, p.status === 'Baixado' ? `Baixado (${formatDateBR(p.dataBaixa)})` : 'Em aberto')), h('td', { className: 'right num' }, showMoney(p.valorParcela)));
+                })),
+                h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '5', style: { textAlign: 'right' } }, "Total Filtrado:"), h('td', { className: 'right num' }, showMoney(totalMesPagarRelatorio))))
               )
             ),
-
-            h('div', { style: { display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: 12, marginBottom: 12 } },
-              h('div', { className: 'top', style: { margin: 0, padding: 16 } },
-                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
-                  h('div', { style: { fontWeight: '800', fontSize: 15 } }, 'Contas a pagar x receber'),
-                  h('span', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatMonthLabel(month))
-                ),
-                [
-                  ['Contas a Pagar', relatorioDashboard.pagarTotal, 'var(--red)'],
-                  ['Contas a Receber', relatorioDashboard.receberTotal, 'var(--green)'],
-                  ['Fatura', relatorioDashboard.faturaTotal, 'var(--amber)']
-                ].map(([label, value, color]) => h('div', { key: label, style: { marginBottom: 12, cursor: 'pointer' }, onClick: () => label === 'Fatura' ? abrirRelatorioFatura(month) : setRelatorioTab(label === 'Contas a Pagar' ? 'pagar' : 'receber') },
-                  h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 } }, h('span', null, label), h('span', { className: 'num', style: { fontWeight: '700' } }, showMoney(value))),
-                  h('div', { style: { height: 12, background: '#edf0f2', borderRadius: 99, overflow: 'hidden' } }, h('div', { style: { height: '100%', width: `${Math.min(100, Math.max(2, (value / Math.max(relatorioDashboard.pagarTotal, relatorioDashboard.receberTotal, relatorioDashboard.faturaTotal, 1)) * 100))}%`, background: color, borderRadius: 99 } })
-                )))
-              ),
-              h('div', { className: 'top', style: { margin: 0, padding: 16 } },
-                h('div', { style: { fontWeight: '800', fontSize: 15, marginBottom: 12 } }, 'Status dos lançamentos'),
-                h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
-                  h('div', { style: { padding: 12, background: '#fff4f3', borderRadius: 8, cursor: 'pointer' }, onClick: () => { setRelatorioTab('pagar'); setRelFiltroStatus('aberto'); setRelFiltroStatusInput('aberto'); } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Pagar em aberto'), h('div', { className: 'num', style: { fontSize: 19, fontWeight: '800', color: 'var(--red)', marginTop: 4 } }, showMoney(relatorioDashboard.pagarAberto))),
-                  h('div', { style: { padding: 12, background: '#f0f9f3', borderRadius: 8, cursor: 'pointer' }, onClick: () => { setRelatorioTab('receber'); setRelFiltroStatus('aberto'); setRelFiltroStatusInput('aberto'); } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Receber em aberto'), h('div', { className: 'num', style: { fontSize: 19, fontWeight: '800', color: 'var(--green)', marginTop: 4 } }, showMoney(relatorioDashboard.receberAberto))),
-                  h('div', { style: { padding: 12, background: '#f6f7f8', borderRadius: 8, cursor: 'pointer' }, onClick: () => { setRelatorioTab('pagar'); setRelFiltroStatus('baixado'); setRelFiltroStatusInput('baixado'); } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Pagar baixado'), h('div', { className: 'num', style: { fontSize: 19, fontWeight: '800', marginTop: 4 } }, showMoney(relatorioDashboard.pagarBaixado))),
-                  h('div', { style: { padding: 12, background: '#f6f7f8', borderRadius: 8, cursor: 'pointer' }, onClick: () => { setRelatorioTab('receber'); setRelFiltroStatus('baixado'); setRelFiltroStatusInput('baixado'); } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Receber baixado'), h('div', { className: 'num', style: { fontSize: 19, fontWeight: '800', marginTop: 4 } }, showMoney(relatorioDashboard.receberBaixado)))
-                )
+            relatorioTab === "receber" && h(React.Fragment, null,
+              h('div', { className: 'total-mes num' }, showMoney(totalMesReceberRelatorio)), h('div', { className: 'total-sub', style: { marginBottom: 12 } }, `Total de Contas a Receber filtradas para ${formatMonthLabel(month)} (${contasReceberFiltradasRelatorio.length} itens)`),
+              h('table', null,
+                h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'center' }, "Status / Baixa"), h('th', { className: 'right' }, "Valor"))),
+                h('tbody', null, contasReceberFiltradasRelatorio.length === 0 ? h('tr', null, h('td', { colSpan: 6, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum registro encontrado.")) : contasReceberFiltradasRelatorio.map(p => {
+                  const cat = getCategoria(p.categoriaId); return h('tr', { key: `rel-rec-${p.id}` }, h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${p.observacao}`)), h('td', null, cat?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'center' }, h('span', { className: `badge ${p.status === 'Baixado' ? 'baixado' : 'aberto'}` }, p.status === 'Baixado' ? `Baixado (${formatDateBR(p.dataBaixa)})` : 'Em aberto')), h('td', { className: 'right num' }, showMoney(p.valorParcela)));
+                })),
+                h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '5', style: { textAlign: 'right' } }, "Total Filtrado:"), h('td', { className: 'right num' }, showMoney(totalMesReceberRelatorio))))
               )
-            ),
-
-            h('div', { className: 'top', style: { margin: '0 0 12px', padding: 16 } },
-              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } }, h('div', { style: { fontWeight: '800', fontSize: 15 } }, 'Saldo das contas bancárias'), h('span', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `posição até ${formatMonthLabel(month)}`)),
-              relatorioDashboard.contas.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 12 } }, 'Nenhuma conta bancária cadastrada.') :
-              h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 } }, relatorioDashboard.contas.map(c => h('div', { key: c.id, style: { border: '1px solid var(--line)', borderRadius: 8, padding: 12, background: '#fff', cursor: 'pointer' }, onClick: () => abrirRelatorioConciliacao(c.id) },
-                h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8 } }, h('strong', { style: { fontSize: 13 } }, c.nome), h('span', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, c.bancoCode || c.banco || '')),
-                h('div', { className: 'num', style: { fontSize: 20, fontWeight: '800', marginTop: 9, color: c.saldo >= 0 ? 'var(--green)' : 'var(--red)' } }, showMoney(c.saldo)),
-                h('div', { style: { fontSize: 10, color: 'var(--ink-soft)', marginTop: 4 } }, 'Clique para abrir a conciliação')
-              )))
-            ),
-
-            h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 } },
-              h('div', { className: 'top', style: { margin: 0, padding: 16 } },
-                h('div', { style: { fontWeight: '800', fontSize: 15, marginBottom: 12 } }, 'Despesas por categoria'),
-                relatorioDashboard.pagarCategorias.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 12 } }, 'Sem dados na competência.') : relatorioDashboard.pagarCategorias.slice(0, 8).map(([cat, valor]) => h('div', { key: cat, style: { marginBottom: 9, cursor: 'pointer' }, onClick: () => setRelatorioTab('pagar') }, h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 } }, h('span', null, cat), h('span', { className: 'num', style: { fontWeight: '700' } }, showMoney(valor))), h('div', { style: { height: 8, background: '#edf0f2', borderRadius: 99 } }, h('div', { style: { height: '100%', width: `${Math.min(100, valor / Math.max(relatorioDashboard.pagarTotal, 1) * 100)}%`, background: 'var(--red)', borderRadius: 99 } })))),
-              h('div', { className: 'top', style: { margin: 0, padding: 16 } },
-                h('div', { style: { fontWeight: '800', fontSize: 15, marginBottom: 12 } }, 'Receitas por categoria'),
-                relatorioDashboard.receberCategorias.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 12 } }, 'Sem dados na competência.') : relatorioDashboard.receberCategorias.slice(0, 8).map(([cat, valor]) => h('div', { key: cat, style: { marginBottom: 9, cursor: 'pointer' }, onClick: () => setRelatorioTab('receber') }, h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 } }, h('span', null, cat), h('span', { className: 'num', style: { fontWeight: '700' } }, showMoney(valor))), h('div', { style: { height: 8, background: '#edf0f2', borderRadius: 99 } }, h('div', { style: { height: '100%', width: `${Math.min(100, valor / Math.max(relatorioDashboard.receberTotal, 1) * 100)}%`, background: 'var(--green)', borderRadius: 99 } }))))
-              )
-              )
-            ),
-
-            h('div', { className: 'top', style: { margin: 0, padding: 16 } },
-              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } }, h('div', { style: { fontWeight: '800', fontSize: 15 } }, 'Lançamentos da competência'), h('div', { className: 'sub-nav', style: { margin: 0 } }, h('button', { className: relatorioTab === 'pagar' ? 'active' : '', onClick: () => setRelatorioTab('pagar') }, 'Contas a Pagar'), h('button', { className: relatorioTab === 'receber' ? 'active' : '', onClick: () => setRelatorioTab('receber') }, 'Contas a Receber'))),
-              h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 0', borderTop: '1px solid var(--line)', marginTop: 4 } },
-                h('button', { type: 'button', className: 'action-btn', onClick: () => { setScreen('lancamentos'); setLancamentoTab('pagar'); } }, 'Abrir Contas a Pagar'),
-                h('button', { type: 'button', className: 'action-btn', onClick: () => { setScreen('lancamentos'); setLancamentoTab('receber'); } }, 'Abrir Contas a Receber'),
-                h('button', { type: 'button', className: 'action-btn', onClick: () => abrirRelatorioFatura(month) }, 'Abrir Fatura'),
-                h('button', { type: 'button', className: 'action-btn', onClick: () => abrirRelatorioConciliacao(relatorioDashboard.contas[0]?.id) }, 'Abrir Conciliação Bancária')
-              ),
-              h('div', { style: { overflowX: 'auto', marginTop: 8 } },
-                h('table', null,
-                  h('thead', null, h('tr', null, h('th', null, 'Data'), h('th', null, 'Descrição'), h('th', null, 'Categoria'), h('th', { className: 'center' }, 'Status'), h('th', { className: 'right' }, 'Valor'))),
-                  h('tbody', null, (relatorioTab === 'pagar' ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio).length === 0 ? h('tr', null, h('td', { colSpan: 5, style: { textAlign: 'center', color: 'var(--ink-soft)', padding: 18 } }, 'Nenhum registro encontrado.')) : (relatorioTab === 'pagar' ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio).slice(0, 25).map(p => { const cat = getCategoria(p.categoriaId); return h('tr', { key: `${relatorioTab}-${p.id}`, style: { cursor: 'pointer' }, onClick: () => abrirRelatorioLancamento(relatorioTab, p.id) }, h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('strong', null, p.descricao), p.observacao && h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, p.observacao)), h('td', null, cat?.nome || '-'), h('td', { className: 'center' }, h('span', { className: `badge ${p.status === 'Baixado' ? 'baixado' : 'aberto'}` }, p.status === 'Baixado' ? 'Baixado' : 'Em aberto')), h('td', { className: 'right num' }, showMoney(p.valorParcela))); }))
-                )
-              ),
-              (relatorioTab === 'pagar' ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio).length > 25 && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 } }, 'Mostrando os primeiros 25 registros. Use a aba acima para acessar todos os lançamentos.')
             )
           ),
 
@@ -2210,38 +1325,18 @@
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
               h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Conciliação Bancária"),
               h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } },
-                h('button', { type: 'button', className: 'primary', title: 'Criar novo lançamento bancário', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(dataPadraoLancamento()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
+                h('button', { type: 'button', className: 'primary', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
                 concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
                 concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
               )
             ),
+            h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")),
 
-            h('div', { className: 'sub-nav' }, 
-              h('button', { className: concilTab === "extrato" ? "active" : "", onClick: () => { setConcilTab("extrato"); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Conciliação Extrato Bancário"),
-              h('button', { className: concilTab === "ofx" ? "active" : "", onClick: () => { setConcilTab("ofx"); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Conciliação OFX"),
-              h('button', { className: concilTab === "ofx-importacao" ? "active" : "", onClick: () => { setConcilTab("ofx-importacao"); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Importação OFX"),
-            ),
-
-
-            concilTab !== "ofx-importacao" && h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(BancoLogo, { code: (() => { const c = contasBancarias.find(x => String(x.id) === String(concilContaId)); return c?.bancoCode || c?.banco || c?.nome; })(), logoData: contasBancarias.find(x => String(x.id) === String(concilContaId))?.logoData || '', size: 38 }), h('select', { value: concilContaId, style: { flex: 1 }, onChange: e => { setConcilContaId(e.target.value); setOfxSelectedIds([]); setSysSelectedIds([]); } }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome))))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => { setConcilDataIniAplicada(String(concilDataIni || '').substring(0,10)); setConcilDataFimAplicada(String(concilDataFim || '').substring(0,10)); setConcilExibido(true); setOfxSelectedIds([]); setSysSelectedIds([]); } }, "Filtrar Período")),
-            concilExibido && concilTab === "extrato" && h(React.Fragment, null,
-              h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 20, marginBottom: 20 } },
-                h('div', { className: 'top', style: { margin: 0, padding: 14 } },
-                  h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo inicial"),
-                  h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoInicialConciliacao))
-                ),
-                h('div', { className: 'top', style: { margin: 0, padding: 14 } },
-                  h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Débitos (Pagamentos)"),
-                  h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--red)' } }, showMoney(totalDebitosConciliacao))
-                ),
-                h('div', { className: 'top', style: { margin: 0, padding: 14 } },
-                  h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Créditos (Recebimentos)"),
-                  h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--green)' } }, showMoney(totalCreditosConciliacao))
-                ),
-                h('div', { className: 'top', style: { margin: 0, padding: 14 } },
-                  h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo Final da Conta"),
-                  h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoFinalConciliacao))
-                )
+            concilExibido && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap' } },
+                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Débitos (Pagamentos)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--red)' } }, showMoney(totalDebitosConcil))),
+                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Créditos (Recebimentos)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--green)' } }, showMoney(totalCreditosConcil))),
+                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo Final da Conta"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoFinalConcil)))
               ),
 
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: '#F2EFE9', borderRadius: 6, border: '1px solid var(--line)' } }, 
@@ -2258,85 +1353,15 @@
               ),
 
               calendarioExpandido && h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 24 } }, calendarioDiasDoMes.map(d => {
-                const fechado = isDiaFechado(d.data, concilContaId); return h('div', { key: d.data, style: { background: '#fff', border: '1px solid var(--line)', borderRadius: 5, padding: 8, fontSize: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', marginBottom: 4 } }, h('span', null, formatDateBR(d.data)), h('button', { type: 'button', className: 'action-btn', style: { padding: 2, background: fechado ? 'var(--amber-soft)' : '#fff', borderColor: fechado ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => toggleDiaFechado(d.data, e, concilContaId) }, fechado ? h(Lock, { size: 10, color: 'var(--amber)' }) : h(Unlock, { size: 10, color: 'var(--green)' }))), h('div', { style: { color: 'var(--red)', fontSize: 11 } }, `(-) ${showMoney(d.debitos)}`), h('div', { style: { color: 'var(--green)', fontSize: 11 } }, `(+) ${showMoney(d.cred)}`), h('div', { className: 'num', style: { fontWeight: 'bold', marginTop: 4, borderTop: '1px solid var(--line)', paddingTop: 2 } }, `Saldo: ${showMoney(d.saldo)}`));
+                const fechado = isDiaFechado(d.data); return h('div', { key: d.data, style: { background: '#fff', border: '1px solid var(--line)', borderRadius: 5, padding: 8, fontSize: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', marginBottom: 4 } }, h('span', null, formatDateBR(d.data)), h('button', { type: 'button', className: 'action-btn', style: { padding: 2, background: fechado ? 'var(--amber-soft)' : '#fff', borderColor: fechado ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => toggleDiaFechado(d.data, e) }, fechado ? h(Lock, { size: 10, color: 'var(--amber)' }) : h(Unlock, { size: 10, color: 'var(--green)' }))), h('div', { style: { color: 'var(--red)', fontSize: 11 } }, `(-) ${showMoney(d.debitos)}`), h('div', { style: { color: 'var(--green)', fontSize: 11 } }, `(+) ${showMoney(d.cred)}`), h('div', { className: 'num', style: { fontWeight: 'bold', marginTop: 4, borderTop: '1px solid var(--line)', paddingTop: 2 } }, `Saldo: ${showMoney(d.saldo)}`));
               })),
 
-              h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottom: '2px solid var(--line)', paddingBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' } },
-                h('span', null, "Movimentação Detalhada do Período Filtrado"),
-                h('span', { style: { fontSize: 11, color: 'var(--ink-soft)', fontWeight: '500' } }, "🔒 Fechamento diário individual por conta")
-              ),
+              h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottom: '2px solid var(--line)', paddingBottom: 8 } }, "Movimentação Detalhada do Período Filtrado"),
 
-              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data, concilContaId) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e, concilContaId) }, isDiaFechado(grupo.data, concilContaId) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { className: 'concil-day-table', style: { marginTop: 0, width: '100%', maxWidth: '100%' } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Ações"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('div', { style: { display: 'flex', justifyContent: 'center', gap: 5 } }, (item.tipoOrigem === 'pagar' || item.tipoOrigem === 'receber') ? h('button', { type: 'button', className: 'action-btn', onClick: () => abrirEdicaoDaConciliacao(item), title: 'Abrir / Alterar lançamento' }, h(Pencil, { size: 13 })) : null, item.itemRef?.isLancamentoDireto ? h('button', { type: 'button', className: 'action-btn delete', onClick: () => excluirLancamentoDaConciliacao(item), title: 'Excluir lançamento manual' }, h(Trash2, { size: 13 })) : null, !(item.tipoOrigem === 'pagar' || item.tipoOrigem === 'receber') && !item.itemRef?.isLancamentoDireto ? '-' : null)), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))
-            ),
-
-)
-
-        ),,
-            concilTab === "ofx" && h(React.Fragment,null,
-              !concilExibido ? h('div',{style:{padding:40,textAlign:'center',color:'var(--ink-soft)'}},'Selecione a conta e o período e clique em Filtrar Período.') :
-              h(React.Fragment,null,
-                h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:10}},
-                  h('div',null,h('div',{style:{fontSize:17,fontWeight:'bold'}},'Conciliação OFX'),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},ofxMovimentacoesExibidas.length+' OFX • '+movimentacoesConciliacao.length+' do sistema')),
-                  h('div',{style:{display:'flex',gap:8}},
-                    h('button',{type:'button',className:'primary',disabled:!(ofxSelectedIds.length&&sysSelectedIds.length&&Math.round(ofxTotalSelecionado*100)===Math.round(sysTotalSelecionado*100)),onClick:handleConciliarMatch},'✓ Conciliar'),
-                    h('button',{type:'button',className:'action-btn delete',disabled:!(ofxSelectedIds.some(id=>ofxData.find(o=>o.id===id)?.conciliacaoId)||sysSelectedIds.some(id=>{const m=movimentacoesConciliacao.find(x=>x.id===id);return !!(m?.itemRef?.conciliacaoId||m?.baixaRef?.conciliacaoId||m?.conciliacaoId)})),onClick:removerConciliacoesSelecionadas},'↩ Remover Conciliação')
-                  )
-                ),
-                h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}},
-                  h('div',{style:{border:'1px solid var(--line)',borderRadius:8,background:'#fff',overflow:'hidden'}},
-                    h('div',{style:{padding:10,background:'#F2EFE9',display:'flex',justifyContent:'space-between'}},h('b',null,'🏦 Lançamentos Importados do Banco'),h('span',null,formatBRL(ofxTotalSelecionado))),
-                    h('div',{style:{padding:8,borderBottom:'1px solid var(--line)'}},h('input',{type:'checkbox',checked:ofxMovimentacoesExibidas.filter(o=>!o.conciliado).length>0&&ofxMovimentacoesExibidas.filter(o=>!o.conciliado).every(o=>ofxSelectedIds.includes(o.id)),onChange:e=>setOfxSelectedIds(e.target.checked?ofxMovimentacoesExibidas.filter(o=>!o.conciliado).map(o=>o.id):[])}),' Selecionar todos'),
-                    h('div',{style:{maxHeight:520,overflow:'auto'}},h('table',{className:'concil-day-table',style:{margin:0,width:'100%'}},h('thead',null,h('tr',null,h('th',null,'✓'),h('th',null,'Data'),h('th',null,'Descrição'),h('th',{className:'right'},'Valor'),h('th',{className:'center'},'Status'))),h('tbody',null,ofxMovimentacoesExibidas.length===0?h('tr',null,h('td',{colSpan:5,style:{textAlign:'center',padding:25}},'Nenhum OFX no período.')):ofxMovimentacoesExibidas.map(o=>h('tr',{key:o.id},h('td',null,h('input',{type:'checkbox',checked:ofxSelectedIds.includes(o.id),disabled:o.conciliado,onChange:e=>setOfxSelectedIds(p=>e.target.checked?[...p,o.id]:p.filter(id=>id!==o.id))})),h('td',null,formatDateBR(o.data)),h('td',null,o.descricao),h('td',{className:'right num'},showMoney(Math.abs(Number(o.valor||0)))),h('td',{className:'center'},o.conciliado?'Conciliado':'Pendente'))))))),
-                  h('div',{style:{border:'1px solid var(--line)',borderRadius:8,background:'#fff',overflow:'hidden'}},
-                    h('div',{style:{padding:10,background:'#F2EFE9',display:'flex',justifyContent:'space-between'}},h('b',null,'📒 Lançamentos do Sistema'),h('span',null,formatBRL(sysTotalSelecionado))),
-                    h('div',{style:{padding:8,borderBottom:'1px solid var(--line)'}},h('input',{type:'checkbox',checked:movimentacoesConciliacao.filter(m=>!m.conciliado).length>0&&movimentacoesConciliacao.filter(m=>!m.conciliado).every(m=>sysSelectedIds.includes(m.id)),onChange:e=>setSysSelectedIds(e.target.checked?movimentacoesConciliacao.filter(m=>!m.conciliado).map(m=>m.id):[])}),' Selecionar todos'),
-                    h('div',{style:{maxHeight:520,overflow:'auto'}},h('table',{className:'concil-day-table',style:{margin:0,width:'100%'}},h('thead',null,h('tr',null,h('th',null,'✓'),h('th',null,'Data'),h('th',null,'Descrição'),h('th',null,'Tipo'),h('th',{className:'right'},'Valor'),h('th',{className:'center'},'Status'))),h('tbody',null,movimentacoesConciliacao.length===0?h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:25}},'Nenhum lançamento no período.')):movimentacoesConciliacao.map(m=>h('tr',{key:m.id},h('td',null,h('input',{type:'checkbox',checked:sysSelectedIds.includes(m.id),disabled:m.conciliado,onChange:e=>setSysSelectedIds(p=>e.target.checked?[...p,m.id]:p.filter(id=>id!==m.id))})),h('td',null,formatDateBR(m.data)),h('td',null,m.descricao),h('td',null,m.tipo),h('td',{className:'right num'},showMoney(Number(m.valorDebito||m.valorCredito||0))),h('td',{className:'center'},m.conciliado?'Conciliado':'Pendente')))))))
-                  )
-                )
-              )
-            ),
-            concilTab === "ofx-importacao" && h(React.Fragment,null,
-              h('div',{style:{display:'grid',gridTemplateColumns:'1.4fr 1fr 1fr auto',gap:10,alignItems:'end',marginBottom:18}},
-                h('div',{className:'field'},h('label',null,'Conta Bancária'),h('select',{value:ofxImportContaId,onChange:e=>setOfxImportContaId(e.target.value)},h('option',{value:''},'Todas as contas'),contasBancarias.map(c=>h('option',{key:c.id,value:c.id},c.nome)))),
-                h('div',{className:'field'},h('label',null,'Data Inicial'),h('input',{type:'date',value:ofxImportDataIni,onChange:e=>setOfxImportDataIni(e.target.value)})),
-                h('div',{className:'field'},h('label',null,'Data Final'),h('input',{type:'date',value:ofxImportDataFim,onChange:e=>setOfxImportDataFim(e.target.value)})),
-                h('button',{type:'button',className:'primary',style:{height:38},onClick:()=>setOfxImportConsultado(true)},'Consultar')
-              ),
-              h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
-                h('div',null,h('b',null,'Arquivos OFX Importados'),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},ofxArquivosImportados.length+' arquivo(s)')),
-                h('div',null,h('input',{ref:ofxInputRef,type:'file',accept:'.ofx,.txt',style:{display:'none'},onChange:handleOfxUpload}),h('button',{type:'button',className:'primary',disabled:ofxImportLoading,onClick:()=>{if(!ofxImportContaId)return alert('Selecione uma conta antes de importar.');ofxInputRef.current?.click();}},ofxImportLoading?'Importando...':'＋ Importar OFX'))
-              ),
-              h('div',{style:{border:'1px solid var(--line)',borderRadius:8,background:'#fff',overflow:'auto'}},h('table',{className:'concil-day-table',style:{margin:0,width:'100%'}},h('thead',null,h('tr',null,h('th',null,'Arquivo'),h('th',null,'Conta'),h('th',null,'Dias'),h('th',{className:'center'},'Lançamentos'),h('th',{className:'center'},'Conciliados'),h('th',{className:'center'},'Ação'))),h('tbody',null,!ofxImportConsultado?h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:30}},'Defina os filtros e clique em Consultar.')):ofxArquivosImportados.length===0?h('tr',null,h('td',{colSpan:6,style:{textAlign:'center',padding:30}},'Nenhum arquivo OFX encontrado.')):ofxArquivosImportados.map(a=>h('tr',{key:a.id},h('td',null,a.nome),h('td',null,a.contaNome||'-'),h('td',null,a.datas.slice().sort().map(d=>formatDateBR(d)).join(', ')),h('td',{className:'center'},a.qtd),h('td',{className:'center'},a.conciliados),h('td',{className:'center'},h('button',{type:'button',className:'action-btn delete',disabled:a.conciliados>0||a.datas.some(d=>isDiaFechado(d,a.contaId)),title:a.conciliados?'Existem lançamentos conciliados':a.datas.some(d=>isDiaFechado(d,a.contaId))?'Dia fechado':'Excluir',onClick:()=>excluirArquivoOfx(a.id)},h(Trash2,{size:14})))))))
-              ))
-            )
-
-
-
-
-
-        ofxImportPreview.open && h('div',{className:'modal-overlay'},
-          h('div',{className:'modal-content',onClick:e=>e.stopPropagation(),style:{maxWidth:560}},
-            h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
-              h('div',{style:{fontSize:17,fontWeight:'bold'}},'Importar OFX'),
-              h('button',{type:'button',className:'icon',onClick:()=>setOfxImportPreview({open:false,contaId:'',contaNome:'',arquivoId:'',arquivoNome:'',transacoes:[],datas:[],dataSelecionada:''})},h(XIcon))
-            ),
-            h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},ofxImportPreview.arquivoNome+' • Conta: '+ofxImportPreview.contaNome),
-            h('div',{className:'field'},h('label',null,'Escolha o dia que deseja importar *'),
-              h('select',{value:ofxImportPreview.dataSelecionada,onChange:e=>setOfxImportPreview(p=>({...p,dataSelecionada:e.target.value}))},
-                h('option',{value:''},'Selecione o dia...'),
-                ofxImportPreview.datas.map(d=>h('option',{key:d,value:d},formatDateBR(d)+' • '+ofxImportPreview.transacoes.filter(t=>t.data===d).length+' lançamento(s)'))
-              )
-            ),
-            ofxImportPreview.dataSelecionada && h('div',{style:{marginTop:12,padding:10,background:'#F7F4EC',border:'1px solid var(--line)',borderRadius:6,fontSize:12}},
-              h('b',null,'Resumo do dia: '),
-              ofxImportPreview.transacoes.filter(t=>t.data===ofxImportPreview.dataSelecionada).length+' lançamento(s) • '+
-              formatBRL(ofxImportPreview.transacoes.filter(t=>t.data===ofxImportPreview.dataSelecionada).reduce((s,t)=>s+Math.abs(Number(t.valor||0)),0))
-            ),
-            h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:16}},
-              h('button',{type:'button',className:'action-btn',onClick:()=>setOfxImportPreview({open:false,contaId:'',contaNome:'',arquivoId:'',arquivoNome:'',transacoes:[],datas:[],dataSelecionada:''})},'Cancelar'),
-              h('button',{type:'button',className:'primary',disabled:ofxImportLoading||!ofxImportPreview.dataSelecionada,onClick:confirmarImportacaoOfx},ofxImportLoading?'Importando...':'Confirmar Importação')
+              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e) }, isDiaFechado(grupo.data) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { style: { marginTop: 0 } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('a', { href: '#', style: { color: 'var(--green)', fontWeight: 'bold', textDecoration: 'underline', fontSize: '12px' }, onClick: (e) => { e.preventDefault(); setConcilEditModal({ open: true, item }); } }, "🔗 Abrir / Alterar")), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo))))))))
             )
           )
+
         ),
 
         lrModalOpen && h('div', { className: 'modal-overlay' },
@@ -2365,6 +1390,34 @@
               
               lrError && h('div', { style: { color: 'var(--red)', fontSize: 12, gridColumn: 'span 2' } }, lrError),
               h('div', { className: 'submit-row', style: { marginTop: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setLrModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, h(CheckCircle, {size: 16}), " Lançar"))
+            )
+          )
+        ),
+
+        concilEditModal.open && concilEditModal.item && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 12 } }, h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Detalhes do Lançamento"), h('button', { type: 'button', className: 'icon', onClick: () => setConcilEditModal({ open: false, item: null }) }, h(XIcon))),
+            concilEditModal.item.tipoOrigem === 'fatura' ? h('div', null,
+              h('p', null, `Pagamento de Fatura referente à competência: ${formatMonthLabel(concilEditModal.item.competenciaRef)}`), h('p', null, `Data do Pagamento: ${formatDateBR(concilEditModal.item.baixaRef.dataBaixa)}`), h('p', null, `Conta: ${getConta(concilEditModal.item.baixaRef.bancoId)?.nome || '-'}`),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setConcilEditModal({ open: false, item: null }) }, "Fechar"))
+            ) : h('div', null,
+              h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Descrição: "), concilEditModal.item.itemRef.descricao),
+              concilEditModal.item.itemRef.observacao && h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Observação: "), concilEditModal.item.itemRef.observacao),
+              h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Valor: "), showMoney(concilEditModal.item.itemRef.recorrente ? concilEditModal.item.itemRef.valorParcela : (concilEditModal.item.itemRef.valorParcela || concilEditModal.item.itemRef.total))), h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Status: "), concilEditModal.item.itemRef.status), h('div', { style: { fontSize: 14, marginBottom: 16 } }, h('b', null, "Baixado em: "), formatDateBR(concilEditModal.item.itemRef.dataBaixa), ` (${getConta(concilEditModal.item.itemRef.bancoBaixaId)?.nome || '-'})`),
+              
+              (() => {
+                  const isDireto = concilEditModal.item.itemRef.isLancamentoDireto;
+                  return h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 20 } },
+                      isDireto 
+                      ? h('button', { type: 'button', className: 'danger', onClick: () => { setDeleteModal({ open: true, type: concilEditModal.item.tipoOrigem, id: concilEditModal.item.itemRef.id, purchase: concilEditModal.item.itemRef, title: 'Excluir Lançamento Direto', message: 'Este é um lançamento direto e será permanentemente apagado. Deseja excluir?', option: 'all' }); setConcilEditModal({ open: false, item: null }); } }, h(Trash2, { size: 14 }), " Excluir") 
+                      : h('button', { type: 'button', className: 'danger', onClick: () => { const tipo = concilEditModal.item.tipoOrigem; const id = concilEditModal.item.itemRef.id; const dataBaixa = concilEditModal.item.itemRef.dataBaixa; setConcilEditModal({ open: false, item: null }); executarEstornoBaixa(tipo, id, dataBaixa); } }, "Estornar Baixa"),
+                      
+                      h('div', { style: { display: 'flex', gap: 8 } }, 
+                          h('button', { type: 'button', className: 'action-btn', onClick: () => setConcilEditModal({ open: false, item: null }) }, "Cancelar"), 
+                          !isDireto && h('button', { type: 'button', className: 'primary', onClick: () => { const ref = concilEditModal.item.itemRef; const tipo = concilEditModal.item.tipoOrigem; setConcilEditModal({ open: false, item: null }); setEditingId(ref.id); setDescricao(ref.descricao); setObservacao(ref.observacao || ''); setValorTotal(ref.total.toFixed(2).replace('.', ',')); setValorParcelaInput(ref.recorrente ? '' : (ref.valorParcela || ref.total).toFixed(2).replace('.', ',')); setDataLancamento(ref.dataCompra || currentDate()); setFaturaMes(ref.inicio || month); setParcelas(ref.parcelas.toString()); setParcelaAtual((ref.parcelaInicial || 1).toString()); setCategoriaId(ref.categoriaId || ''); setSubcategoriaId(ref.subcategoriaId || ''); setIsRecorrente(!!ref.recorrente); setLancamentoTab(tipo); setModalOpen(true); } }, "Editar")
+                      )
+                  );
+              })()
             )
           )
         ),
@@ -2398,30 +1451,6 @@
               formError && h('div', { style: { color: 'var(--red)', fontSize: 12, gridColumn: 'span 2' } }, formError),
               formSuccess && h('div', { style: { color: 'var(--green)', fontSize: 13, gridColumn: 'span 2', fontWeight: 'bold', background: '#D1FAE5', padding: '6px 10px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 6 } }, h(CheckCircle, {size: 14}), formSuccess),
               h('div', { className: 'submit-row' }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setModalOpen(false); setFormSuccess(""); } }, "Fechar"), h('button', { type: 'submit', className: 'primary' }, h(Plus), " Salvar Lançamento"))
-            )
-          )
-        ),
-
-        periodoTrabalhoModalOpen && h('div', { className: 'modal-overlay' },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
-              h('div', { style: { fontSize: 17, fontWeight: 'bold' } }, 'Período de Trabalho'),
-              h('button', { type: 'button', className: 'icon', onClick: () => setPeriodoTrabalhoModalOpen(false) }, h(XIcon))
-            ),
-            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 } }, 'Defina a data em que você está trabalhando. O sistema não permitirá criar, alterar ou baixar lançamentos com outra data.'),
-            h('div', { className: 'field' },
-              h('label', null, 'Data de Trabalho *'),
-              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
-                h('div', null, h('label', null, 'Data inicial'), h('input', { type: 'date', value: periodoTrabalhoInicioInput, onChange: e => setPeriodoTrabalhoInicioInput(e.target.value), required: true })),
-                h('div', null, h('label', null, 'Data final'), h('input', { type: 'date', value: periodoTrabalhoFimInput, onChange: e => setPeriodoTrabalhoFimInput(e.target.value), required: true }))
-              )
-            ),
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 18 } },
-              h('button', { type: 'button', className: 'danger', onClick: () => { setPeriodoTrabalho(''); setPeriodoTrabalhoInput(''); setPeriodoTrabalhoModalOpen(false); } }, 'Desativar Trava'),
-              h('div', { style: { display: 'flex', gap: 8 } },
-                h('button', { type: 'button', className: 'action-btn', onClick: () => setPeriodoTrabalhoModalOpen(false) }, 'Cancelar'),
-                h('button', { type: 'button', className: 'primary', onClick: () => { if (!periodoTrabalhoInicioInput || !periodoTrabalhoFimInput) return alert('Informe a data inicial e a data final do Período de Trabalho.'); if (periodoTrabalhoInicioInput > periodoTrabalhoFimInput) return alert('A data inicial não pode ser maior que a data final.'); setPeriodoTrabalhoInicio(periodoTrabalhoInicioInput); setPeriodoTrabalhoFim(periodoTrabalhoFimInput); setPeriodoTrabalhoModalOpen(false); } }, h(CheckCircle, { size: 15 }), ' Salvar Período')
-              )
             )
           )
         ),
@@ -2507,97 +1536,51 @@
                 ),
                 h('label', { style: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, cursor: 'pointer' } },
                   h('input', { type: 'radio', name: 'del_opt', checked: deleteModal.option === 'future', onChange: () => setDeleteModal({...deleteModal, option: 'future'}) }),
-                  h('div', null, h('div', { style: { fontWeight: 'bold' } }, "Excluir deste mês em diante"), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Cancela as parcelas futuras a partir de ${formatMonthLabel(month)}.`))
+                  h('div', null, h('div', { style: { fontWeight: 'bold' } }, "Excluir deste mês em diante"), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Cancela o lançamento a partir do mês atual."))
                 ),
                 h('label', { style: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, cursor: 'pointer' } },
                   h('input', { type: 'radio', name: 'del_opt', checked: deleteModal.option === 'all', onChange: () => setDeleteModal({...deleteModal, option: 'all'}) }),
-                  h('div', null, h('div', { style: { fontWeight: 'bold' } }, "Excluir TUDO (Histórico completo)"), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Remove o lançamento por completo."))
+                  h('div', null, h('div', { style: { fontWeight: 'bold' } }, "Excluir todas as ocorrências"), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Apaga o lançamento inteiro do sistema."))
                 )
-              ) : h('div', { style: { fontSize: 14, marginBottom: 20 } }, deleteModal.message || "Deseja realmente excluir este registro?"),
+              ) : 
+              h('div', { style: { fontSize: 14, marginBottom: 20 } }, deleteModal.message || "Tem certeza que deseja excluir?"),
+            
+            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' } }, 
+              h('button', { type: 'button', className: 'action-btn', onClick: () => setDeleteModal({ open: false, type: null, id: null, subId: null, purchase: null, title: "", message: "", option: "all" }) }, "Cancelar"), 
+              deleteModal.message && deleteModal.message.includes("ERRO") ? null : h('button', { type: 'button', className: 'danger', onClick: handleConfirmDelete }, "Confirmar Exclusão")
+            )
+          )
+        ),
 
-            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } },
-              h('button', { type: 'button', className: 'action-btn', onClick: () => setDeleteModal({ open: false, type: null, id: null, subId: null, purchase: null, title: "", message: "", option: "all" }) }, "Cancelar"),
-              h('button', { type: 'button', className: 'danger', onClick: handleConfirmDelete }, "Confirmar Exclusão")
+        cartaoModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, editingCartaoId ? "Editar Cartão" : "Novo Cartão"),
+            h('form', { onSubmit: handleSaveCartao, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+              h('div', { className: 'field' }, h('label', null, "Nome *"), h('input', { type: 'text', value: novoCartaoNome, onChange: e => setNovoCartaoNome(e.target.value), required: true })), 
+              h('div', { className: 'field' }, h('label', null, "Banco"), h('select', { value: novoCartaoBanco, onChange: e => setNovoCartaoBanco(e.target.value) }, BANCOS_FEBRABAN.map(b => h('option', { key: b.code, value: b.code }, b.name)))), 
+              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, 
+                h('div', { className: 'field' }, h('label', null, "Dia do Fechamento"), h('input', { type: 'number', min: 1, max: 31, value: novoCartaoFechamento, onChange: e => setNovoCartaoFechamento(e.target.value), required: true })),
+                h('div', { className: 'field' }, h('label', null, "Dia do Vencimento"), h('input', { type: 'number', min: 1, max: 31, value: novoCartaoVencimento, onChange: e => setNovoCartaoVencimento(e.target.value), required: true }))
+              ),
+              h('div', { className: 'field' }, h('label', null, "Cor"), h('div', { className: 'color-swatches' }, CARD_COLORS.map(cor => h('button', { type: 'button', key: cor, className: `color-swatch ${novoCartaoCor === cor ? 'selected' : ''}`, style: { background: cor }, onClick: () => setNovoCartaoCor(cor) })))), cartaoError && h('div', { style: { color: 'var(--red)', fontSize: 12 } }, cartaoError),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setCartaoModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
             )
           )
         ),
 
         contaModalOpen && h('div', { className: 'modal-overlay' },
           h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
-            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, editingContaId ? "Editar Conta Bancária" : "Nova Conta Bancária"),
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, editingContaId ? "Editar Conta" : "Nova Conta"),
             h('form', { onSubmit: handleSaveConta, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
-              h('div', { className: 'field' }, h('label', null, "Nome da Conta *"), h('input', { type: 'text', placeholder: 'Ex: Conta PJ Bradesco', value: novaContaNome, onChange: e => setNovaContaNome(e.target.value), required: true })),
-              h('div', { className: 'field' },
-                h('label', null, "Banco Febraban *"),
-                h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
-                  h(BancoLogo, { code: novaContaBanco, logoData: novaContaLogoData, size: 46 }),
-                  h('div', { style: { flex: 1 } },
-                    h('select', { value: novaContaBanco, onChange: e => setNovaContaBanco(e.target.value), style: { width: '100%' } },
-                      BANCOS_FEBRABAN.map(b => h('option', { key: b.code, value: b.code }, b.name))
-                    ),
-                    h('div', { style: { marginTop: 7, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
-                      h('label', { className: 'action-btn', style: { cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 } },
-                        "📷 Carregar logo",
-                        h('input', {
-                          type: 'file',
-                          accept: 'image/png,image/jpeg,image/webp,image/svg+xml',
-                          onChange: handleContaLogoChange,
-                          style: { display: 'none' }
-                        })
-                      ),
-                      novaContaLogoData && h('button', {
-                        type: 'button',
-                        className: 'action-btn delete',
-                        onClick: () => setNovaContaLogoData(""),
-                        title: 'Remover o logo personalizado'
-                      }, "Remover logo"),
-                      h('span', { style: { fontSize: 11, color: 'var(--ink-soft)' } },
-                        novaContaLogoData ? "Logo personalizado carregado" : "PNG, JPG, WEBP ou SVG"
-                      )
-                    )
-                  )
-                )
-              ),
-              h('div', { className: 'field' }, h('label', null, "Tipo de Conta *"), h('select', { value: novaContaTipo, onChange: e => setNovaContaTipo(e.target.value) }, h('option', { value: "corrente" }, "Conta Corrente"), h('option', { value: "investimento" }, "Conta Investimento"), h('option', { value: "dinheiro" }, "Dinheiro / Caixa Físico"), h('option', { value: "outros" }, "Outros"))),
-              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
-                h('div', { className: 'field' }, h('label', null, "Agência"), h('input', { type: 'text', placeholder: '0000', value: novaContaAgencia, onChange: e => setNovaContaAgencia(e.target.value) })),
-                h('div', { className: 'field' }, h('label', null, "Número da Conta"), h('input', { type: 'text', placeholder: '00000-0', value: novaContaNumero, onChange: e => setNovaContaNumero(e.target.value) }))
-              ),
-              h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', background: '#F7F4EC', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px' } },
-                "O logo carregado é salvo dentro dos dados da conta e será usado no cadastro e na conciliação, sem depender de um site externo."
-              ),
-              contaError && h('div', { style: { color: 'var(--red)', fontSize: 12 } }, contaError),
+              h('div', { className: 'field' }, h('label', null, "Nome da Conta *"), h('input', { type: 'text', value: novaContaNome, onChange: e => setNovaContaNome(e.target.value), placeholder: 'Ex: Caixa Principal, Conta PJ Santander', required: true })), h('div', { className: 'field' }, h('label', null, "Banco *"), h('select', { value: novaContaBanco, onChange: e => setNovaContaBanco(e.target.value) }, BANCOS_FEBRABAN.map(b => h('option', { key: b.code, value: b.code }, b.name)))), h('div', { className: 'field' }, h('label', null, "Categoria / Tipo de Conta *"), h('select', { value: novaContaTipo, onChange: e => setNovaContaTipo(e.target.value) }, h('option', { value: "corrente" }, "Conta Corrente"), h('option', { value: "investimento" }, "Conta Investimento"), h('option', { value: "dinheiro" }, "Dinheiro / Caixa Físico"), h('option', { value: "outros" }, "Outros"))), h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, h('div', { className: 'field' }, h('label', null, "Número da Agência"), h('input', { type: 'text', value: novaContaAgencia, onChange: e => setNovaContaAgencia(e.target.value), placeholder: 'Ex: 1234' })), h('div', { className: 'field' }, h('label', null, "Número da Conta"), h('input', { type: 'text', value: novaContaNumero, onChange: e => setNovaContaNumero(e.target.value), placeholder: 'Ex: 56789-0' }))), contaError && h('div', { style: { color: 'var(--red)', fontSize: 12 } }, contaError),
               h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setContaModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
             )
           )
-        ),
-
-        cartaoModalOpen && h('div', { className: 'modal-overlay' },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
-            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, editingCartaoId ? "Editar Cartão" : "Novo Cartão"),
-            h('form', { onSubmit: handleSaveCartao, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
-              h('div', { className: 'field' }, h('label', null, "Nome do Cartão *"), h('input', { type: 'text', placeholder: 'Ex: Nubank, Visa Infinite', value: novoCartaoNome, onChange: e => setNovoCartaoNome(e.target.value), required: true })),
-              h('div', { className: 'field' }, h('label', null, "Banco Emissor"), h('select', { value: novoCartaoBanco, onChange: e => setNovoCartaoBanco(e.target.value) }, BANCOS_FEBRABAN.map(b => h('option', { key: b.code, value: b.code }, b.name)))),
-              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
-                h('div', { className: 'field' }, h('label', null, "Dia Fechamento"), h('input', { type: 'number', min: '1', max: '31', value: novoCartaoFechamento, onChange: e => setNovoCartaoFechamento(e.target.value) })),
-                h('div', { className: 'field' }, h('label', null, "Dia Vencimento"), h('input', { type: 'number', min: '1', max: '31', value: novoCartaoVencimento, onChange: e => setNovoCartaoVencimento(e.target.value) }))
-              ),
-              h('div', { className: 'field' }, h('label', null, "Cor do Cartão"), h('div', { className: 'color-swatches' }, CARD_COLORS.map(cor => h('button', { type: 'button', key: cor, className: `color-swatch ${novoCartaoCor === cor ? 'selected' : ''}`, style: { background: cor }, onClick: () => setNovoCartaoCor(cor) })))),
-              cartaoError && h('div', { style: { color: 'var(--red)', fontSize: 12 } }, cartaoError),
-              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setCartaoModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
-            )
-          )
         )
-
-      ));
+      );
     }
 
-    const container = document.getElementById('root');
-    if (ReactDOM.createRoot) {
-      ReactDOM.createRoot(container).render(h(FaturaApp));
-    } else {
-      ReactDOM.render(h(FaturaApp), container);
-    }
+    ReactDOM.createRoot(document.getElementById('root')).render(h(FaturaApp));
   </script>
 </body>
 </html>
