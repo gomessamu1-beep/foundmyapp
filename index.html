@@ -848,7 +848,7 @@
             if (!rows.length) throw new Error("A planilha não possui lançamentos.");
             const normalizarChave = (k) => normalizarTextoImportacao(k).replace(/[^a-z0-9]/g, "");
             const aliases = {
-              data:["data"], descricao:["descricao"], valor:["valor"], tipo:["tipo"],
+              data:["data"], descricao:["descricao"], valor:["valor"], tipo:["tipo","natureza","tipolancamento","tipodelancamento"],
               cartao:["cartao","cartaoid","nomecartao"], competencia:["competencia","competenciames","mescompetencia"],
               conta:["conta"], categoria:["categoria"], subcategoria:["subcategoria"],
               parcela:["parcela"], numeroParcela:["numerodaparcela","numeroparcela"],
@@ -856,9 +856,20 @@
             };
             const chave = (obj, lista) => {
               const keys = Object.keys(obj);
-              const k = keys.find(x => lista.includes(normalizarChave(x)));
-              return k ? obj[k] : "";
+              const normalizadas = keys.map(x => ({ original: x, normalizada: normalizarChave(x) }));
+              const exata = normalizadas.find(x => lista.includes(x.normalizada));
+              if (exata) return obj[exata.original];
+              const aproximada = normalizadas.find(x => lista.some(alias => x.normalizada.includes(alias) || alias.includes(x.normalizada)));
+              return aproximada ? obj[aproximada.original] : "";
             };
+
+            function normalizarTipoImportacao(valor) {
+              const t = normalizarTextoImportacao(valor).toUpperCase();
+              if (["DESPESA","DESPESAS","D"].includes(t)) return "DESPESA";
+              if (["RECEITA","RECEITAS","R"].includes(t)) return "RECEITA";
+              if (["FATURA","FATURAS","F"].includes(t)) return "FATURA";
+              return t;
+            }
             const erros = [];
             const preview = rows.map((r, idx) => {
               const linha = idx + 2;
@@ -866,7 +877,7 @@
               let data = parseDataPlanilha(chave(r, aliases.data));
               const descricao = String(chave(r, aliases.descricao) ?? "").trim();
               const valor = parseValorPlanilha(chave(r, aliases.valor));
-              const tipo = normalizarTextoImportacao(chave(r, aliases.tipo)).toUpperCase();
+              const tipo = normalizarTipoImportacao(chave(r, aliases.tipo));
               const cartaoNome = String(chave(r, aliases.cartao) ?? "").trim();
               const contaNome = String(chave(r, aliases.conta) ?? "").trim();
               const categoriaNome = String(chave(r, aliases.categoria) ?? "").trim();
