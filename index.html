@@ -1135,10 +1135,9 @@
         setPlanilhaImportando(true);
 
         try {
-          // Garante que categorias e subcategorias criadas durante a leitura
-          // também sejam persistidas junto com os lançamentos.
           const categoriasImportadas = [...(categorias || [])];
 
+          // Mantém categorias/subcategorias da planilha.
           for (const r of planilhaPreview) {
             if (!r.categoriaNome) continue;
 
@@ -1158,39 +1157,36 @@
               categoriasImportadas.push(cat);
             }
 
-            if (!Array.isArray(cat.subcategorias)) {
-              cat.subcategorias = [];
-            }
+            if (!Array.isArray(cat.subcategorias)) cat.subcategorias = [];
 
             if (r.subcategoriaNome) {
-              const subExistente = cat.subcategorias.find(s =>
+              let sub = cat.subcategorias.find(s =>
                 normalizarTextoImportacao(s?.nome) === normalizarTextoImportacao(r.subcategoriaNome)
               );
 
-              if (!subExistente) {
-                cat.subcategorias.push({
-                  id: uid(),
-                  nome: r.subcategoriaNome
-                });
+              if (!sub) {
+                sub = { id: uid(), nome: r.subcategoriaNome };
+                cat.subcategorias.push(sub);
               }
 
-              // Atualiza o objeto usado pelo lançamento para apontar
-              // para a subcategoria realmente persistida.
               r.categoria = cat;
-              r.subcategoria = cat.subcategorias.find(s =>
-                normalizarTextoImportacao(s?.nome) === normalizarTextoImportacao(r.subcategoriaNome)
-              ) || null;
+              r.subcategoria = sub;
             } else {
               r.categoria = cat;
+              r.subcategoria = null;
             }
           }
 
+          const novasFaturas = [];
           const novosPagar = [];
           const novosReceber = [];
-          const novasFaturas = [];
 
           for (const r of planilhaPreview) {
-            const statusBaixa = r.conta ? "Baixado" : "Em aberto";
+            // REGRA DEFINITIVA DA IMPORTAÇÃO:
+            // FATURA = lançamento do cartão, nunca Contas a Pagar.
+            // DESPESA = Contas a Pagar.
+            // RECEITA = Contas a Receber.
+            const tipo = String(r.tipo || "").trim().toUpperCase();
 
             const base = {
               id: uid(),
@@ -1202,34 +1198,91 @@
               parcelaInicial: r.numeroParcela || 1,
               inicio: r.competencia,
               recorrente: false,
-              cartaoId: r.tipo === "FATURA" ? r.cartao?.id || null : null,
+              cartaoId: tipo === "FATURA" ? (r.cartao?.id || null) : null,
               categoriaId: r.categoria?.id || null,
               subcategoriaId: r.subcategoria?.id || null,
-              status: statusBaixa,
-              bancoBaixaId: r.conta?.id || null,
-              dataBaixa: r.conta ? r.data : null,
+              status: "Em aberto",
+              bancoBaixaId: null,
+              dataBaixa: null,
               criadoEm: Date.now(),
               isImportacaoPlanilha: true,
-              competenciaImportacao: r.competencia
+              tipoImportacao: tipo,
+              competenciaImportacao: r.competencia,
+              parcelaImportacao: r.parcela || "",
+              numeroParcelaImportacao: r.numeroParcela || 1,
+              totalParcelasImportacao: r.totalParcelas || 1
             };
 
-            if (r.tipo === "FATURA") {
-              novasFaturas.push({
+            if (tipo === "FATURA") {
+              // Vai exclusivamente para purchases, que alimenta a tela do cartão/fatura.
+              if (!base.cartaoId) {
+                throw new Error(`Linha ${r.linha}: FATURA sem cartão vinculado.`);
+              }
+              novasFaturas.push(base);
+            } else if (tipo === "DESPESA") {
+              novosPagar.push({
                 ...base,
-                status: "Em aberto",
-                bancoBaixaId: null,
-                dataBaixa: null
+                cartaoId: null
               });
-            } else if (r.tipo === "DESPESA") {
-              novosPagar.push(base);
+            } else if (tipo === "RECEITA") {
+              novosReceber.push({
+                ...base,
+                cartaoId: null
+              });
             } else {
-              novosReceber.push(base);
+              throw new Error(`Linha ${r.linha}: tipo de importação inválido: ${tipo || "(vazio)"}.`);
             }
           }
 
-          const nextPurchases = [...purchases, ...novasFaturas];
-          const nextPagar = [...contasPagar, ...novosPagar];
-          const nextReceber = [...contasReceber, ...novosReceber];
+          // Se uma importação anterior colocou FATURAS por engano no Contas a Pagar,
+          // migra esses registros para os lançamentos do cartão e evita duplicação.
+          const faturasAntigasNoPagar = (contasPagar || []).filter(p =>
+            p?.isImportacaoPlanilha === true &&
+            (
+              p?.tipoImportacao === "FATURA" ||
+              (!!p?.cartaoId && !p?.tipoImportacao)
+            )
+          );
+
+          const faturasAntigasNoReceber = (contasReceber || []).filter(p =>
+            p?.isImportacaoPlanilha === true &&
+            (
+              p?.tipoImportacao === "FATURA" ||
+              (!!p?.cartaoId && !p?.tipoImportacao)
+            )
+          );
+
+          const faturasMigradas = [
+            ...faturasAntigasNoPagar,
+            ...faturasAntigasNoReceber
+          ].map(p => ({
+            ...p,
+            tipoImportacao: "FATURA",
+            status: "Em aberto",
+            bancoBaixaId: null,
+            dataBaixa: null
+          }));
+
+          const idsMigrados = new Set(faturasMigradas.map(p => p.id));
+
+          const pagarSemFaturasImportadas = (contasPagar || []).filter(p => !idsMigrados.has(p.id));
+          const receberSemFaturasImportadas = (contasReceber || []).filter(p => !idsMigrados.has(p.id));
+
+          const nextPurchases = [
+            ...(purchases || []),
+            ...faturasMigradas,
+            ...novasFaturas
+          ];
+
+          const nextPagar = [
+            ...pagarSemFaturasImportadas,
+            ...novosPagar
+          ];
+
+          const nextReceber = [
+            ...receberSemFaturasImportadas,
+            ...novosReceber
+          ];
 
           setCategorias(categoriasImportadas);
           setPurchases(nextPurchases);
@@ -1251,29 +1304,21 @@
           );
 
           const totalImportado = planilhaPreview.length;
-          const totalCategorias = categoriasImportadas.length - (categorias || []).length;
-
-          let totalSubcategorias = 0;
-          for (const r of planilhaPreview) {
-            if (r.subcategoriaNome) {
-              const originalCat = (categorias || []).find(c =>
-                normalizarTextoImportacao(c?.nome) === normalizarTextoImportacao(r.categoriaNome)
-              );
-              const tinha = originalCat?.subcategorias?.some(s =>
-                normalizarTextoImportacao(s?.nome) === normalizarTextoImportacao(r.subcategoriaNome)
-              );
-              if (!tinha) totalSubcategorias++;
-            }
-          }
+          const totalFaturas = novasFaturas.length;
+          const totalDespesas = novosPagar.length;
+          const totalReceitas = novosReceber.length;
+          const totalMigradas = faturasMigradas.length;
 
           setPlanilhaPreview([]);
           setPlanilhaArquivo("");
           setPlanilhaModalOpen(false);
 
           alert(
-            `${totalImportado} lançamento(s) importado(s) com sucesso.\n\n` +
-            `${totalCategorias} categoria(s) criada(s).\n` +
-            `${totalSubcategorias} subcategoria(s) criada(s).`
+            `${totalImportado} lançamento(s) importado(s) com sucesso.\\n\\n` +
+            `FATURAS no cartão: ${totalFaturas}.\\n` +
+            `DESPESAS no Contas a Pagar: ${totalDespesas}.\\n` +
+            `RECEITAS no Contas a Receber: ${totalReceitas}.` +
+            (totalMigradas ? `\\n\\n${totalMigradas} fatura(s) que estavam indevidamente no Contas a Pagar/Receber foram corrigidas e movidas para o cartão.` : "")
           );
         } catch (err) {
           console.error("Erro ao importar lançamentos:", err);
@@ -1282,7 +1327,6 @@
           setPlanilhaImportando(false);
         }
       }
-
 
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
