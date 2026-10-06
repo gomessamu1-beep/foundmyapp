@@ -1746,7 +1746,7 @@
               h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "📥 Importar Lançamentos por Planilha"),
               h('button', { type: 'button', className: 'action-btn', onClick: () => setPlanilhaModalOpen(false), disabled: planilhaImportando }, h(XIcon, { size: 16 }))
             ),
-            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 } }, "Importe despesas e receitas para Contas a Pagar e Contas a Receber. A planilha deve usar as colunas do modelo."),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 } }, "Importe DESPESAS, RECEITAS ou FATURAS. A planilha deve usar as colunas do modelo. O campo Tipo aceita exatamente: DESPESA, RECEITA ou FATURA."),
             h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 } },
               h('button', { type: 'button', className: 'action-btn', onClick: baixarModeloImportacao }, h(FileSpreadsheet, { size: 15 }), " Baixar Modelo Excel"),
               h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer' } },
