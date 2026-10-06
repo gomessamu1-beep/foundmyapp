@@ -574,10 +574,10 @@
 
       function handleProcessarTxtCategorias(e) {
         e.preventDefault();
-        const conteudo = String(txtCategoriasContent || "").replace(/^\\uFEFF/, "");
+        const conteudo = String(txtCategoriasContent || "").replace(/^\uFEFF/, "");
         if (!conteudo.trim()) return alert("Cole/carregue arquivo TXT.");
 
-        const linhas = conteudo.split(/\\r?\\n/);
+        const linhas = conteudo.split(/\r?\n/);
         let novasCategorias = (categorias || []).map(c => ({
           ...c,
           nome: typeof c.nome === "string" ? c.nome : String(c.nome ?? ""),
@@ -597,12 +597,12 @@
         linhas.forEach(linhaOriginal => {
           if (!linhaOriginal || !linhaOriginal.trim()) return;
 
-          const temTabulacao = /^\\s+/.test(linhaOriginal);
+          const temTabulacao = /^\s+/.test(linhaOriginal);
           const limpa = linhaOriginal.trim();
           if (!limpa) return;
 
           const ehSub = temTabulacao || /^[-•]/.test(limpa);
-          const nomeItem = limpa.replace(/^[-•]\\s*/, "").trim();
+          const nomeItem = limpa.replace(/^[-•]\s*/, "").trim();
           if (!nomeItem) return;
 
           const nomeNormalizado = normalizarTextoImportacao(nomeItem);
