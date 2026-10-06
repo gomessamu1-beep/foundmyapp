@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "planilha-importacao-2026-10-06-03";
+    const APP_BUILD = "planilha-importacao-2026-10-06-04";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -1202,7 +1202,12 @@
               id: uid(),
               descricao: r.descricao,
               observacao: r.observacao,
-              total: r.valor,
+              // Na planilha, "Valor" representa o VALOR DA PARCELA.
+              // O sistema precisa guardar o valor total da compra para que
+              // o parcelamento seja calculado corretamente na fatura.
+              // Ex.: R$ 100,00 em 10x => total da compra = R$ 1.000,00.
+              total: r.valor * (r.totalParcelas || 1),
+              valorParcelaImportacao: r.valor,
               dataCompra: r.data,
               parcelas: r.totalParcelas || 1,
               parcelaInicial: r.numeroParcela || 1,
