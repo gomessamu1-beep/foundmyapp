@@ -115,13 +115,13 @@
       const [diasFechados, setDiasFechados] = useState({});
       const [mesesFechados, setMesesFechados] = useState({});
       
-      const [screen, setScreen] = useState(() => localStorage.getItem('fatura-screen-v1') || "cadastros");
-      const [cadastroTab, setCadastroTab] = useState(() => localStorage.getItem('fatura-cadtab-v1') || "cartoes");
+      const [screen, setScreen] = useState(() => sessionStorage.getItem('fatura-screen-v1') || "cadastros");
+      const [cadastroTab, setCadastroTab] = useState(() => sessionStorage.getItem('fatura-cadtab-v1') || "cartoes");
       const [categoriaTipoTab, setCategoriaTipoTab] = useState("despesa");
       const [lancamentoTab, setLancamentoTab] = useState("cartao");
       const [relatorioTab, setRelatorioTab] = useState("pagar");
       
-      const [month, setMonth] = useState(() => localStorage.getItem('fatura-month-v1') || currentMonth());
+      const [month, setMonth] = useState(() => sessionStorage.getItem('fatura-month-v1') || currentMonth());
       const [faturaAno, setFaturaAno] = useState(() => new Date().getFullYear().toString());
 
       const [faturaOrdem, setFaturaOrdem] = useState("atual");
@@ -171,9 +171,9 @@
       const [lrError, setLrError] = useState('');
 
       useEffect(() => {
-        localStorage.setItem('fatura-screen-v1', screen);
-        localStorage.setItem('fatura-cadtab-v1', cadastroTab);
-        localStorage.setItem('fatura-month-v1', month);
+        sessionStorage.setItem('fatura-screen-v1', screen);
+        sessionStorage.setItem('fatura-cadtab-v1', cadastroTab);
+        sessionStorage.setItem('fatura-month-v1', month);
       }, [screen, cadastroTab, month]);
 
       useEffect(() => {
