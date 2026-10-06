@@ -573,15 +573,87 @@
       function handleAddSubcategoria(catId) { const nome = (subInputs[catId] || "").trim(); if (!nome) return; updateCategorias(prev => prev.map(c => c.id !== catId ? c : { ...c, subcategorias: [...c.subcategorias, { id: uid(), nome }] })); setSubInputs(prev => ({ ...prev, [catId]: "" })); }
 
       function handleProcessarTxtCategorias(e) {
-        e.preventDefault(); const linhas = txtCategoriasContent.split("\n"); if (linhas.length === 0 || !txtCategoriasContent.trim()) return alert("Cole/carregue arquivo TXT.");
-        let novasCategorias = [...categorias]; let catAtual = null; let qtdCatAdicionadas = 0; let qtdSubAdicionadas = 0;
+        e.preventDefault();
+        const conteudo = String(txtCategoriasContent || "").replace(/^\\uFEFF/, "");
+        if (!conteudo.trim()) return alert("Cole/carregue arquivo TXT.");
+
+        const linhas = conteudo.split(/\\r?\\n/);
+        let novasCategorias = (categorias || []).map(c => ({
+          ...c,
+          nome: typeof c.nome === "string" ? c.nome : String(c.nome ?? ""),
+          subcategorias: Array.isArray(c.subcategorias)
+            ? c.subcategorias.map(s => ({
+                ...s,
+                nome: typeof s.nome === "string" ? s.nome : String(s.nome ?? "")
+              }))
+            : []
+        }));
+
+        let catAtual = null;
+        let qtdCatAdicionadas = 0;
+        let qtdSubAdicionadas = 0;
+        const tipoAtual = categoriaTipoTab || "despesa";
+
         linhas.forEach(linhaOriginal => {
-          const temTabulacao = linhaOriginal.startsWith("\t") || linhaOriginal.startsWith("    "); const limpa = linhaOriginal.trim(); if (!limpa) return;
-          const ehSub = temTabulacao || limpa.startsWith("-") || limpa.startsWith("•"); const nomeItem = limpa.replace(/^[-•]\s*/, "").trim();
-          if (!ehSub) { let catExistente = novasCategorias.find(c => c.tipo === categoriaTipoTab && c.nome.toLowerCase() === nomeItem.toLowerCase()); if (!catExistente) { catExistente = { id: uid(), tipo: categoriaTipoTab, nome: nomeItem, cor: CARD_COLORS[novasCategorias.length % CARD_COLORS.length], isTransferencia: false, subcategorias: [] }; novasCategorias.push(catExistente); qtdCatAdicionadas++; } catAtual = catExistente; } 
-          else { if (catAtual) { let subExistente = catAtual.subcategorias.find(s => s.nome.toLowerCase() === nomeItem.toLowerCase()); if (!subExistente) { catAtual.subcategorias.push({ id: uid(), nome: item => item }); qtdSubAdicionadas++; } } else { const catsDoTipo = novasCategorias.filter(c => c.tipo === categoriaTipoTab); if (catsDoTipo.length > 0) { catAtual = catsDoTipo[catsDoTipo.length - 1]; let subExistente = catAtual.subcategorias.find(s => s.nome.toLowerCase() === nomeItem.toLowerCase()); if (!subExistente) { catAtual.subcategorias.push({ id: uid(), nome: nomeItem }); qtdSubAdicionadas++; } } } }
+          if (!linhaOriginal || !linhaOriginal.trim()) return;
+
+          const temTabulacao = /^\\s+/.test(linhaOriginal);
+          const limpa = linhaOriginal.trim();
+          if (!limpa) return;
+
+          const ehSub = temTabulacao || /^[-•]/.test(limpa);
+          const nomeItem = limpa.replace(/^[-•]\\s*/, "").trim();
+          if (!nomeItem) return;
+
+          const nomeNormalizado = normalizarTextoImportacao(nomeItem);
+
+          if (!ehSub) {
+            let catExistente = novasCategorias.find(c =>
+              c.tipo === tipoAtual &&
+              normalizarTextoImportacao(c.nome) === nomeNormalizado
+            );
+
+            if (!catExistente) {
+              catExistente = {
+                id: uid(),
+                tipo: tipoAtual,
+                nome: nomeItem,
+                cor: CARD_COLORS[novasCategorias.length % CARD_COLORS.length],
+                isTransferencia: false,
+                subcategorias: []
+              };
+              novasCategorias.push(catExistente);
+              qtdCatAdicionadas++;
+            }
+
+            if (!Array.isArray(catExistente.subcategorias)) {
+              catExistente.subcategorias = [];
+            }
+            catAtual = catExistente;
+          } else {
+            if (!catAtual) return;
+
+            if (!Array.isArray(catAtual.subcategorias)) {
+              catAtual.subcategorias = [];
+            }
+
+            const subExistente = catAtual.subcategorias.find(s =>
+              normalizarTextoImportacao(s.nome) === nomeNormalizado
+            );
+
+            if (!subExistente) {
+              catAtual.subcategorias.push({
+                id: uid(),
+                nome: nomeItem
+              });
+              qtdSubAdicionadas++;
+            }
+          }
         });
-        updateCategorias(novasCategorias); setTxtCategoriasContent(""); alert(`Concluído!\n- ${qtdCatAdicionadas} categorias\n- ${qtdSubAdicionadas} subcategorias`);
+
+        updateCategorias(novasCategorias);
+        setTxtCategoriasContent("");
+        alert(`Concluído!\\n- ${qtdCatAdicionadas} categorias\\n- ${qtdSubAdicionadas} subcategorias`);
       }
 
       function handleUploadTxtFile(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (evt) => { setTxtCategoriasContent(evt.target.result); }; reader.readAsText(file); if (txtInputRef.current) txtInputRef.current.value = ""; }
