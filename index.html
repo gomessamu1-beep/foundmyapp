@@ -825,24 +825,6 @@
           ["Total de Parcelas","Opcional. Ex.: 3."],
           ["Observação","Opcional."]
         ];
-        const ws = XLSX.utils.aoa_to_sheet(dados);
-        ws["!cols"] = [{wch:13},{wch:30},{wch:15},{wch:14},{wch:24},{wch:22},{wch:22},{wch:12},{wch:19},{wch:20},{wch:35}];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Lançamentos");
-        const instrucoes = [
-          ["COLUNA","PREENCHIMENTO"],
-          ["Data","Obrigatório. dd/mm/aaaa."],
-          ["Descrição","Obrigatório."],
-          ["Valor","Obrigatório. Valor total do lançamento. Ex.: 150,90."],
-          ["Tipo","Obrigatório: DESPESA ou RECEITA."],
-          ["Conta","Opcional. Se informada, deve existir no cadastro. O lançamento será marcado como Baixado."],
-          ["Categoria","Opcional. Se informada, deve existir no cadastro."],
-          ["Subcategoria","Opcional. Se informada, deve existir dentro da categoria."],
-          ["Parcela","Opcional. Ex.: 1/3. Use uma linha por compra parcelada; não repita as parcelas futuras na planilha."],
-          ["Número da Parcela","Opcional. Ex.: 1."],
-          ["Total de Parcelas","Opcional. Ex.: 3."],
-          ["Observação","Opcional."]
-        ];
         const wi = XLSX.utils.aoa_to_sheet(instrucoes);
         wi["!cols"] = [{wch:24},{wch:95}];
         XLSX.utils.book_append_sheet(wb, wi, "Instruções");
