@@ -745,10 +745,31 @@
 
       function parseValorPlanilha(valor) {
         if (typeof valor === "number") return Number.isFinite(valor) ? valor : NaN;
-        let s = String(valor ?? "").trim().replace(/R\\$\\s?/gi, "");
+        let s = String(valor ?? "").trim().replace(/R\$\s?/gi, "");
         if (!s) return NaN;
-        if (s.includes(",")) s = s.replace(/\\./g, "").replace(",", ".");
+        if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
         return Number(s.replace(/[^0-9.-]/g, ""));
+      }
+
+      function parseCompetenciaPlanilha(valor) {
+        if (valor instanceof Date && !isNaN(valor.getTime())) {
+          return `${valor.getFullYear()}-${String(valor.getMonth() + 1).padStart(2, "0")}`;
+        }
+        if (typeof valor === "number" && window.XLSX?.SSF) {
+          const d = window.XLSX.SSF.parse_date_code(valor);
+          if (d) return `${d.y}-${String(d.m).padStart(2, "0")}`;
+        }
+        const s = String(valor ?? "").trim();
+        if (!s) return "";
+        let m = s.match(/^(\d{4})[-\/](\d{1,2})$/);
+        if (m) return `${m[1]}-${String(m[2]).padStart(2, "0")}`;
+        m = s.match(/^(\d{1,2})[-\/](\d{4})$/);
+        if (m) return `${m[2]}-${String(m[1]).padStart(2, "0")}`;
+        return "";
+      }
+
+      function dataDaCompetencia(competencia) {
+        return competencia ? `${competencia}-01` : "";
       }
 
       function encontrarCategoriaImportacao(nome) {
@@ -779,9 +800,30 @@
       function baixarModeloImportacao() {
         if (!window.XLSX) return setPlanilhaError("Biblioteca Excel não carregada. Atualize a página e tente novamente.");
         const dados = [
-          ["Data","Descrição","Valor","Tipo","Conta","Categoria","Subcategoria","Parcela","Número da Parcela","Total de Parcelas","Observação"],
-          ["05/10/2026","SUPERMERCADO ABC",150.90,"DESPESA","","Alimentação","Mercado","1/3",1,3,"Compra de mercado"],
-          ["10/10/2026","RECEBIMENTO CLIENTE",2500.00,"RECEITA","Banco do Brasil","Vendas","","","","","Recebimento"]
+          ["Data","Descrição","Valor","Tipo","Cartão","Competência","Conta","Categoria","Subcategoria","Parcela","Número da Parcela","Total de Parcelas","Observação"],
+          ["05/10/2026","SUPERMERCADO ABC",150.90,"FATURA","Nubank","2026-10","","Alimentação","Mercado","1/3",1,3,"Compra no cartão"],
+          ["10/10/2026","PAGAMENTO FORNECEDOR",850.00,"DESPESA","","2026-10","Banco do Brasil","Fornecedores","","","","Pagamento"],
+          ["10/10/2026","RECEBIMENTO CLIENTE",2500.00,"RECEITA","","2026-10","Banco do Brasil","Vendas","","","","Recebimento"]
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(dados);
+        ws["!cols"] = [{wch:13},{wch:30},{wch:15},{wch:14},{wch:24},{wch:14},{wch:24},{wch:22},{wch:22},{wch:12},{wch:19},{wch:20},{wch:35}];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Lançamentos");
+        const instrucoes = [
+          ["COLUNA","PREENCHIMENTO"],
+          ["Data","Opcional quando a Competência estiver informada. Se ficar vazia, será usada a data 01 da Competência."],
+          ["Descrição","Obrigatório."],
+          ["Valor","Obrigatório. Valor total do lançamento. Ex.: 150,90."],
+          ["Tipo","Obrigatório: DESPESA, RECEITA ou FATURA."],
+          ["Cartão","Obrigatório para FATURA. Informe exatamente o nome do cartão cadastrado no sistema."],
+          ["Competência","Obrigatório. Informe no formato AAAA-MM, por exemplo 2026-10."],
+          ["Conta","Opcional para DESPESA/RECEITA. Se informada, deve existir no cadastro. O lançamento será marcado como Baixado."],
+          ["Categoria","Opcional. Se informada, deve existir no cadastro."],
+          ["Subcategoria","Opcional. Se informada, deve existir dentro da categoria."],
+          ["Parcela","Opcional. Ex.: 1/3. Use uma linha por compra parcelada; não repita as parcelas futuras na planilha."],
+          ["Número da Parcela","Opcional. Ex.: 1."],
+          ["Total de Parcelas","Opcional. Ex.: 3."],
+          ["Observação","Opcional."]
         ];
         const ws = XLSX.utils.aoa_to_sheet(dados);
         ws["!cols"] = [{wch:13},{wch:30},{wch:15},{wch:14},{wch:24},{wch:22},{wch:22},{wch:12},{wch:19},{wch:20},{wch:35}];
@@ -825,6 +867,7 @@
             const normalizarChave = (k) => normalizarTextoImportacao(k).replace(/[^a-z0-9]/g, "");
             const aliases = {
               data:["data"], descricao:["descricao"], valor:["valor"], tipo:["tipo"],
+              cartao:["cartao","cartaoid","nomecartao"], competencia:["competencia","competenciames","mescompetencia"],
               conta:["conta"], categoria:["categoria"], subcategoria:["subcategoria"],
               parcela:["parcela"], numeroParcela:["numerodaparcela","numeroparcela"],
               totalParcelas:["totaldeparcelas","totalparcelas"], observacao:["observacao"]
@@ -837,10 +880,12 @@
             const erros = [];
             const preview = rows.map((r, idx) => {
               const linha = idx + 2;
-              const data = parseDataPlanilha(chave(r, aliases.data));
+              const competencia = parseCompetenciaPlanilha(chave(r, aliases.competencia));
+              let data = parseDataPlanilha(chave(r, aliases.data));
               const descricao = String(chave(r, aliases.descricao) ?? "").trim();
               const valor = parseValorPlanilha(chave(r, aliases.valor));
               const tipo = normalizarTextoImportacao(chave(r, aliases.tipo)).toUpperCase();
+              const cartaoNome = String(chave(r, aliases.cartao) ?? "").trim();
               const contaNome = String(chave(r, aliases.conta) ?? "").trim();
               const categoriaNome = String(chave(r, aliases.categoria) ?? "").trim();
               const subcategoriaNome = String(chave(r, aliases.subcategoria) ?? "").trim();
@@ -848,18 +893,27 @@
               const numeroParcela = parseInt(chave(r, aliases.numeroParcela), 10) || 1;
               const totalParcelas = parseInt(chave(r, aliases.totalParcelas), 10) || 1;
               const observacao = String(chave(r, aliases.observacao) ?? "").trim();
-              if (!data) erros.push(`Linha ${linha}: Data inválida.`);
+
+              if (!competencia) erros.push(`Linha ${linha}: Competência inválida ou não informada. Use AAAA-MM.`);
+              if (!data && competencia) data = dataDaCompetencia(competencia);
               if (!descricao) erros.push(`Linha ${linha}: Descrição não informada.`);
               if (!Number.isFinite(valor) || valor <= 0) erros.push(`Linha ${linha}: Valor inválido.`);
-              if (!["DESPESA","RECEITA"].includes(tipo)) erros.push(`Linha ${linha}: Tipo deve ser DESPESA ou RECEITA.`);
+              if (!["DESPESA","RECEITA","FATURA"].includes(tipo)) erros.push(`Linha ${linha}: Tipo deve ser DESPESA, RECEITA ou FATURA.`);
+
+              const cartao = cartoes.find(c => normalizarTextoImportacao(c.nome) === normalizarTextoImportacao(cartaoNome)) || null;
               const conta = encontrarContaImportacao(contaNome);
               const categoria = encontrarCategoriaImportacao(categoriaNome);
+
+              if (tipo === "FATURA" && !cartaoNome) erros.push(`Linha ${linha}: Cartão é obrigatório para o tipo FATURA.`);
+              if (cartaoNome && !cartao) erros.push(`Linha ${linha}: Cartão "${cartaoNome}" não encontrado no cadastro.`);
               if (contaNome && !conta) erros.push(`Linha ${linha}: Conta "${contaNome}" não encontrada no cadastro.`);
               if (categoriaNome && !categoria) erros.push(`Linha ${linha}: Categoria "${categoriaNome}" não encontrada no cadastro.`);
+
               const subcategoria = categoria ? encontrarSubcategoriaImportacao(categoria, subcategoriaNome) : null;
               if (subcategoriaNome && !subcategoria) erros.push(`Linha ${linha}: Subcategoria "${subcategoriaNome}" não encontrada na categoria informada.`);
               if (totalParcelas < 1 || numeroParcela < 1 || numeroParcela > totalParcelas) erros.push(`Linha ${linha}: Parcelamento inválido.`);
-              return { linha, data, descricao, valor, tipo, contaNome, conta, categoriaNome, categoria, subcategoriaNome, subcategoria, parcela, numeroParcela, totalParcelas, observacao };
+
+              return { linha, data, competencia, descricao, valor, tipo, cartaoNome, cartao, contaNome, conta, categoriaNome, categoria, subcategoriaNome, subcategoria, parcela, numeroParcela, totalParcelas, observacao };
             });
             if (erros.length) {
               setPlanilhaError(erros.slice(0, 20).join("\\n") + (erros.length > 20 ? `\\n... e mais ${erros.length - 20} erro(s).` : ""));
@@ -880,6 +934,7 @@
         try {
           const novosPagar = [];
           const novosReceber = [];
+          const novasFaturas = [];
           for (const r of planilhaPreview) {
             const statusBaixa = r.conta ? "Baixado" : "Em aberto";
             const base = {
@@ -890,25 +945,29 @@
               dataCompra: r.data,
               parcelas: r.totalParcelas || 1,
               parcelaInicial: r.numeroParcela || 1,
-              inicio: r.data.substring(0, 7),
+              inicio: r.competencia,
               recorrente: false,
-              cartaoId: null,
+              cartaoId: r.tipo === "FATURA" ? r.cartao?.id || null : null,
               categoriaId: r.categoria?.id || null,
               subcategoriaId: r.subcategoria?.id || null,
               status: statusBaixa,
               bancoBaixaId: r.conta?.id || null,
               dataBaixa: r.conta ? r.data : null,
               criadoEm: Date.now(),
-              isImportacaoPlanilha: true
+              isImportacaoPlanilha: true,
+              competenciaImportacao: r.competencia
             };
-            if (r.tipo === "DESPESA") novosPagar.push(base);
+            if (r.tipo === "FATURA") novasFaturas.push({ ...base, status: "Em aberto", bancoBaixaId: null, dataBaixa: null });
+            else if (r.tipo === "DESPESA") novosPagar.push(base);
             else novosReceber.push(base);
           }
+          const nextPurchases = [...purchases, ...novasFaturas];
           const nextPagar = [...contasPagar, ...novosPagar];
           const nextReceber = [...contasReceber, ...novosReceber];
+          setPurchases(nextPurchases);
           setContasPagar(nextPagar);
           setContasReceber(nextReceber);
-          saveDataToSupabase(purchases, nextPagar, nextReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
+          saveDataToSupabase(nextPurchases, nextPagar, nextReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
           setPlanilhaPreview([]);
           setPlanilhaArquivo("");
           setPlanilhaModalOpen(false);
@@ -1719,8 +1778,8 @@
               h('div', { style: { fontWeight: 'bold', marginBottom: 8 } }, `${planilhaPreview.length} lançamento(s) prontos para importar`),
               h('div', { style: { overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6, maxHeight: 360 } },
                 h('table', { style: { minWidth: 900 } },
-                  h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição"), h('th', { className: 'right' }, "Valor"), h('th', null, "Tipo"), h('th', null, "Conta"), h('th', null, "Categoria"), h('th', null, "Parcela"))),
-                  h('tbody', null, planilhaPreview.map((r, idx) => h('tr', { key: idx }, h('td', null, formatDateBR(r.data)), h('td', null, r.descricao), h('td', { className: 'right num' }, formatBRL(r.valor)), h('td', null, r.tipo), h('td', null, r.conta?.nome || "-"), h('td', null, r.categoria?.nome || "-"), h('td', null, r.totalParcelas > 1 ? `${r.numeroParcela}/${r.totalParcelas}` : "-"))))
+                  h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição"), h('th', { className: 'right' }, "Valor"), h('th', null, "Tipo"), h('th', null, "Cartão"), h('th', null, "Competência"), h('th', null, "Conta"), h('th', null, "Categoria"), h('th', null, "Parcela"))),
+                  h('tbody', null, planilhaPreview.map((r, idx) => h('tr', { key: idx }, h('td', null, formatDateBR(r.data)), h('td', null, r.descricao), h('td', { className: 'right num' }, formatBRL(r.valor)), h('td', null, r.tipo), h('td', null, r.cartao?.nome || "-"), h('td', null, r.competencia || "-"), h('td', null, r.conta?.nome || "-"), h('td', null, r.categoria?.nome || "-"), h('td', null, r.totalParcelas > 1 ? `${r.numeroParcela}/${r.totalParcelas}` : "-"))))
                 )
               ),
               h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 } },
