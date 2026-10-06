@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "planilha-importacao-2026-10-06-01";
+    const APP_BUILD = "planilha-importacao-2026-10-06-02";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -839,57 +839,137 @@
         setPlanilhaError("");
         setPlanilhaPreview([]);
         setPlanilhaArquivo(file.name);
+
         const reader = new FileReader();
         reader.onload = (e) => {
           try {
             if (!window.XLSX) throw new Error("Biblioteca Excel não carregada.");
+
             const wb = XLSX.read(e.target.result, { type: "array", cellDates: true });
             const nomeAba = wb.SheetNames.find(n => normalizarTextoImportacao(n) === "lancamentos") || wb.SheetNames[0];
             const ws = wb.Sheets[nomeAba];
             const rows = XLSX.utils.sheet_to_json(ws, { defval: "", raw: true });
+
             if (!rows.length) throw new Error("A planilha não possui lançamentos.");
+
             const normalizarChave = (k) => normalizarTextoImportacao(k).replace(/[^a-z0-9]/g, "");
+
             const aliases = {
-              data:["data","datacompra","datadolancamento"], descricao:["descricao","historico","descricaolancamento"], valor:["valor","total","valorlancamento"], tipo:["tipo","natureza","tipolancamento","tipodelancamento","tipolancamento","classificacao"],
-              cartao:["cartao","cartaoid","nomecartao"], competencia:["competencia","competenciames","mescompetencia"],
-              conta:["conta"], categoria:["categoria"], subcategoria:["subcategoria"],
-              parcela:["parcela"], numeroParcela:["numerodaparcela","numeroparcela"],
-              totalParcelas:["totaldeparcelas","totalparcelas"], observacao:["observacao"]
+              data: ["data","datacompra","datadolancamento","datadacompra","datalancamento"],
+              descricao: ["descricao","historico","descricaolancamento","descrição","histórico"],
+              valor: ["valor","total","valorlancamento","valorlançamento"],
+              tipo: ["tipo","natureza","tipolancamento","tipodelancamento","classificacao","classificação"],
+              cartao: ["cartao","cartaoid","nomecartao","cartãodecredito","cartãocredito"],
+              competencia: ["competencia","competenciames","mescompetencia","mêscompetência"],
+              conta: ["conta","contabancaria","banco"],
+              categoria: ["categoria","categoriafinanceira"],
+              subcategoria: ["subcategoria","subcategoriafinanceira"],
+              parcela: ["parcela","parcelamento"],
+              numeroParcela: ["numerodaparcela","numeroparcela","nparcela","parcelan"],
+              totalParcelas: ["totaldeparcelas","totalparcelas","qtdparcelas","quantidadedeparcelas"],
+              observacao: ["observacao","obs","comentario","comentários","comentarioadicional"]
             };
+
             const chave = (obj, lista) => {
               const keys = Object.keys(obj);
-              const normalizadas = keys.map(x => ({ original: x, normalizada: normalizarChave(x) }));
+              const normalizadas = keys.map(x => ({
+                original: x,
+                normalizada: normalizarChave(x)
+              }));
+
+              // Primeiro procura correspondência exata.
               const exata = normalizadas.find(x => lista.includes(x.normalizada));
               if (exata) return obj[exata.original];
-              const aproximada = normalizadas.find(x => lista.some(alias => x.normalizada.includes(alias) || alias.includes(x.normalizada)));
+
+              // Depois procura correspondência aproximada, evitando
+              // que uma coluna seja confundida com outra.
+              const aproximada = normalizadas.find(x =>
+                lista.some(alias =>
+                  x.normalizada === alias ||
+                  (x.normalizada.length >= 6 && x.normalizada.includes(alias)) ||
+                  (alias.length >= 6 && alias.includes(x.normalizada))
+                )
+              );
+
               return aproximada ? obj[aproximada.original] : "";
             };
 
             function normalizarTipoImportacao(valor) {
               const t = normalizarTextoImportacao(valor).toUpperCase();
+
               if (["DESPESA","DESPESAS","D","DEBITO","DEBITO","SAIDA","SAIDAS","PAGAMENTO","PAGAMENTOS"].includes(t)) return "DESPESA";
               if (["RECEITA","RECEITAS","R","CREDITO","CREDITO","ENTRADA","ENTRADAS","RECEBIMENTO","RECEBIMENTOS"].includes(t)) return "RECEITA";
               if (["FATURA","FATURAS","F"].includes(t)) return "FATURA";
-              return t;
+
+              return "";
             }
+
+            function tipoDaCategoriaImportacao(cat) {
+              if (!cat) return "";
+              const t = normalizarTextoImportacao(cat.tipo);
+
+              if (["receita","receitas","r"].includes(t)) return "RECEITA";
+              if (["fatura","faturas","f"].includes(t)) return "FATURA";
+              if (["despesa","despesas","d"].includes(t)) return "DESPESA";
+
+              return "";
+            }
+
+            function localizarCategoriaFlexivel(nome) {
+              if (!nome) return null;
+              const alvo = normalizarTextoImportacao(nome);
+              if (!alvo) return null;
+
+              return (categorias || []).find(c =>
+                normalizarTextoImportacao(c?.nome) === alvo
+              ) || null;
+            }
+
+            function localizarSubcategoriaFlexivel(cat, nome) {
+              if (!nome) return null;
+              const alvo = normalizarTextoImportacao(nome);
+              if (!alvo) return null;
+
+              // Primeiro procura dentro da categoria informada.
+              if (cat && Array.isArray(cat.subcategorias)) {
+                const dentro = cat.subcategorias.find(s =>
+                  normalizarTextoImportacao(s?.nome) === alvo
+                );
+                if (dentro) return dentro;
+              }
+
+              // Depois procura globalmente, caso a subcategoria exista
+              // no cadastro mas esteja vinculada a outra categoria.
+              for (const categoria of (categorias || [])) {
+                const sub = Array.isArray(categoria?.subcategorias)
+                  ? categoria.subcategorias.find(s =>
+                      normalizarTextoImportacao(s?.nome) === alvo
+                    )
+                  : null;
+
+                if (sub) return sub;
+              }
+
+              return null;
+            }
+
             const erros = [];
-            const primeiraLinha = rows[0] || {};
-            const chavesDetectadas = Object.keys(primeiraLinha).map(k => `${k}=${String(primeiraLinha[k] ?? "")}`).join(" | ");
-            const preview = rows.map((r, idx) => {
+            const preview = [];
+            const categoriasParaCriar = [];
+            const subcategoriasParaCriar = [];
+
+            rows.forEach((r, idx) => {
               const linha = idx + 2;
+
               let competencia = parseCompetenciaPlanilha(chave(r, aliases.competencia));
               let data = parseDataPlanilha(chave(r, aliases.data));
+
               const descricao = String(chave(r, aliases.descricao) ?? "").trim();
               const valor = parseValorPlanilha(chave(r, aliases.valor));
-              const cartaoNome = String(chave(r, aliases.cartao) ?? "").trim();
-              let tipoBruto = chave(r, aliases.tipo);
-              let tipo = normalizarTipoImportacao(tipoBruto);
 
-              // Se a planilha não tiver Tipo, não bloqueia a importação:
-              // com Cartão informado, trata como FATURA; caso contrário, como DESPESA.
-              if (!normalizarTextoImportacao(tipoBruto)) {
-                tipo = cartaoNome ? "FATURA" : "DESPESA";
-              }
+              const cartaoNome = String(chave(r, aliases.cartao) ?? "").trim();
+              let tipo = normalizarTipoImportacao(chave(r, aliases.tipo));
+
               const contaNome = String(chave(r, aliases.conta) ?? "").trim();
               const categoriaNome = String(chave(r, aliases.categoria) ?? "").trim();
               const subcategoriaNome = String(chave(r, aliases.subcategoria) ?? "").trim();
@@ -898,52 +978,220 @@
               const totalParcelas = parseInt(chave(r, aliases.totalParcelas), 10) || 1;
               const observacao = String(chave(r, aliases.observacao) ?? "").trim();
 
-              // Data e Competência são intercambiáveis. Se vier apenas a Data,
-              // a competência é obtida automaticamente pelo mês da Data.
+              // Data e Competência são intercambiáveis.
               if (!data && competencia) data = dataDaCompetencia(competencia);
               if (!competencia && data) competencia = data.slice(0, 7);
-              if (!data && !competencia) erros.push(`Linha ${linha}: informe Data ou Competência.`);
-              if (!descricao) erros.push(`Linha ${linha}: Descrição não informada.`);
-              if (!Number.isFinite(valor) || valor <= 0) erros.push(`Linha ${linha}: Valor inválido.`);
-              if (!["DESPESA","RECEITA","FATURA"].includes(tipo)) erros.push(`Linha ${linha}: Tipo deve ser DESPESA, RECEITA ou FATURA.`);
 
-              const cartao = cartoes.find(c => normalizarTextoImportacao(c.nome) === normalizarTextoImportacao(cartaoNome)) || null;
+              if (!data && !competencia) {
+                erros.push(`Linha ${linha}: informe Data ou Competência.`);
+              }
+
+              if (!descricao) {
+                erros.push(`Linha ${linha}: Descrição não informada.`);
+              }
+
+              if (!Number.isFinite(valor) || valor <= 0) {
+                erros.push(`Linha ${linha}: Valor inválido.`);
+              }
+
+              let categoria = localizarCategoriaFlexivel(categoriaNome);
+
+              // Se a categoria não existir, ela será criada na confirmação.
+              if (categoriaNome && !categoria) {
+                const existenteTemporario = categoriasParaCriar.find(c =>
+                  normalizarTextoImportacao(c.nome) === normalizarTextoImportacao(categoriaNome)
+                );
+
+                if (existenteTemporario) {
+                  categoria = existenteTemporario;
+                } else {
+                  categoria = {
+                    id: uid(),
+                    nome: categoriaNome,
+                    tipo: "",
+                    cor: CARD_COLORS[(categorias.length + categoriasParaCriar.length) % CARD_COLORS.length],
+                    isTransferencia: false,
+                    subcategorias: []
+                  };
+                  categoriasParaCriar.push(categoria);
+                }
+              }
+
+              // Se o tipo não foi informado ou veio com uma descrição diferente,
+              // tenta usar o tipo cadastrado na categoria.
+              if (!tipo && categoria) {
+                tipo = tipoDaCategoriaImportacao(categoria);
+              }
+
+              // Se houver cartão e nenhum tipo reconhecido, trata como FATURA.
+              if (!tipo && cartaoNome) {
+                tipo = "FATURA";
+              }
+
+              // Último fallback: DESPESA.
+              if (!tipo) {
+                tipo = "DESPESA";
+              }
+
+              const cartao = cartoes.find(c =>
+                normalizarTextoImportacao(c?.nome) === normalizarTextoImportacao(cartaoNome)
+              ) || null;
+
               const conta = encontrarContaImportacao(contaNome);
-              const categoria = encontrarCategoriaImportacao(categoriaNome);
 
-              if (tipo === "FATURA" && !cartaoNome) erros.push(`Linha ${linha}: Cartão é obrigatório para o tipo FATURA.`);
-              if (cartaoNome && !cartao) erros.push(`Linha ${linha}: Cartão "${cartaoNome}" não encontrado no cadastro.`);
-              if (contaNome && !conta) erros.push(`Linha ${linha}: Conta "${contaNome}" não encontrada no cadastro.`);
-              if (categoriaNome && !categoria) erros.push(`Linha ${linha}: Categoria "${categoriaNome}" não encontrada no cadastro.`);
+              if (cartaoNome && !cartao) {
+                erros.push(`Linha ${linha}: Cartão "${cartaoNome}" não encontrado no cadastro.`);
+              }
 
-              const subcategoria = categoria ? encontrarSubcategoriaImportacao(categoria, subcategoriaNome) : null;
-              if (subcategoriaNome && !subcategoria) erros.push(`Linha ${linha}: Subcategoria "${subcategoriaNome}" não encontrada na categoria informada.`);
-              if (totalParcelas < 1 || numeroParcela < 1 || numeroParcela > totalParcelas) erros.push(`Linha ${linha}: Parcelamento inválido.`);
+              if (contaNome && !conta) {
+                erros.push(`Linha ${linha}: Conta "${contaNome}" não encontrada no cadastro.`);
+              }
 
-              return { linha, data, competencia, descricao, valor, tipo, cartaoNome, cartao, contaNome, conta, categoriaNome, categoria, subcategoriaNome, subcategoria, parcela, numeroParcela, totalParcelas, observacao };
+              // Localiza a subcategoria de forma flexível.
+              let subcategoria = localizarSubcategoriaFlexivel(categoria, subcategoriaNome);
+
+              // Se a subcategoria não existir, cria dentro da categoria informada.
+              if (subcategoriaNome && !subcategoria && categoria) {
+                subcategoria = {
+                  id: uid(),
+                  nome: subcategoriaNome
+                };
+
+                if (!Array.isArray(categoria.subcategorias)) {
+                  categoria.subcategorias = [];
+                }
+
+                categoria.subcategorias.push(subcategoria);
+
+                if (!subcategoriasParaCriar.some(s =>
+                  s.categoriaId === categoria.id &&
+                  normalizarTextoImportacao(s.nome) === normalizarTextoImportacao(subcategoriaNome)
+                )) {
+                  subcategoriasParaCriar.push({
+                    categoriaId: categoria.id,
+                    nome: subcategoriaNome
+                  });
+                }
+              }
+
+              if (tipo === "FATURA" && !cartaoNome) {
+                erros.push(`Linha ${linha}: Cartão é obrigatório para o tipo FATURA.`);
+              }
+
+              if (totalParcelas < 1 || numeroParcela < 1 || numeroParcela > totalParcelas) {
+                erros.push(`Linha ${linha}: Parcelamento inválido.`);
+              }
+
+              preview.push({
+                linha,
+                data,
+                competencia,
+                descricao,
+                valor,
+                tipo,
+                cartaoNome,
+                cartao,
+                contaNome,
+                conta,
+                categoriaNome,
+                categoria,
+                subcategoriaNome,
+                subcategoria,
+                parcela,
+                numeroParcela,
+                totalParcelas,
+                observacao
+              });
             });
-            if (erros.length) {
-              setPlanilhaError(erros.slice(0, 20).join("\\n") + (erros.length > 20 ? `\\n... e mais ${erros.length - 20} erro(s).` : ""));
+
+            // Erros realmente impeditivos.
+            const errosBloqueantes = erros.filter(e =>
+              /Data ou Competência|Descrição não informada|Valor inválido|Cartão ".*" não encontrado|Conta ".*" não encontrado|Cartão é obrigatório|Parcelamento inválido/.test(e)
+            );
+
+            if (errosBloqueantes.length) {
+              setPlanilhaError(
+                errosBloqueantes.slice(0, 30).join("\n") +
+                (errosBloqueantes.length > 30 ? `\n... e mais ${errosBloqueantes.length - 30} erro(s).` : "")
+              );
               return;
             }
+
             setPlanilhaPreview(preview);
           } catch (err) {
+            console.error("Erro ao ler planilha:", err);
             setPlanilhaError(err?.message || "Não foi possível ler a planilha.");
           }
         };
+
         reader.readAsArrayBuffer(file);
         event.target.value = "";
       }
 
+
       function confirmarImportacaoPlanilha() {
         if (!planilhaPreview.length || planilhaImportando) return;
+
         setPlanilhaImportando(true);
+
         try {
+          // Garante que categorias e subcategorias criadas durante a leitura
+          // também sejam persistidas junto com os lançamentos.
+          const categoriasImportadas = [...(categorias || [])];
+
+          for (const r of planilhaPreview) {
+            if (!r.categoriaNome) continue;
+
+            let cat = categoriasImportadas.find(c =>
+              normalizarTextoImportacao(c?.nome) === normalizarTextoImportacao(r.categoriaNome)
+            );
+
+            if (!cat) {
+              cat = {
+                id: uid(),
+                nome: r.categoriaNome,
+                tipo: r.tipo === "RECEITA" ? "receita" : "despesa",
+                cor: CARD_COLORS[categoriasImportadas.length % CARD_COLORS.length],
+                isTransferencia: false,
+                subcategorias: []
+              };
+              categoriasImportadas.push(cat);
+            }
+
+            if (!Array.isArray(cat.subcategorias)) {
+              cat.subcategorias = [];
+            }
+
+            if (r.subcategoriaNome) {
+              const subExistente = cat.subcategorias.find(s =>
+                normalizarTextoImportacao(s?.nome) === normalizarTextoImportacao(r.subcategoriaNome)
+              );
+
+              if (!subExistente) {
+                cat.subcategorias.push({
+                  id: uid(),
+                  nome: r.subcategoriaNome
+                });
+              }
+
+              // Atualiza o objeto usado pelo lançamento para apontar
+              // para a subcategoria realmente persistida.
+              r.categoria = cat;
+              r.subcategoria = cat.subcategorias.find(s =>
+                normalizarTextoImportacao(s?.nome) === normalizarTextoImportacao(r.subcategoriaNome)
+              ) || null;
+            } else {
+              r.categoria = cat;
+            }
+          }
+
           const novosPagar = [];
           const novosReceber = [];
           const novasFaturas = [];
+
           for (const r of planilhaPreview) {
             const statusBaixa = r.conta ? "Baixado" : "Em aberto";
+
             const base = {
               id: uid(),
               descricao: r.descricao,
@@ -964,27 +1212,77 @@
               isImportacaoPlanilha: true,
               competenciaImportacao: r.competencia
             };
-            if (r.tipo === "FATURA") novasFaturas.push({ ...base, status: "Em aberto", bancoBaixaId: null, dataBaixa: null });
-            else if (r.tipo === "DESPESA") novosPagar.push(base);
-            else novosReceber.push(base);
+
+            if (r.tipo === "FATURA") {
+              novasFaturas.push({
+                ...base,
+                status: "Em aberto",
+                bancoBaixaId: null,
+                dataBaixa: null
+              });
+            } else if (r.tipo === "DESPESA") {
+              novosPagar.push(base);
+            } else {
+              novosReceber.push(base);
+            }
           }
+
           const nextPurchases = [...purchases, ...novasFaturas];
           const nextPagar = [...contasPagar, ...novosPagar];
           const nextReceber = [...contasReceber, ...novosReceber];
+
+          setCategorias(categoriasImportadas);
           setPurchases(nextPurchases);
           setContasPagar(nextPagar);
           setContasReceber(nextReceber);
-          saveDataToSupabase(nextPurchases, nextPagar, nextReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
+
+          saveDataToSupabase(
+            nextPurchases,
+            nextPagar,
+            nextReceber,
+            cartoes,
+            contasBancarias,
+            categoriasImportadas,
+            deparaList,
+            faturasFechadas,
+            faturasBaixadas,
+            diasFechados,
+            mesesFechados
+          );
+
+          const totalImportado = planilhaPreview.length;
+          const totalCategorias = categoriasImportadas.length - (categorias || []).length;
+
+          let totalSubcategorias = 0;
+          for (const r of planilhaPreview) {
+            if (r.subcategoriaNome) {
+              const originalCat = (categorias || []).find(c =>
+                normalizarTextoImportacao(c?.nome) === normalizarTextoImportacao(r.categoriaNome)
+              );
+              const tinha = originalCat?.subcategorias?.some(s =>
+                normalizarTextoImportacao(s?.nome) === normalizarTextoImportacao(r.subcategoriaNome)
+              );
+              if (!tinha) totalSubcategorias++;
+            }
+          }
+
           setPlanilhaPreview([]);
           setPlanilhaArquivo("");
           setPlanilhaModalOpen(false);
-          alert(`${planilhaPreview.length} lançamento(s) importado(s) com sucesso.`);
+
+          alert(
+            `${totalImportado} lançamento(s) importado(s) com sucesso.\n\n` +
+            `${totalCategorias} categoria(s) criada(s).\n` +
+            `${totalSubcategorias} subcategoria(s) criada(s).`
+          );
         } catch (err) {
+          console.error("Erro ao importar lançamentos:", err);
           setPlanilhaError(err?.message || "Erro ao importar os lançamentos.");
         } finally {
           setPlanilhaImportando(false);
         }
       }
+
 
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
