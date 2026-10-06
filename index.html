@@ -27,6 +27,8 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
+    const APP_BUILD = "planilha-importacao-2026-10-06-01";
+    console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
     function CreditCard({ size = 16 }) { return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '2', strokeLinecap: 'round', strokeLinejoin: 'round' }, h('rect', { width: '20', height: '14', x: '2', y: '5', rx: '2' }), h('line', { x1: '2', x2: '22', y1: '10', y2: '10' })); }
@@ -816,7 +818,7 @@
           ["Valor","Obrigatório. Valor total do lançamento. Ex.: 150,90."],
           ["Tipo","Obrigatório: DESPESA, RECEITA ou FATURA."],
           ["Cartão","Obrigatório para FATURA. Informe exatamente o nome do cartão cadastrado no sistema."],
-          ["Competência","Obrigatório. Informe no formato AAAA-MM, por exemplo 2026-10."],
+          ["Competência","Opcional. Se a Data estiver preenchida, o sistema calcula automaticamente AAAA-MM. Se a Data estiver vazia, informe AAAA-MM e será usada a data do primeiro dia do mês."],
           ["Conta","Opcional para DESPESA/RECEITA. Se informada, deve existir no cadastro. O lançamento será marcado como Baixado."],
           ["Categoria","Opcional. Se informada, deve existir no cadastro."],
           ["Subcategoria","Opcional. Se informada, deve existir dentro da categoria."],
@@ -865,8 +867,8 @@
 
             function normalizarTipoImportacao(valor) {
               const t = normalizarTextoImportacao(valor).toUpperCase();
-              if (["DESPESA","DESPESAS","D"].includes(t)) return "DESPESA";
-              if (["RECEITA","RECEITAS","R"].includes(t)) return "RECEITA";
+              if (["DESPESA","DESPESAS","D","DEBITO","DEBITO","SAIDA","SAIDAS","PAGAMENTO","PAGAMENTOS"].includes(t)) return "DESPESA";
+              if (["RECEITA","RECEITAS","R","CREDITO","CREDITO","ENTRADA","ENTRADAS","RECEBIMENTO","RECEBIMENTOS"].includes(t)) return "RECEITA";
               if (["FATURA","FATURAS","F"].includes(t)) return "FATURA";
               return t;
             }
@@ -875,12 +877,19 @@
             const chavesDetectadas = Object.keys(primeiraLinha).map(k => `${k}=${String(primeiraLinha[k] ?? "")}`).join(" | ");
             const preview = rows.map((r, idx) => {
               const linha = idx + 2;
-              const competencia = parseCompetenciaPlanilha(chave(r, aliases.competencia));
+              let competencia = parseCompetenciaPlanilha(chave(r, aliases.competencia));
               let data = parseDataPlanilha(chave(r, aliases.data));
               const descricao = String(chave(r, aliases.descricao) ?? "").trim();
               const valor = parseValorPlanilha(chave(r, aliases.valor));
-              const tipo = normalizarTipoImportacao(chave(r, aliases.tipo));
               const cartaoNome = String(chave(r, aliases.cartao) ?? "").trim();
+              let tipoBruto = chave(r, aliases.tipo);
+              let tipo = normalizarTipoImportacao(tipoBruto);
+
+              // Se a planilha não tiver Tipo, não bloqueia a importação:
+              // com Cartão informado, trata como FATURA; caso contrário, como DESPESA.
+              if (!normalizarTextoImportacao(tipoBruto)) {
+                tipo = cartaoNome ? "FATURA" : "DESPESA";
+              }
               const contaNome = String(chave(r, aliases.conta) ?? "").trim();
               const categoriaNome = String(chave(r, aliases.categoria) ?? "").trim();
               const subcategoriaNome = String(chave(r, aliases.subcategoria) ?? "").trim();
@@ -889,8 +898,11 @@
               const totalParcelas = parseInt(chave(r, aliases.totalParcelas), 10) || 1;
               const observacao = String(chave(r, aliases.observacao) ?? "").trim();
 
-              if (!competencia) erros.push(`Linha ${linha}: Competência inválida ou não informada. Use AAAA-MM.`);
+              // Data e Competência são intercambiáveis. Se vier apenas a Data,
+              // a competência é obtida automaticamente pelo mês da Data.
               if (!data && competencia) data = dataDaCompetencia(competencia);
+              if (!competencia && data) competencia = data.slice(0, 7);
+              if (!data && !competencia) erros.push(`Linha ${linha}: informe Data ou Competência.`);
               if (!descricao) erros.push(`Linha ${linha}: Descrição não informada.`);
               if (!Number.isFinite(valor) || valor <= 0) erros.push(`Linha ${linha}: Valor inválido.`);
               if (!["DESPESA","RECEITA","FATURA"].includes(tipo)) erros.push(`Linha ${linha}: Tipo deve ser DESPESA, RECEITA ou FATURA.`);
@@ -1759,7 +1771,7 @@
               h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "📥 Importar Lançamentos por Planilha"),
               h('button', { type: 'button', className: 'action-btn', onClick: () => setPlanilhaModalOpen(false), disabled: planilhaImportando }, h(XIcon, { size: 16 }))
             ),
-            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 } }, "Importe DESPESAS, RECEITAS ou FATURAS. A planilha deve usar as colunas do modelo. O campo Tipo aceita exatamente: DESPESA, RECEITA ou FATURA."),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 } }, "Importe DESPESAS, RECEITAS ou FATURAS. Data e Competência são aceitas; se a Competência não for informada, ela será calculada pela Data. Se Tipo ficar vazio, o sistema usa FATURA quando houver Cartão e DESPESA nos demais casos. Também são aceitos Débito/Entrada/Saída/Crédito/Pagamento/Recebimento."),
             h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 } },
               h('button', { type: 'button', className: 'action-btn', onClick: baixarModeloImportacao }, h(FileSpreadsheet, { size: 15 }), " Baixar Modelo Excel"),
               h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer' } },
