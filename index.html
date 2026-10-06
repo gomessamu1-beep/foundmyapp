@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "planilha-importacao-2026-10-06-02";
+    const APP_BUILD = "planilha-importacao-2026-10-06-03";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -969,6 +969,16 @@
 
               const cartaoNome = String(chave(r, aliases.cartao) ?? "").trim();
               let tipo = normalizarTipoImportacao(chave(r, aliases.tipo));
+
+              // REGRA PRINCIPAL DA IMPORTAÇÃO:
+              // Se a linha informa um Cartão, ela representa uma compra/fatura
+              // do cartão. O campo Cartão tem prioridade sobre o Tipo da planilha.
+              // Assim, mesmo que o Excel venha com DESPESA, "FATURA DO CARTÃO",
+              // "COMPRA", "CARTÃO" ou outro texto, a linha será enviada para
+              // purchases (Fatura do Cartão) e NUNCA para Contas a Pagar.
+              if (cartaoNome) {
+                tipo = "FATURA";
+              }
 
               const contaNome = String(chave(r, aliases.conta) ?? "").trim();
               const categoriaNome = String(chave(r, aliases.categoria) ?? "").trim();
