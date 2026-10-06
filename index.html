@@ -848,7 +848,7 @@
             if (!rows.length) throw new Error("A planilha não possui lançamentos.");
             const normalizarChave = (k) => normalizarTextoImportacao(k).replace(/[^a-z0-9]/g, "");
             const aliases = {
-              data:["data"], descricao:["descricao"], valor:["valor"], tipo:["tipo","natureza","tipolancamento","tipodelancamento"],
+              data:["data","datacompra","datadolancamento"], descricao:["descricao","historico","descricaolancamento"], valor:["valor","total","valorlancamento"], tipo:["tipo","natureza","tipolancamento","tipodelancamento","tipolancamento","classificacao"],
               cartao:["cartao","cartaoid","nomecartao"], competencia:["competencia","competenciames","mescompetencia"],
               conta:["conta"], categoria:["categoria"], subcategoria:["subcategoria"],
               parcela:["parcela"], numeroParcela:["numerodaparcela","numeroparcela"],
@@ -871,6 +871,8 @@
               return t;
             }
             const erros = [];
+            const primeiraLinha = rows[0] || {};
+            const chavesDetectadas = Object.keys(primeiraLinha).map(k => `${k}=${String(primeiraLinha[k] ?? "")}`).join(" | ");
             const preview = rows.map((r, idx) => {
               const linha = idx + 2;
               const competencia = parseCompetenciaPlanilha(chave(r, aliases.competencia));
