@@ -2560,7 +2560,7 @@
               h('button', { type: 'button', className: 'action-btn', onClick: () => setPdfModalOpen(false), disabled: pdfImportando }, h(XIcon, { size: 16 }))
             ),
             h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione o PDF da fatura. O sistema identifica os lançamentos, marca duplicados e permite informar categoria, subcategoria e parcelas dos novos. Faturas fechadas não aceitam novas importações.'),
-            h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12, background: '#1E3A8A', color: '#FFFFFF', border: '1px solid #162E6D', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
+            h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12, background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
               h(FileText, { size: 17 }), ' Selecionar PDF para Importação',
               h('input', { ref: pdfInputRef, type: 'file', accept: '.pdf,application/pdf', style: { display: 'none' }, onChange: lerFaturaPDF })
             ),
