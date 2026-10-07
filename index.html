@@ -21,6 +21,18 @@
 </head>
 <body style="margin: 0; background-color: #ECE8DD;">
   <div id="root"></div>
+  <div id="foundmyapp-runtime-status" style="display:none;position:fixed;inset:0;background:#ECE8DD;color:#111827;z-index:99999;padding:40px;font-family:Arial,sans-serif;white-space:pre-wrap;overflow:auto;"><div style="max-width:900px;margin:0 auto;background:#fff;padding:24px;border:1px solid #d1d5db;border-radius:10px;"><h2 style="margin-top:0;">FoundMyApp — erro ao abrir</h2><div id="foundmyapp-runtime-error"></div></div></div>
+  <script>
+    (function(){
+      function showError(message){
+        var box=document.getElementById("foundmyapp-runtime-status");
+        var out=document.getElementById("foundmyapp-runtime-error");
+        if(box&&out){box.style.display="block";out.textContent=String(message||"Erro desconhecido");}
+      }
+      window.addEventListener("error",function(e){showError((e&&e.message?e.message:"Erro JavaScript")+(e&&e.filename?"\n\nArquivo: "+e.filename:"")+(e&&e.lineno?"\nLinha: "+e.lineno:""));});
+      window.addEventListener("unhandledrejection",function(e){showError("Promise rejeitada: "+(e&&e.reason&&e.reason.message?e.reason.message:String(e&&e.reason||"Erro desconhecido")));});
+    })();
+  </script>
 
   <script>
     const { createElement: h, useState, useEffect, useMemo, useRef } = React;
@@ -323,7 +335,7 @@
 
       const installmentsForMonth = useMemo(() => {
         const mapped = purchases.map(p => {
-          const idx = monthDiff(p.inicio, month); 
+          if (!p || !p.inicio) return null;\n          const idx = monthDiff(p.inicio, month); 
           if (idx < 0) return null; 
           if (p.canceladoEm && month >= p.canceladoEm) return null;
           const mesesExcluidos = p.mesesExcluidos || []; 
