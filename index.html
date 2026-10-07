@@ -716,6 +716,14 @@
       function toggleSelectAllReceber() { if (batchReceberIds.length === contasReceberForMonth.length) setBatchReceberIds([]); else setBatchReceberIds(contasReceberForMonth.map(p => p.id)); }
       function toggleSelectReceberItem(id) { setBatchReceberIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); }
 
+      function toggleSelecionarTodosPDF() {
+        setPdfPreview(prev => {
+          const selecionaveis = prev.filter(r => !r.duplicado);
+          const todosSelecionados = selecionaveis.length > 0 && selecionaveis.every(r => r.selecionado);
+          return prev.map(r => r.duplicado ? { ...r, selecionado: false } : { ...r, selecionado: !todosSelecionados });
+        });
+      }
+
       function resetFormAfterSave() {
         setDescricao("");
         setObservacao("");
@@ -1082,6 +1090,11 @@
             const cat = categorias.find(c => c.id === valor) || null;
             return { ...item, categoria: cat, subcategoria: null };
           }
+          if (campo === "subcategoria") {
+            const cat = item.categoria || null;
+            const sub = cat?.subcategorias?.find(s => s.id === valor) || null;
+            return { ...item, subcategoria: sub };
+          }
           if (campo === "cartao") {
             const card = cartoes.find(c => c.id === valor) || null;
             return { ...item, cartao: card };
@@ -1098,17 +1111,40 @@
           return setPdfError("Não há lançamentos novos selecionados para importar.");
         }
 
+        // Proteção definitiva: uma fatura fechada nunca pode receber novos lançamentos.
+        const competenciasFechadas = [...new Set(
+          novos.map(r => String(r.competencia || "").slice(0, 7)).filter(comp => comp && isFaturaFechada(comp))
+        )];
+        if (competenciasFechadas.length) {
+          return setPdfError(
+            `Não é possível importar. A(s) fatura(s) ${competenciasFechadas.map(formatMonthLabel).join(", ")} está(ão) fechada(s). Reabra a fatura antes de importar novos lançamentos.`
+          );
+        }
+
         const semCartao = novos.filter(r => !r.cartao?.id);
         if (semCartao.length) return setPdfError(`Selecione o cartão em ${semCartao.length} lançamento(s) que não foram identificados automaticamente.`);
 
         const semCategoria = novos.filter(r => !r.categoria?.id);
         if (semCategoria.length) return setPdfError(`Selecione a categoria em ${semCategoria.length} lançamento(s) novos.`);
 
+        const semSubcategoria = novos.filter(r => !r.subcategoria?.id && !r.categoria?.isTransferencia);
+        if (semSubcategoria.length) return setPdfError(`Selecione a subcategoria em ${semSubcategoria.length} lançamento(s) novos.`);
+
         const nextPurchases = [...(purchases || [])];
         const agora = Date.now();
+        let importados = 0;
+        let ignorados = 0;
 
         for (const r of novos) {
-          nextPurchases.push({
+          // Segunda validação no momento da gravação, para impedir duplicidade mesmo
+          // se a prévia tiver sido alterada pelo usuário.
+          const duplicadoFinal = encontrarDuplicadoPDF(r);
+          if (duplicadoFinal) {
+            ignorados++;
+            continue;
+          }
+
+          const novoLancamento = {
             id: uid(),
             descricao: r.descricao,
             observacao: `Importado da fatura PDF ${pdfArquivo}`,
@@ -1132,7 +1168,14 @@
             parcelaImportacao: `${r.numeroParcela || 1}/${r.totalParcelas || 1}`,
             numeroParcelaImportacao: Number(r.numeroParcela || 1),
             totalParcelasImportacao: Number(r.totalParcelas || 1)
-          });
+          };
+
+          nextPurchases.push(novoLancamento);
+          importados++;
+        }
+
+        if (!importados) {
+          return setPdfError(`Nenhum lançamento foi importado. ${ignorados} lançamento(s) já estavam cadastrados e foram ignorados.`);
         }
 
         setPurchases(nextPurchases);
@@ -1140,7 +1183,7 @@
         setPdfPreview([]);
         setPdfArquivo("");
         setPdfModalOpen(false);
-        alert(`${novos.length} lançamento(s) novo(s) importado(s). ${pdfPreview.filter(r => r.duplicado).length} já lançado(s) foram ignorado(s).`);
+        alert(`${importados} lançamento(s) novo(s) importado(s). ${ignorados + pdfPreview.filter(r => r.duplicado).length} já lançado(s) foram ignorado(s).`);
       }
 
 
@@ -2481,7 +2524,7 @@
               h('strong', { style: { fontSize: 18 } }, 'Importar Fatura do Cartão — PDF'),
               h('button', { type: 'button', className: 'action-btn', onClick: () => setPdfModalOpen(false), disabled: pdfImportando }, h(XIcon, { size: 16 }))
             ),
-            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione o PDF da fatura. O sistema identifica os lançamentos, marca duplicados e permite informar categoria e parcelas dos novos.'),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione o PDF da fatura. O sistema identifica os lançamentos, marca duplicados e permite informar categoria, subcategoria e parcelas dos novos. Faturas fechadas não aceitam novas importações.'),
             h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', marginBottom: 12 } },
               h(FileText, { size: 15 }), ' Selecionar PDF',
               h('input', { ref: pdfInputRef, type: 'file', accept: '.pdf,application/pdf', style: { display: 'none' }, onChange: lerFaturaPDF })
@@ -2491,6 +2534,12 @@
             pdfError && h('div', { style: { color: 'var(--red)', background: '#FEE2E2', padding: 10, marginBottom: 10, whiteSpace: 'pre-line' } }, pdfError),
             pdfPreview.length > 0 && h('div', null,
               h('div', { style: { fontWeight: 'bold', marginBottom: 8 } }, pdfPreview.length + ' lançamento(s) identificados. Novos: ' + pdfPreview.filter(r => !r.duplicado).length + ' | Já lançados: ' + pdfPreview.filter(r => r.duplicado).length),
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8, padding: '8px 10px', background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6 } },
+                h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Os lançamentos já cadastrados ficam desmarcados automaticamente.'),
+                h('button', { type: 'button', className: 'action-btn', onClick: toggleSelecionarTodosPDF },
+                  pdfPreview.filter(r => !r.duplicado).length > 0 && pdfPreview.filter(r => !r.duplicado).every(r => r.selecionado) ? 'Desmarcar todos' : 'Marcar todos'
+                )
+              ),
               h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
                 pdfPreview.map(r => h('div', { key: r.id, style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, opacity: r.duplicado ? 0.6 : 1 } },
                   h('div', { style: { display: 'grid', gridTemplateColumns: '80px 1fr 110px 160px 150px', gap: 8, alignItems: 'center' } },
@@ -2498,7 +2547,8 @@
                     h('div', null, h('strong', null, r.descricao), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatDateBR(r.data))),
                     h('div', { className: 'num' }, formatBRL(r.valor)),
                     h('select', { value: r.cartao?.id || '', onChange: e => atualizarItemPDF(r.id, 'cartao', e.target.value) }, h('option', { value: '' }, 'Cartão'), cartoes.map(c => h('option', { key: c.id, value: c.id }, c.nome))),
-                    h('select', { value: r.categoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'categoria', e.target.value) }, h('option', { value: '' }, 'Categoria'), categorias.filter(c => c.tipo !== 'receita').map(c => h('option', { key: c.id, value: c.id }, c.nome)))
+                    h('select', { value: r.categoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'categoria', e.target.value) }, h('option', { value: '' }, 'Categoria'), categorias.filter(c => c.tipo !== 'receita').map(c => h('option', { key: c.id, value: c.id }, c.nome))),
+                    h('select', { value: r.subcategoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'subcategoria', e.target.value), disabled: !r.categoria || r.categoria.isTransferencia }, h('option', { value: '' }, r.categoria?.isTransferencia ? 'Não aplicável' : 'Subcategoria'), (r.categoria?.subcategorias || []).map(s => h('option', { key: s.id, value: s.id }, s.nome)))
                   ),
                   h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 12 } },
                     h('span', null, 'Parcela:'),
@@ -2512,7 +2562,7 @@
               h('div', { style: { marginTop: 10, padding: 10, background: '#FAF8F2', fontSize: 12 } }, 'Valor Parcela = valor do PDF. Valor Total = Valor Parcela × Total de Parcelas.'),
               h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 } },
                 h('button', { type: 'button', className: 'action-btn', onClick: () => { setPdfPreview([]); setPdfError(''); } }, 'Limpar'),
-                h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoPDF, disabled: pdfImportando }, 'Importar lançamentos novos')
+                h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoPDF, disabled: pdfImportando || pdfPreview.some(r => r.selecionado && !r.duplicado && isFaturaFechada(String(r.competencia || '').slice(0, 7))) }, 'Importar lançamentos novos')
               )
             )
           )
