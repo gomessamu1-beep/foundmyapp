@@ -478,6 +478,44 @@
       const totalReceberTotalTabela = useMemo(() => contasReceberForMonth.reduce((s, p) => s + (p.recorrente ? p.valorParcela : p.total), 0), [contasReceberForMonth]);
 
       const totalTerminandoCartao = useMemo(() => terminandoCartao.reduce((s, p) => s + p.valorParcela, 0), [terminandoCartao]);
+
+      // Soma todas as parcelas futuras dos lançamentos parcelados, a partir da fatura seguinte.
+      // Ex.: se o lançamento atual está em 3/10, entram as parcelas 4/10 até 10/10.
+      const totalProximasFaturas = useMemo(() => {
+        let total = 0;
+
+        purchases.forEach(p => {
+          if (p.recorrente) return;
+
+          const totalParcelas = Number(p.parcelas || 1);
+          if (totalParcelas <= 1) return;
+
+          const parcelaInicial = Number(p.parcelaInicial || 1);
+          const quantidadeRestante = totalParcelas - parcelaInicial + 1;
+          if (quantidadeRestante <= 0 || !p.inicio) return;
+
+          const valores = splitInstallments(Number(p.total || 0), totalParcelas);
+          const idxAtual = monthDiff(p.inicio, month);
+          const primeiroIndiceFuturo = idxAtual >= 0 ? idxAtual + 1 : 0;
+
+          for (let i = primeiroIndiceFuturo; i < quantidadeRestante; i++) {
+            const competenciaFutura = addMonths(p.inicio, i);
+
+            if (p.canceladoEm && competenciaFutura >= p.canceladoEm) break;
+
+            const mesesExcluidos = p.mesesExcluidos || [];
+            if (mesesExcluidos.includes(competenciaFutura)) continue;
+
+            const numeroParcela = parcelaInicial + i;
+            if (numeroParcela > totalParcelas) break;
+
+            total += Number(valores[numeroParcela - 1] || 0);
+          }
+        });
+
+        return total;
+      }, [purchases, month]);
+
       const totalTerminandoPagar = useMemo(() => terminandoPagar.reduce((s, p) => s + p.valorParcela, 0), [terminandoPagar]);
       const totalTerminandoReceber = useMemo(() => terminandoReceber.reduce((s, p) => s + p.valorParcela, 0), [terminandoReceber]);
 
@@ -2300,7 +2338,10 @@
                 terminandoCartao.length > 0 && h('div', { className: 'warning-box' }, 
                   h('div', { className: 'warning-box-title' }, h(Bell, { size: 16 }), `Atenção: ${terminandoCartao.length} lançamento(s) terminando`), 
                   h('ul', null, terminandoCartao.map(p => h('li', { key: `term-cartao-${p.id}` }, `${p.descricao} - Parcela ${p.index}/${p.parcelas} (${showMoney(p.valorParcela)})`))), 
-                  h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', justifyContent: 'space-between', border: '1px solid #D97706' } }, h('span', null, "Total destes lançamentos:"), h('span', null, showMoney(totalTerminandoCartao)))
+                  h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid #D97706' } },
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, h('span', null, "Total destes lançamentos:"), h('span', null, showMoney(totalTerminandoCartao))),
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid rgba(146,64,14,0.25)' } }, h('span', null, "Total das próximas faturas:"), h('span', null, showMoney(totalProximasFaturas)))
+                  )
                 ),
 
                 h('table', null,
@@ -2437,7 +2478,10 @@
               terminandoCartao.length > 0 && h('div', { className: 'warning-box' }, 
                 h('div', { className: 'warning-box-title' }, h(Bell, { size: 16 }), `Atenção: ${terminandoCartao.length} lançamento(s) terminando`), 
                 h('ul', null, terminandoCartao.map(p => h('li', { key: `term-fatura-${p.id}` }, `${p.descricao} - Parcela ${p.index}/${p.parcelas} (${showMoney(p.valorParcela)})`))), 
-                h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', justifyContent: 'space-between', border: '1px solid #D97706' } }, h('span', null, "Total destes lançamentos:"), h('span', null, showMoney(totalTerminandoCartao)))
+                h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid #D97706' } },
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, h('span', null, "Total destes lançamentos:"), h('span', null, showMoney(totalTerminandoCartao))),
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid rgba(146,64,14,0.25)' } }, h('span', null, "Total das próximas faturas:"), h('span', null, showMoney(totalProximasFaturas)))
+                  )
               ),
 
               installmentsForMonth.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, padding: '16px 0' } }, "Nenhum lançamento para esta fatura.") : h('table', null,
