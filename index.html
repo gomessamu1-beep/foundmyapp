@@ -1617,8 +1617,8 @@
           )
         );
       }
-      if (dataLoading) return h('div', { style: { textAlign: 'center', padding: '50px', fontFamily: 'sans-serif' } }, "Sincronizando dados da nuvem...");
-
+      // O sistema não fica mais bloqueado enquanto sincroniza os dados da nuvem.
+      // A tela abre imediatamente e os dados são preenchidos assim que o Supabase responder.
       return h('div', { className: 'fatura-app-layout' },
         h('style', null, `
           .fatura-app-layout { --paper: #ECE8DD; --card: #FAF8F2; --ink: #262117; --ink-soft: #6B6355; --line: #D8D0BC; --green: #2F5233; --red: #8C3B2E; --red-soft: #F1E4DF; --amber: #D97706; --amber-soft: #FEF3C7; font-family: sans-serif; color: var(--ink); display: flex; min-height: 100vh; background-color: var(--paper); }
