@@ -2547,8 +2547,10 @@
                     h('div', null, h('strong', null, r.descricao), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatDateBR(r.data))),
                     h('div', { className: 'num' }, formatBRL(r.valor)),
                     h('select', { value: r.cartao?.id || '', onChange: e => atualizarItemPDF(r.id, 'cartao', e.target.value) }, h('option', { value: '' }, 'Cartão'), cartoes.map(c => h('option', { key: c.id, value: c.id }, c.nome))),
-                    h('select', { value: r.categoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'categoria', e.target.value) }, h('option', { value: '' }, 'Categoria'), categorias.filter(c => c.tipo !== 'receita').map(c => h('option', { key: c.id, value: c.id }, c.nome))),
-                    h('select', { value: r.subcategoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'subcategoria', e.target.value), disabled: !r.categoria || r.categoria.isTransferencia }, h('option', { value: '' }, r.categoria?.isTransferencia ? 'Não aplicável' : 'Subcategoria'), (r.categoria?.subcategorias || []).map(s => h('option', { key: s.id, value: s.id }, s.nome)))
+                    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+                      h('select', { value: r.categoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'categoria', e.target.value) }, h('option', { value: '' }, 'Categoria'), categorias.filter(c => c.tipo !== 'receita').map(c => h('option', { key: c.id, value: c.id }, c.nome))),
+                      h('select', { value: r.subcategoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'subcategoria', e.target.value), disabled: !r.categoria || r.categoria.isTransferencia }, h('option', { value: '' }, r.categoria?.isTransferencia ? 'Não aplicável' : 'Subcategoria'), (r.categoria?.subcategorias || []).map(s => h('option', { key: s.id, value: s.id }, s.nome)))
+                    )
                   ),
                   h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 12 } },
                     h('span', null, 'Parcela:'),
