@@ -2452,39 +2452,44 @@
           )
         ),
 
-        pdfModalOpen && h('div', { className: 'modal-overlay', onClick: () => !pdfImportando && setPdfModalOpen(false) },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 1100, width: '96%', maxHeight: '90vh', overflowY: 'auto' } },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
-              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, 'Importar Fatura do Cartão — PDF'),
+        pdfModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', style: { maxWidth: 1050, width: '96%', maxHeight: '90vh', overflowY: 'auto' }, onClick: e => e.stopPropagation() },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
+              h('strong', { style: { fontSize: 18 } }, 'Importar Fatura do Cartão — PDF'),
               h('button', { type: 'button', className: 'action-btn', onClick: () => setPdfModalOpen(false), disabled: pdfImportando }, h(XIcon, { size: 16 }))
             ),
-            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione o PDF da fatura. O sistema identifica os lançamentos, ignora os que já existem e pede categoria somente para os novos.'),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione o PDF da fatura. O sistema identifica os lançamentos, marca duplicados e permite informar categoria e parcelas dos novos.'),
             h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer', marginBottom: 12 } },
               h(FileText, { size: 15 }), ' Selecionar PDF',
               h('input', { ref: pdfInputRef, type: 'file', accept: '.pdf,application/pdf', style: { display: 'none' }, onChange: lerFaturaPDF })
             ),
-            pdfArquivo && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginBottom: 10 } }, 'Arquivo: ' + pdfArquivo),
-            pdfImportando && h('div', { style: { padding: 10, background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6, marginBottom: 10 } }, 'Lendo a fatura...'),
-            pdfError && h('div', { style: { whiteSpace: 'pre-line', color: 'var(--red)', background: '#FEE2E2', padding: 10, borderRadius: 6, marginBottom: 10, fontSize: 12 } }, pdfError),
+            pdfArquivo && h('div', { style: { fontSize: 12, marginBottom: 8 } }, 'Arquivo: ' + pdfArquivo),
+            pdfImportando && h('div', { style: { padding: 10, background: '#FAF8F2', marginBottom: 10 } }, 'Lendo a fatura...'),
+            pdfError && h('div', { style: { color: 'var(--red)', background: '#FEE2E2', padding: 10, marginBottom: 10, whiteSpace: 'pre-line' } }, pdfError),
             pdfPreview.length > 0 && h('div', null,
-              h('div', { style: { marginBottom: 8, fontWeight: 'bold' } }, pdfPreview.length + ' lançamento(s) identificados — Novos: ' + pdfPreview.filter(r => !r.duplicado).length + ' | Já lançados: ' + pdfPreview.filter(r => r.duplicado).length),
-              h('div', { style: { overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6, maxHeight: 500 } },
-                h('table', { style: { minWidth: 1050 } },
-                  h('thead', null, h('tr', null, h('th', null, 'OK'), h('th', null, 'Data'), h('th', null, 'Descrição'), h('th', { className: 'right' }, 'Valor Parcela'), h('th', null, 'Cartão'), h('th', null, 'Parcela'), h('th', null, 'Categoria'), h('th', null, 'Situação'))),
-                  h('tbody', null, pdfPreview.map(r => h('tr', { key: r.id, style: r.duplicado ? { opacity: 0.55, background: '#F3F4F6' } : null },
-                    h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: !!r.selecionado && !r.duplicado, disabled: !!r.duplicado, onChange: e => atualizarItemPDF(r.id, 'selecionado', e.target.checked) })),
-                    h('td', null, formatDateBR(r.data)), h('td', null, r.descricao), h('td', { className: 'right num' }, formatBRL(r.valor)),
-                    h('td', null, r.cartao?.nome ? r.cartao.nome : h('select', { value: r.cartao?.id || '', onChange: e => atualizarItemPDF(r.id, 'cartao', e.target.value) }, h('option', { value: '' }, 'Selecione...'), cartoes.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
-                    h('td', null, h('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } }, h('input', { type: 'number', min: 1, max: 60, value: r.numeroParcela || 1, onChange: e => atualizarItemPDF(r.id, 'numeroParcela', e.target.value), style: { width: 55 } }), h('span', null, '/'), h('input', { type: 'number', min: 1, max: 60, value: r.totalParcelas || 1, onChange: e => atualizarItemPDF(r.id, 'totalParcelas', e.target.value), style: { width: 55 } })),
-                    h('td', null, h('select', { value: r.categoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'categoria', e.target.value), style: { minWidth: 170 } }, h('option', { value: '' }, 'Selecione...'), categorias.filter(c => c.tipo !== 'receita').map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
-                    h('td', null, r.duplicado ? h('span', { style: { color: 'var(--green)', fontWeight: 'bold' } }, 'Já lançado — ignorado') : 'Novo')
-                  )))
-                )
+              h('div', { style: { fontWeight: 'bold', marginBottom: 8 } }, pdfPreview.length + ' lançamento(s) identificados. Novos: ' + pdfPreview.filter(r => !r.duplicado).length + ' | Já lançados: ' + pdfPreview.filter(r => r.duplicado).length),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+                pdfPreview.map(r => h('div', { key: r.id, style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, opacity: r.duplicado ? 0.6 : 1 } },
+                  h('div', { style: { display: 'grid', gridTemplateColumns: '80px 1fr 110px 160px 150px', gap: 8, alignItems: 'center' } },
+                    h('input', { type: 'checkbox', checked: !!r.selecionado && !r.duplicado, disabled: !!r.duplicado, onChange: e => atualizarItemPDF(r.id, 'selecionado', e.target.checked) }),
+                    h('div', null, h('strong', null, r.descricao), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatDateBR(r.data))),
+                    h('div', { className: 'num' }, formatBRL(r.valor)),
+                    h('select', { value: r.cartao?.id || '', onChange: e => atualizarItemPDF(r.id, 'cartao', e.target.value) }, h('option', { value: '' }, 'Cartão'), cartoes.map(c => h('option', { key: c.id, value: c.id }, c.nome))),
+                    h('select', { value: r.categoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'categoria', e.target.value) }, h('option', { value: '' }, 'Categoria'), categorias.filter(c => c.tipo !== 'receita').map(c => h('option', { key: c.id, value: c.id }, c.nome)))
+                  ),
+                  h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 12 } },
+                    h('span', null, 'Parcela:'),
+                    h('input', { type: 'number', min: 1, max: 60, value: r.numeroParcela || 1, onChange: e => atualizarItemPDF(r.id, 'numeroParcela', e.target.value), style: { width: 60 } }),
+                    h('span', null, '/'),
+                    h('input', { type: 'number', min: 1, max: 60, value: r.totalParcelas || 1, onChange: e => atualizarItemPDF(r.id, 'totalParcelas', e.target.value), style: { width: 60 } }),
+                    r.duplicado ? h('strong', { style: { color: 'var(--green)' } }, 'Já lançado — ignorado') : h('span', null, 'Novo')
+                  )
+                ))
               ),
-              h('div', { style: { marginTop: 10, padding: 10, background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6, fontSize: 12 } }, 'O Valor Parcela é o valor importado do PDF. O Valor Total será calculado automaticamente: Valor Parcela × Total de Parcelas.'),
-              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 } },
+              h('div', { style: { marginTop: 10, padding: 10, background: '#FAF8F2', fontSize: 12 } }, 'Valor Parcela = valor do PDF. Valor Total = Valor Parcela × Total de Parcelas.'),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 } },
                 h('button', { type: 'button', className: 'action-btn', onClick: () => { setPdfPreview([]); setPdfError(''); } }, 'Limpar'),
-                h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoPDF, disabled: pdfImportando }, pdfImportando ? 'Importando...' : 'Importar lançamentos novos')
+                h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoPDF, disabled: pdfImportando }, 'Importar lançamentos novos')
               )
             )
           )
