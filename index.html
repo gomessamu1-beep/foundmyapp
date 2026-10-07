@@ -821,35 +821,58 @@
 
       function encontrarDuplicadoPDF(item) {
         const descricao = normalizarDescricaoPDF(item.descricao);
-        const data = item.data;
-        const cartaoId = item.cartao?.id || null;
+        const data = String(item.data || "").slice(0, 10);
+        const cartaoId = item.cartao?.id != null ? String(item.cartao.id) : "";
         const valorCent = Math.round(Number(item.valor || 0) * 100);
         const numeroParcela = Number(item.numeroParcela || 1);
-        const competencia = item.competencia || "";
+        const totalParcelas = Number(item.totalParcelas || 1);
+
+        if (!descricao || !data || !valorCent) return null;
+
         const lista = (purchases || []).filter(p => {
-          if (p?.cartaoId !== cartaoId) return false;
-          if ((p?.dataCompra || "") !== data) return false;
+          const pData = String(p?.dataCompra || "").slice(0, 10);
+          if (pData !== data) return false;
           if (normalizarDescricaoPDF(p?.descricao) !== descricao) return false;
 
-          let parcelaAtual = Number(p?.parcelaInicial || 1);
-          if (p?.inicio && competencia) {
-            const delta = monthDiff(p.inicio, competencia);
-            if (delta < 0) return false;
-            parcelaAtual = p?.recorrente ? delta + 1 : Number(p?.parcelaInicial || 1) + delta;
-          }
-          if (parcelaAtual !== numeroParcela) return false;
+          // Se os dois lançamentos têm cartão, o cartão também precisa ser o mesmo.
+          // Se o lançamento antigo estiver sem cartão, ainda podemos identificá-lo
+          // pelos demais dados da compra.
+          const pCartaoId = p?.cartaoId != null ? String(p.cartaoId) : "";
+          if (cartaoId && pCartaoId && cartaoId !== pCartaoId) return false;
 
-          let valorParcela = Number(p?.valorParcelaImportacao);
-          if (!Number.isFinite(valorParcela) || valorParcela <= 0) {
-            if (p?.recorrente) valorParcela = Number(p.total || 0);
-            else {
-              const qtd = Number(p?.parcelas || 1);
-              const valores = splitInstallments(Number(p?.total || 0), qtd);
-              valorParcela = valores[parcelaAtual - 1] || 0;
+          // Descobre a parcela atual de forma compatível com lançamentos antigos
+          // e com os lançamentos criados pela importação PDF.
+          let parcelaAtual = Number(p?.parcelaInicial || p?.numeroParcelaImportacao || 1);
+          if (p?.numeroParcelaImportacao) {
+            parcelaAtual = Number(p.numeroParcelaImportacao);
+          } else if (p?.inicio && item.competencia) {
+            const delta = monthDiff(String(p.inicio).slice(0, 7), String(item.competencia).slice(0, 7));
+            if (delta >= 0) {
+              parcelaAtual = p?.recorrente ? delta + 1 : Number(p?.parcelaInicial || 1) + delta;
             }
           }
-          return Math.round(valorParcela * 100) === valorCent;
+
+          if (parcelaAtual !== numeroParcela) return false;
+
+          const pTotalParcelas = Number(p?.totalParcelasImportacao || p?.parcelas || 1);
+          if (pTotalParcelas !== totalParcelas && p?.totalParcelasImportacao) return false;
+
+          // Primeiro usa o valor de parcela salvo pela importação.
+          // Para lançamentos antigos, calcula a parcela a partir do total.
+          let valorParcela = Number(p?.valorParcelaImportacao);
+          if (!Number.isFinite(valorParcela) || valorParcela <= 0) {
+            if (p?.recorrente) {
+              valorParcela = Number(p.total || 0);
+            } else {
+              const qtd = Number(p?.parcelas || 1);
+              const valores = splitInstallments(Number(p?.total || 0), qtd);
+              valorParcela = valores[Math.max(0, parcelaAtual - 1)] || 0;
+            }
+          }
+
+          return Math.abs(Math.round(valorParcela * 100) - valorCent) <= 1;
         });
+
         return lista[0] || null;
       }
 
