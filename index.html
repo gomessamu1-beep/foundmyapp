@@ -1045,12 +1045,16 @@
                 if (normal.startsWith("valor total")) continue;
               }
 
+              const trechosLancamento = separarLancamentosPorData(linha);
+
               if (secao === "parcelamentos") {
-                regexParcelamento.lastIndex = 0;
-                let m;
-                while ((m = regexParcelamento.exec(linha)) !== null) {
+                for (const trecho of trechosLancamento) {
+                  const m = trecho.match(regexParcelamento);
+                  if (!m) continue;
+
                   const valor = valorMoedaPDF(m[5]);
                   if (!Number.isFinite(valor) || valor <= 0) continue;
+
                   const item = {
                     id: uid(),
                     data: parseDataPDF(m[1], ano),
@@ -1079,11 +1083,13 @@
                   resultado.push(item);
                 }
               } else if (secao === "despesas") {
-                regexDespesa.lastIndex = 0;
-                let m;
-                while ((m = regexDespesa.exec(linha)) !== null) {
+                for (const trecho of trechosLancamento) {
+                  const m = trecho.match(regexDespesa);
+                  if (!m) continue;
+
                   const valor = valorMoedaPDF(m[3]);
                   if (!Number.isFinite(valor) || valor <= 0) continue;
+
                   const item = {
                     id: uid(),
                     data: parseDataPDF(m[1], ano),
@@ -1111,7 +1117,7 @@
                   }
                   resultado.push(item);
                 }
-              }
+              }              }
             }
           }
 
