@@ -193,6 +193,40 @@
       const [pdfError, setPdfError] = useState("");
       const [pdfArquivo, setPdfArquivo] = useState("");
       const [pdfImportando, setPdfImportando] = useState(false);
+      // Mantém a última prévia da importação PDF para que o usuário possa fechar
+      // a janela e voltar depois sem perder a classificação já feita.
+      const PDF_PREVIEW_STORAGE_KEY = 'foundmyapp-pdf-preview-v1';
+      const PDF_FILE_STORAGE_KEY = 'foundmyapp-pdf-file-v1';
+      useEffect(() => {
+        try {
+          const salvo = localStorage.getItem(PDF_PREVIEW_STORAGE_KEY);
+          const arquivoSalvo = localStorage.getItem(PDF_FILE_STORAGE_KEY);
+          if (salvo) {
+            const dados = JSON.parse(salvo);
+            if (Array.isArray(dados) && dados.length) {
+              setPdfPreview(dados);
+              setPdfArquivo(arquivoSalvo || '');
+            }
+          }
+        } catch (e) {
+          console.warn('[FoundMyApp] Não foi possível restaurar a última prévia PDF:', e);
+        }
+      }, []);
+
+      useEffect(() => {
+        try {
+          if (Array.isArray(pdfPreview) && pdfPreview.length) {
+            localStorage.setItem(PDF_PREVIEW_STORAGE_KEY, JSON.stringify(pdfPreview));
+            localStorage.setItem(PDF_FILE_STORAGE_KEY, pdfArquivo || '');
+          } else {
+            localStorage.removeItem(PDF_PREVIEW_STORAGE_KEY);
+            localStorage.removeItem(PDF_FILE_STORAGE_KEY);
+          }
+        } catch (e) {
+          console.warn('[FoundMyApp] Não foi possível salvar a prévia PDF:', e);
+        }
+      }, [pdfPreview, pdfArquivo]);
+
       const pdfInputRef = useRef(null);
       const [cartaoModalOpen, setCartaoModalOpen] = useState(false);
       const [contaModalOpen, setContaModalOpen] = useState(false);
@@ -1180,6 +1214,7 @@
 
         setPurchases(nextPurchases);
         saveDataToSupabase(nextPurchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
+        // Depois que a importação foi concluída, a prévia não precisa mais ficar salva.
         setPdfPreview([]);
         setPdfArquivo("");
         setPdfModalOpen(false);
