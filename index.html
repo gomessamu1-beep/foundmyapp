@@ -194,6 +194,7 @@
       const [pdfArquivo, setPdfArquivo] = useState("");
       const [pdfImportando, setPdfImportando] = useState(false);
       const [pdfFiltro, setPdfFiltro] = useState('todos');
+      const [pdfBusca, setPdfBusca] = useState('');
       // Mantém a última prévia da importação PDF para que o usuário possa fechar
       // a janela e voltar depois sem perder a classificação já feita.
       const PDF_PREVIEW_STORAGE_KEY = 'foundmyapp-pdf-preview-v1';
@@ -824,6 +825,23 @@
       function toggleSelectPagarItem(id) { setBatchPagarIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); }
       function toggleSelectAllReceber() { if (batchReceberIds.length === contasReceberForMonth.length) setBatchReceberIds([]); else setBatchReceberIds(contasReceberForMonth.map(p => p.id)); }
       function toggleSelectReceberItem(id) { setBatchReceberIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); }
+
+      function filtrarLancamentosPDF(lista) {
+        const termo = normalizarDescricaoPDF(pdfBusca);
+        return (lista || []).filter(r => {
+          if (!termo) return true;
+          const descricao = normalizarDescricaoPDF(r.descricao);
+          const categoria = normalizarDescricaoPDF(r.categoria?.nome);
+          const subcategoria = normalizarDescricaoPDF(r.subcategoria?.nome);
+          const valor = normalizarDescricaoPDF(formatBRL(r.valor));
+          const valorNumerico = normalizarDescricaoPDF(String(r.valor ?? ''));
+          return descricao.includes(termo) ||
+            categoria.includes(termo) ||
+            subcategoria.includes(termo) ||
+            valor.includes(termo) ||
+            valorNumerico.includes(termo);
+        });
+      }
 
       function toggleSelecionarTodosPDF() {
         setPdfPreview(prev => {
@@ -2799,6 +2817,15 @@
                   h('option', { value: 'lancados' }, 'Já lançados')
                 )
               ),
+              h('div', { style: { marginBottom: 10 } },
+                h('input', {
+                  type: 'text',
+                  value: pdfBusca,
+                  onChange: e => setPdfBusca(e.target.value),
+                  placeholder: 'Pesquisar por descrição, categoria, subcategoria ou valor da parcela...',
+                  style: { width: '100%', boxSizing: 'border-box', padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 6, fontSize: 13 }
+                })
+              ),
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8, padding: '8px 10px', background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6 } },
                 h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Os lançamentos já cadastrados ficam desmarcados automaticamente.'),
                 h('button', { type: 'button', className: 'action-btn', onClick: toggleSelecionarTodosPDF },
@@ -2806,7 +2833,7 @@
                 )
               ),
               h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-                pdfPreview.filter(r => pdfFiltro === 'todos' || (pdfFiltro === 'novos' && !r.duplicado) || (pdfFiltro === 'lancados' && r.duplicado)).map(r => h('div', { key: r.id, style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, opacity: r.duplicado ? 0.6 : 1 } },
+                filtrarLancamentosPDF(pdfPreview.filter(r => pdfFiltro === 'todos' || (pdfFiltro === 'novos' && !r.duplicado) || (pdfFiltro === 'lancados' && r.duplicado))).map(r => h('div', { key: r.id, style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, opacity: r.duplicado ? 0.6 : 1 } },
                   h('div', { style: { display: 'grid', gridTemplateColumns: '36px 1fr 110px 160px 150px 100px', gap: 8, alignItems: 'center' } },
                     h('input', { type: 'checkbox', checked: !!r.selecionado && !r.duplicado, disabled: !!r.duplicado, onChange: e => atualizarItemPDF(r.id, 'selecionado', e.target.checked) }),
                     h('div', null, h('strong', null, r.descricao), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatDateBR(r.data)), r.classificacaoAutomaticaDePara && h('div', { style: { fontSize: 10, color: 'var(--green)', fontWeight: 'bold', marginTop: 2 } }, '✓ Categoria sugerida pelo De/Para')),
