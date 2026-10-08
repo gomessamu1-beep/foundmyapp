@@ -1103,146 +1103,158 @@
 
           const regexCabecalhoCartao = /(?:^|\\s)(?:[A-ZÀ-Ú][A-ZÀ-Ú0-9 .'-]{2,})\\s+-\\s+\\d{4}\\s+XXXX\\s+XXXX\\s+(\\d{4})/i;
 
-          // REGRA DO PDF: uma data no formato DD/MM sempre inicia um novo
-          // lançamento. Se outra data aparecer no meio da linha, ela NÃO faz
-          // parte da descrição/valor do lançamento anterior: a linha é dividida
-          // exatamente nesse ponto e cada trecho passa a ser um lançamento.
-          function separarLancamentosPorData(linha) {
-            const texto = String(linha || '').replace(/\\s+/g, ' ').trim();
-            const datas = [];
-            const reData = /\b\d{2}\/\d{2}\b/g;
-            let dm;
-            while ((dm = reData.exec(texto)) !== null) {
-              datas.push(dm.index);
+          // Parser robusto: cada DD/MM inicia um lançamento, mesmo quando
+          // o PDF quebra o parcelamento em linhas diferentes.
+          function separarRegistrosPDF(linhas) {
+            const registros = [];
+            let atual = "";
+
+            for (const linhaBruta of (linhas || [])) {
+              const linha = String(linhaBruta || "").replace(/\s+/g, " ").trim();
+              if (!linha) continue;
+
+              const datas = [];
+              const reData = /\b\d{2}\/\d{2}\b/g;
+              let dm;
+              while ((dm = reData.exec(linha)) !== null) datas.push(dm.index);
+
+              if (datas.length) {
+                if (atual) registros.push(atual.trim());
+                for (let i = 0; i < datas.length; i++) {
+                  const inicio = datas[i];
+                  const fim = i + 1 < datas.length ? datas[i + 1] : linha.length;
+                  const trecho = linha.slice(inicio, fim).trim();
+                  if (!trecho) continue;
+                  if (i < datas.length - 1) registros.push(trecho);
+                  else atual = trecho;
+                }
+              } else if (atual) {
+                atual += " " + linha;
+              }
             }
 
-            if (!datas.length) return [];
-
-            const trechos = [];
-            for (let i = 0; i < datas.length; i++) {
-              const inicio = datas[i];
-              const fim = i + 1 < datas.length ? datas[i + 1] : texto.length;
-              const trecho = texto.slice(inicio, fim).trim();
-              if (trecho) trechos.push(trecho);
-            }
-            return trechos;
+            if (atual) registros.push(atual.trim());
+            return registros;
           }
 
-          // Depois de separar pela data, o parser só aceita data no COMEÇO do
-          // trecho. Assim nunca captura um segundo lançamento como parte do
-          // primeiro.
-          const regexParcelamento = /^(?:\d+\s+)?(\d{2}\/\d{2})\s+(.+?)\s+(\d{2})\/(\d{2})\s+(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2})\s*$/;
-          const regexDespesa = /^(?:\d+\s+)?(\d{2}\/\d{2})\s+(.+?)\s+(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2})\s*$/;
+          const regexDataPDF = /^(?:\d+\s+)?(\d{2}\s*\/\s*\d{2})\s+(.+)$/;
+
+          function extrairLancamentoPDF(registro, ano, cartaoAtual, cartaoUltimos4, competencia) {
+            const base = String(registro || "").replace(/\s+/g, " ").trim();
+            const md = base.match(regexDataPDF);
+            if (!md) return null;
+
+            const dataBR = md[1].replace(/\s+/g, "");
+            const resto = md[2].trim();
+
+            let parcelaInfo = null;
+            const reP = /\b(\d{1,2})\s*\/\s*(\d{1,2})\b/g;
+            let mp;
+            while ((mp = reP.exec(resto)) !== null) {
+              const n = Number(mp[1]);
+              const total = Number(mp[2]);
+              if (n >= 1 && total >= n && total <= 60) {
+                parcelaInfo = { numero: n, total, index: mp.index, length: mp[0].length };
+              }
+            }
+
+            const valores = [];
+            const reV = /(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?-?\d+,\d{2}/g;
+            let mv;
+            while ((mv = reV.exec(resto)) !== null) {
+              const valor = valorMoedaPDF(mv[0]);
+              if (Number.isFinite(valor)) valores.push({ valor, index: mv.index, length: mv[0].length });
+            }
+
+            const valorInfo = [...valores].reverse().find(v => v.valor > 0);
+            if (!valorInfo) return null;
+
+            let descricao = resto;
+            if (parcelaInfo) {
+              descricao = descricao.slice(0, parcelaInfo.index) + " " +
+                descricao.slice(parcelaInfo.index + parcelaInfo.length);
+            }
+
+            descricao = descricao
+              .replace(/(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?-?\d+,\d{2}/g, " ")
+              .replace(/\s+/g, " ")
+              .replace(/^[-–—]+\s*/, "")
+              .trim();
+
+            if (!descricao || descricao.length < 2) return null;
+
+            const numeroParcela = parcelaInfo ? parcelaInfo.numero : 1;
+            const totalParcelas = parcelaInfo ? parcelaInfo.total : 1;
+            const classificacaoDePara = encontrarClassificacaoDeParaPDF(descricao);
+
+            return {
+              id: uid(),
+              data: parseDataPDF(dataBR, ano),
+              descricao,
+              valor: valorInfo.valor,
+              tipo: "FATURA",
+              cartao: cartaoAtual,
+              cartaoUltimos4,
+              competencia,
+              parcela: `${numeroParcela}/${totalParcelas}`,
+              numeroParcela,
+              totalParcelas,
+              categoria: classificacaoDePara?.categoria || null,
+              subcategoria: classificacaoDePara?.subcategoria || null,
+              deparaId: classificacaoDePara?.regra?.id || null,
+              classificacaoAutomaticaDePara: !!classificacaoDePara,
+              duplicado: false,
+              duplicadoId: null,
+              selecionado: true
+            };
+          }
 
           for (const linhas of paginas) {
             for (const linhaOriginal of linhas) {
               const linha = linhaOriginal.replace(/\s+/g, " ").trim();
               const normal = normalizarTextoImportacao(linha);
-
               const cab = linha.match(regexCabecalhoCartao);
+
               if (cab) {
                 cartaoUltimos4 = cab[1];
                 cartaoAtual = localizarCartaoPDF(cartaoUltimos4);
-                continue;
               }
 
-              if (normal.includes("parcelamentos")) {
-                secao = "parcelamentos";
-                continue;
+              if (normal.includes("parcelamentos")) secao = "parcelamentos";
+              else if (normal.includes("despesas")) secao = "despesas";
+              else if (normal.includes("pagamento e demais creditos")) secao = "creditos";
+            }
+
+            const registros = separarRegistrosPDF(linhas);
+
+            for (const registro of registros) {
+              const normalRegistro = normalizarTextoImportacao(registro);
+
+              if (
+                normalRegistro.includes("parcelamentos") ||
+                normalRegistro.includes("despesas") ||
+                normalRegistro.includes("pagamento e demais creditos") ||
+                normalRegistro.startsWith("vencimento") ||
+                normalRegistro.startsWith("valor total") ||
+                normalRegistro.startsWith("resumo da fatura") ||
+                normalRegistro.startsWith("total da fatura")
+              ) continue;
+
+              const item = extrairLancamentoPDF(
+                registro, ano, cartaoAtual, cartaoUltimos4, competencia
+              );
+
+              if (!item) continue;
+              if (!item.cartao && cartoes.length === 1) item.cartao = cartoes[0];
+
+              const dup = encontrarDuplicadoPDF(item);
+              if (dup) {
+                item.duplicado = true;
+                item.duplicadoId = dup.id;
+                item.selecionado = false;
               }
-              if (normal.includes("despesas")) {
-                secao = "despesas";
-                continue;
-              }
-              if (normal.includes("pagamento e demais creditos")) {
-                secao = "creditos";
-                continue;
-              }
-              if (normal.startsWith("valor total") || normal.startsWith("resumo da fatura")) {
-                if (normal.startsWith("valor total")) continue;
-              }
 
-              const trechosLancamento = separarLancamentosPorData(linha);
-
-              if (secao === "parcelamentos") {
-                for (const trecho of trechosLancamento) {
-                  const m = trecho.match(regexParcelamento);
-                  if (!m) continue;
-
-                  const valor = valorMoedaPDF(m[5]);
-                  if (!Number.isFinite(valor) || valor <= 0) continue;
-
-                  let classificacaoDePara = null;
-
-                  const item = {
-                    id: uid(),
-                    data: parseDataPDF(m[1], ano),
-                    descricao: m[2].trim().replace(/^[-–—]+\s*/, ""),
-                    valor,
-                    tipo: "FATURA",
-                    cartao: cartaoAtual,
-                    cartaoUltimos4,
-                    competencia,
-                    parcela: `${Number(m[3])}/${Number(m[4])}`,
-                    numeroParcela: Number(m[3]),
-                    totalParcelas: Number(m[4]),
-                    categoria: ((classificacaoDePara = encontrarClassificacaoDeParaPDF(m[2].trim().replace(/^[-–—]+\\s*/, ""))) ? classificacaoDePara.categoria : null),
-                    subcategoria: classificacaoDePara?.subcategoria || null,
-                    deparaId: classificacaoDePara?.regra?.id || null,
-                    classificacaoAutomaticaDePara: !!classificacaoDePara,
-                    duplicado: false,
-                    duplicadoId: null,
-                    selecionado: true
-                  };
-                  if (!item.cartao && cartoes.length === 1) item.cartao = cartoes[0];
-                  const dup = encontrarDuplicadoPDF(item);
-                  if (dup) {
-                    item.duplicado = true;
-                    item.duplicadoId = dup.id;
-                    item.selecionado = false;
-                  }
-                  resultado.push(item);
-                }
-              } else if (secao === "despesas") {
-                for (const trecho of trechosLancamento) {
-                  const m = trecho.match(regexDespesa);
-                  if (!m) continue;
-
-                  const valor = valorMoedaPDF(m[3]);
-                  if (!Number.isFinite(valor) || valor <= 0) continue;
-
-                  let classificacaoDePara = null;
-
-                  const item = {
-                    id: uid(),
-                    data: parseDataPDF(m[1], ano),
-                    descricao: m[2].trim().replace(/^[-–—]+\s*/, ""),
-                    valor,
-                    tipo: "FATURA",
-                    cartao: cartaoAtual,
-                    cartaoUltimos4,
-                    competencia,
-                    parcela: "1/1",
-                    numeroParcela: 1,
-                    totalParcelas: 1,
-                    categoria: ((classificacaoDePara = encontrarClassificacaoDeParaPDF(m[2].trim().replace(/^[-–—]+\\s*/, ""))) ? classificacaoDePara.categoria : null),
-                    subcategoria: classificacaoDePara?.subcategoria || null,
-                    deparaId: classificacaoDePara?.regra?.id || null,
-                    classificacaoAutomaticaDePara: !!classificacaoDePara,
-                    duplicado: false,
-                    duplicadoId: null,
-                    selecionado: true
-                  };
-                  if (!item.cartao && cartoes.length === 1) item.cartao = cartoes[0];
-                  const dup = encontrarDuplicadoPDF(item);
-                  if (dup) {
-                    item.duplicado = true;
-                    item.duplicadoId = dup.id;
-                    item.selecionado = false;
-                  }
-                  resultado.push(item);
-                }
-              }
+              resultado.push(item);
             }
           }
 
