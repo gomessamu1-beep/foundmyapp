@@ -238,6 +238,8 @@
 
       const [batchDeleteModalOpen, setBatchDeleteModalOpen] = useState(false);
       const [batchConfirmText, setBatchConfirmText] = useState("");
+      const [batchCompetenciaModalOpen, setBatchCompetenciaModalOpen] = useState(false);
+      const [batchCompetenciaNova, setBatchCompetenciaNova] = useState(month);
       
       const fileInputRef = useRef(null);
       const planilhaInputRef = useRef(null);
@@ -784,6 +786,40 @@
 
       function toggleSelectAllCartao() { if (selectedCartaoIds.length === installmentsForMonth.length) setSelectedCartaoIds([]); else setSelectedCartaoIds(installmentsForMonth.map(p => p.id)); }
       function toggleSelectCartaoItem(id) { setSelectedCartaoIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); }
+
+      function abrirAlteracaoCompetenciaLote() {
+        if (!selectedCartaoIds.length) return alert("Selecione pelo menos um lançamento para alterar a competência.");
+        if (fechadaAtual) return alert("A fatura atual está fechada. Reabra-a antes de alterar a competência.");
+        setBatchCompetenciaNova(month);
+        setBatchCompetenciaModalOpen(true);
+      }
+
+      function confirmarAlteracaoCompetenciaLote() {
+        if (!selectedCartaoIds.length) return alert("Selecione pelo menos um lançamento.");
+        if (!batchCompetenciaNova) return alert("Informe a nova competência.");
+        if (isFaturaFechada(batchCompetenciaNova)) return alert("A nova competência está em uma fatura fechada. Reabra-a antes de continuar.");
+
+        const selecionados = purchases.filter(p => selectedCartaoIds.includes(p.id));
+        const recorrentes = selecionados.filter(p => p.recorrente);
+        if (recorrentes.length) {
+          return alert("Lançamentos recorrentes não podem ter a competência alterada em lote, pois isso mudaria o início da recorrência. Desmarque-os e tente novamente.");
+        }
+
+        const atualizados = purchases.map(p => {
+          if (!selectedCartaoIds.includes(p.id)) return p;
+
+          const indiceAtual = monthDiff(p.inicio, month);
+          if (indiceAtual < 0) return p;
+
+          // Mantém a parcela atual (ex.: 3/10), apenas deslocando-a para a nova competência.
+          return { ...p, inicio: addMonths(batchCompetenciaNova, -indiceAtual) };
+        });
+
+        updatePurchases(atualizados);
+        setSelectedCartaoIds([]);
+        setBatchCompetenciaModalOpen(false);
+        alert(`Competência alterada para ${formatMonthLabel(batchCompetenciaNova)} em ${selecionados.length} lançamento(s).`);
+      }
       function toggleSelectAllPagar() { if (batchPagarIds.length === contasPagarForMonth.length) setBatchPagarIds([]); else setBatchPagarIds(contasPagarForMonth.map(p => p.id)); }
       function toggleSelectPagarItem(id) { setBatchPagarIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]); }
       function toggleSelectAllReceber() { if (batchReceberIds.length === contasReceberForMonth.length) setBatchReceberIds([]); else setBatchReceberIds(contasReceberForMonth.map(p => p.id)); }
@@ -2332,6 +2368,7 @@
                 h('div', { className: 'total-sub', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h('span', null, installmentsForMonth.length === 0 ? "Nenhum lançamento nesta fatura" : `${installmentsForMonth.length} lançamento(s)`), selectedCartaoIds.length > 0 && h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, h(Trash2, { size: 14 }), ` Excluir selecionados (${selectedCartaoIds.length})`)),
                   h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, h('input', { type: 'file', accept: '.pdf', ref: fileInputRef, style: { display: 'none' } }), h('input', { type: 'file', accept: '.csv,.txt', ref: planilhaInputRef, style: { display: 'none' } }), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirImportacaoPlanilha, title: 'Importar lançamentos por planilha' }, h(ArrowDownCircle, { size: 14 }), " Importar Lançamentos"),
+                    h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirAlteracaoCompetenciaLote, title: 'Alterar competência dos lançamentos selecionados' }, h(CalendarDays, { size: 14 }), " Alterar Competência"),
                     h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirImportacaoPDF, title: 'Importar fatura em PDF' }, h(FileText, { size: 14 }), " Importar Fatura PDF"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
                 ),
                 
@@ -2727,6 +2764,23 @@
                 h('button', { type: 'button', className: 'action-btn', onClick: () => { setPlanilhaPreview([]); setPlanilhaError(""); } }, "Cancelar Importação"),
                 h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoPlanilha, disabled: planilhaImportando }, planilhaImportando ? "Importando..." : `Confirmar Importação (${planilhaPreview.length})`)
               )
+            )
+          )
+        ),
+
+        batchCompetenciaModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 10 } }, "Alterar Competência em Lote"),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 } },
+              `Você selecionou ${selectedCartaoIds.length} lançamento(s) da fatura ${formatMonthLabel(month)}. A parcela atual será mantida e apenas a competência será deslocada.`
+            ),
+            h('div', { className: 'field', style: { marginBottom: 16 } },
+              h('label', null, "Nova competência *"),
+              h('input', { type: 'month', value: batchCompetenciaNova, onChange: e => setBatchCompetenciaNova(e.target.value), required: true })
+            ),
+            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } },
+              h('button', { type: 'button', className: 'action-btn', onClick: () => setBatchCompetenciaModalOpen(false) }, "Cancelar"),
+              h('button', { type: 'button', className: 'primary', onClick: confirmarAlteracaoCompetenciaLote }, h(CalendarDays, { size: 15 }), " Alterar Competência")
             )
           )
         ),
