@@ -926,6 +926,31 @@
         return String(valor || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
       }
 
+      // Sugere Categoria e Subcategoria usando o cadastro existente de De/Para.
+      // A correspondência mais específica (maior trecho reconhecido) ganha prioridade.
+      function encontrarClassificacaoDeParaPDF(descricao) {
+        const alvo = normalizarDescricaoPDF(descricao);
+        if (!alvo || !Array.isArray(deparaList) || !deparaList.length) return null;
+        const candidatos = [];
+        for (const regra of deparaList) {
+          const chaves = [regra?.fatura, regra?.importacao];
+          for (const chave of chaves) {
+            const textoRegra = normalizarDescricaoPDF(chave);
+            if (!textoRegra || textoRegra.length < 4) continue;
+            let score = 0;
+            if (alvo === textoRegra) score = 100000 + textoRegra.length;
+            else if (alvo.includes(textoRegra)) score = 50000 + textoRegra.length;
+            else if (textoRegra.length >= 6 && textoRegra.includes(alvo)) score = 10000 + alvo.length;
+            if (!score) continue;
+            const categoria = (categorias || []).find(c => String(c?.id) === String(regra?.categoriaId)) || null;
+            const subcategoria = categoria?.subcategorias?.find(s => String(s?.id) === String(regra?.subcategoriaId)) || null;
+            if (categoria) candidatos.push({ regra, categoria, subcategoria, score });
+          }
+        }
+        if (!candidatos.length) return null;
+        candidatos.sort((a, b) => b.score - a.score);
+        return candidatos[0];
+      }
       function localizarCartaoPDF(ultimos4) {
         if (!ultimos4) return null;
         const alvo = String(ultimos4).replace(/\D/g, "");
@@ -1129,6 +1154,8 @@
                   const valor = valorMoedaPDF(m[5]);
                   if (!Number.isFinite(valor) || valor <= 0) continue;
 
+                  let classificacaoDePara = null;
+
                   const item = {
                     id: uid(),
                     data: parseDataPDF(m[1], ano),
@@ -1141,8 +1168,10 @@
                     parcela: `${Number(m[3])}/${Number(m[4])}`,
                     numeroParcela: Number(m[3]),
                     totalParcelas: Number(m[4]),
-                    categoria: null,
-                    subcategoria: null,
+                    categoria: ((classificacaoDePara = encontrarClassificacaoDeParaPDF(m[2].trim().replace(/^[-–—]+\\s*/, ""))) ? classificacaoDePara.categoria : null),
+                    subcategoria: classificacaoDePara?.subcategoria || null,
+                    deparaId: classificacaoDePara?.regra?.id || null,
+                    classificacaoAutomaticaDePara: !!classificacaoDePara,
                     duplicado: false,
                     duplicadoId: null,
                     selecionado: true
@@ -1176,8 +1205,10 @@
                     parcela: "1/1",
                     numeroParcela: 1,
                     totalParcelas: 1,
-                    categoria: null,
-                    subcategoria: null,
+                    categoria: ((classificacaoDePara = encontrarClassificacaoDeParaPDF(m[2].trim().replace(/^[-–—]+\\s*/, ""))) ? classificacaoDePara.categoria : null),
+                    subcategoria: classificacaoDePara?.subcategoria || null,
+                    deparaId: classificacaoDePara?.regra?.id || null,
+                    classificacaoAutomaticaDePara: !!classificacaoDePara,
                     duplicado: false,
                     duplicadoId: null,
                     selecionado: true
@@ -1232,7 +1263,7 @@
           }
           if (campo === "categoria") {
             const cat = categorias.find(c => c.id === valor) || null;
-            return { ...item, categoria: cat, subcategoria: null };
+            return { ...item, categoria: cat, subcategoria: null, classificacaoAutomaticaDePara: false, deparaId: null };
           }
           if (campo === "subcategoria") {
             const cat = item.categoria || null;
@@ -2709,7 +2740,7 @@
                 pdfPreview.filter(r => pdfFiltro === 'todos' || (pdfFiltro === 'novos' && !r.duplicado) || (pdfFiltro === 'lancados' && r.duplicado)).map(r => h('div', { key: r.id, style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, opacity: r.duplicado ? 0.6 : 1 } },
                   h('div', { style: { display: 'grid', gridTemplateColumns: '36px 1fr 110px 160px 150px 100px', gap: 8, alignItems: 'center' } },
                     h('input', { type: 'checkbox', checked: !!r.selecionado && !r.duplicado, disabled: !!r.duplicado, onChange: e => atualizarItemPDF(r.id, 'selecionado', e.target.checked) }),
-                    h('div', null, h('strong', null, r.descricao), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatDateBR(r.data))),
+                    h('div', null, h('strong', null, r.descricao), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatDateBR(r.data)), r.classificacaoAutomaticaDePara && h('div', { style: { fontSize: 10, color: 'var(--green)', fontWeight: 'bold', marginTop: 2 } }, '✓ Categoria sugerida pelo De/Para')),
                     h('div', { className: 'num' }, formatBRL(r.valor)),
                     h('select', { value: r.cartao?.id || '', onChange: e => atualizarItemPDF(r.id, 'cartao', e.target.value) }, h('option', { value: '' }, 'Cartão'), cartoes.map(c => h('option', { key: c.id, value: c.id }, c.nome))),
                     h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
