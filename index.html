@@ -2368,7 +2368,7 @@
                 h('div', { className: 'total-sub', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h('span', null, installmentsForMonth.length === 0 ? "Nenhum lançamento nesta fatura" : `${installmentsForMonth.length} lançamento(s)`), selectedCartaoIds.length > 0 && h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, h(Trash2, { size: 14 }), ` Excluir selecionados (${selectedCartaoIds.length})`)),
                   h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, h('input', { type: 'file', accept: '.pdf', ref: fileInputRef, style: { display: 'none' } }), h('input', { type: 'file', accept: '.csv,.txt', ref: planilhaInputRef, style: { display: 'none' } }), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirImportacaoPlanilha, title: 'Importar lançamentos por planilha' }, h(ArrowDownCircle, { size: 14 }), " Importar Lançamentos"),
-                    h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirAlteracaoCompetenciaLote, title: 'Alterar competência dos lançamentos selecionados' }, h(CalendarDays, { size: 14 }), " Alterar Competência"),
+                    h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirAlteracaoCompetenciaLote, title: 'Alterar competência dos lançamentos selecionados' }, h(FileText, { size: 14 }), " Alterar Competência"),
                     h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirImportacaoPDF, title: 'Importar fatura em PDF' }, h(FileText, { size: 14 }), " Importar Fatura PDF"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
                 ),
                 
@@ -2780,7 +2780,7 @@
             ),
             h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } },
               h('button', { type: 'button', className: 'action-btn', onClick: () => setBatchCompetenciaModalOpen(false) }, "Cancelar"),
-              h('button', { type: 'button', className: 'primary', onClick: confirmarAlteracaoCompetenciaLote }, h(CalendarDays, { size: 15 }), " Alterar Competência")
+              h('button', { type: 'button', className: 'primary', onClick: confirmarAlteracaoCompetenciaLote }, h(FileText, { size: 15 }), " Alterar Competência")
             )
           )
         ),
