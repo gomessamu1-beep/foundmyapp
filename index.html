@@ -1193,6 +1193,8 @@
                   const valor = valorMoedaPDF(m[3]);
                   if (!Number.isFinite(valor) || valor <= 0) continue;
 
+                  let classificacaoDePara = null;
+
                   const item = {
                     id: uid(),
                     data: parseDataPDF(m[1], ano),
