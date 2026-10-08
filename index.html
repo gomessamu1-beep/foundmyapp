@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "planilha-importacao-2026-10-06-04";
+    const APP_BUILD = "planilha-importacao-2026-10-07-juros-iof";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -1140,248 +1140,90 @@
           const regexDataPDF = /^(?:\d+\s+)?(\d{2}\s*\/\s*\d{2})\s+(.+)$/;
 
           function extrairLancamentoPDF(registro, ano, cartaoAtual, cartaoUltimos4, competencia) {
-            const base = String(registro || "").replace(/\s+/g, " ").trim();
-            const md = base.match(regexDataPDF);
-            if (!md) return null;
+      const base = String(registro || "").replace(/\s+/g, " ").trim();
+      const md = base.match(regexDataPDF);
+      if (!md) return null;
 
-            const dataBR = md[1].replace(/\s+/g, "");
-            const resto = md[2].trim();
+      const dataBR = md[1].replace(/\s+/g, "");
+      const resto = md[2].trim();
 
-            let parcelaInfo = null;
-            const reP = /\b(\d{1,2})\s*\/\s*(\d{1,2})\b/g;
-            let mp;
-            while ((mp = reP.exec(resto)) !== null) {
-              const n = Number(mp[1]);
-              const total = Number(mp[2]);
-              if (n >= 1 && total >= n && total <= 60) {
-                parcelaInfo = { numero: n, total, index: mp.index, length: mp[0].length };
-              }
-            }
-
-            const valores = [];
-            const reV = /(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?-?\d+,\d{2}/g;
-            let mv;
-            while ((mv = reV.exec(resto)) !== null) {
-              const valor = valorMoedaPDF(mv[0]);
-              if (Number.isFinite(valor)) valores.push({ valor, index: mv.index, length: mv[0].length });
-            }
-
-            const valorInfo = [...valores].reverse().find(v => v.valor > 0);
-            if (!valorInfo) return null;
-
-            let descricao = resto;
-            if (parcelaInfo) {
-              descricao = descricao.slice(0, parcelaInfo.index) + " " +
-                descricao.slice(parcelaInfo.index + parcelaInfo.length);
-            }
-
-            descricao = descricao
-              .replace(/(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?-?\d+,\d{2}/g, " ")
-              .replace(/\s+/g, " ")
-              .replace(/^[-–—]+\s*/, "")
-              .trim();
-
-            if (!descricao || descricao.length < 2) return null;
-
-            const numeroParcela = parcelaInfo ? parcelaInfo.numero : 1;
-            const totalParcelas = parcelaInfo ? parcelaInfo.total : 1;
-            const classificacaoDePara = encontrarClassificacaoDeParaPDF(descricao);
-
-            return {
-              id: uid(),
-              data: parseDataPDF(dataBR, ano),
-              descricao,
-              valor: valorInfo.valor,
-              tipo: "FATURA",
-              cartao: cartaoAtual,
-              cartaoUltimos4,
-              competencia,
-              parcela: `${numeroParcela}/${totalParcelas}`,
-              numeroParcela,
-              totalParcelas,
-              categoria: classificacaoDePara?.categoria || null,
-              subcategoria: classificacaoDePara?.subcategoria || null,
-              deparaId: classificacaoDePara?.regra?.id || null,
-              classificacaoAutomaticaDePara: !!classificacaoDePara,
-              duplicado: false,
-              duplicadoId: null,
-              selecionado: true
-            };
-          }
-
-          for (const linhas of paginas) {
-            for (const linhaOriginal of linhas) {
-              const linha = linhaOriginal.replace(/\s+/g, " ").trim();
-              const normal = normalizarTextoImportacao(linha);
-              const cab = linha.match(regexCabecalhoCartao);
-
-              if (cab) {
-                cartaoUltimos4 = cab[1];
-                cartaoAtual = localizarCartaoPDF(cartaoUltimos4);
-              }
-
-              if (normal.includes("parcelamentos")) secao = "parcelamentos";
-              else if (normal.includes("despesas")) secao = "despesas";
-              else if (normal.includes("pagamento e demais creditos")) secao = "creditos";
-            }
-
-            const registros = separarRegistrosPDF(linhas);
-
-            for (const registro of registros) {
-              const normalRegistro = normalizarTextoImportacao(registro);
-
-              if (
-                normalRegistro.includes("parcelamentos") ||
-                normalRegistro.includes("despesas") ||
-                normalRegistro.includes("pagamento e demais creditos") ||
-                normalRegistro.startsWith("vencimento") ||
-                normalRegistro.startsWith("valor total") ||
-                normalRegistro.startsWith("resumo da fatura") ||
-                normalRegistro.startsWith("total da fatura")
-              ) continue;
-
-              const item = extrairLancamentoPDF(
-                registro, ano, cartaoAtual, cartaoUltimos4, competencia
-              );
-
-              if (!item) continue;
-              if (!item.cartao && cartoes.length === 1) item.cartao = cartoes[0];
-
-              const dup = encontrarDuplicadoPDF(item);
-              if (dup) {
-                item.duplicado = true;
-                item.duplicadoId = dup.id;
-                item.selecionado = false;
-              }
-
-              resultado.push(item);
-            }
-          }
-
-          const unicos = [];
-          const chaves = new Set();
-          for (const item of resultado) {
-            const chave = [item.data, normalizarDescricaoPDF(item.descricao), item.valor.toFixed(2), item.cartao?.id || item.cartaoUltimos4 || "", item.numeroParcela, item.totalParcelas].join("|");
-            if (chaves.has(chave)) continue;
-            chaves.add(chave);
-            unicos.push(item);
-          }
-
-          if (!unicos.length) {
-            throw new Error("Não encontrei lançamentos nas seções Parcelamentos/Despesas deste PDF. Verifique se a fatura está em formato de texto.");
-          }
-
-          setPdfPreview(unicos);
-        } catch (err) {
-          console.error("Erro ao ler fatura PDF:", err);
-          setPdfError(err?.message || "Não foi possível ler a fatura PDF.");
-        } finally {
-          setPdfImportando(false);
-          event.target.value = "";
+      let parcelaInfo = null;
+      const reP = /\b(\d{1,2})\s*\/\s*(\d{1,2})\b/g;
+      let mp;
+      while ((mp = reP.exec(resto)) !== null) {
+        const n = Number(mp[1]);
+        const total = Number(mp[2]);
+        if (n >= 1 && total >= n && total <= 60) {
+          parcelaInfo = { numero: n, total, index: mp.index, length: mp[0].length };
         }
       }
 
-      function atualizarItemPDF(id, campo, valor) {
-        setPdfPreview(prev => prev.map(item => {
-          if (item.id !== id) return item;
-          if (campo === "totalParcelas") {
-            const total = Math.max(1, parseInt(valor, 10) || 1);
-            const atual = Math.min(total, Math.max(1, Number(item.numeroParcela || 1)));
-            return { ...item, totalParcelas: total, numeroParcela: atual, parcela: `${atual}/${total}` };
-          }
-          if (campo === "numeroParcela") {
-            const atual = Math.max(1, Math.min(Number(item.totalParcelas || 1), parseInt(valor, 10) || 1));
-            return { ...item, numeroParcela: atual, parcela: `${atual}/${item.totalParcelas || 1}` };
-          }
-          if (campo === "categoria") {
-            const cat = categorias.find(c => c.id === valor) || null;
-            return { ...item, categoria: cat, subcategoria: null, classificacaoAutomaticaDePara: false, deparaId: null };
-          }
-          if (campo === "subcategoria") {
-            const cat = item.categoria || null;
-            const sub = cat?.subcategorias?.find(s => s.id === valor) || null;
-            return { ...item, subcategoria: sub };
-          }
-          if (campo === "cartao") {
-            const card = cartoes.find(c => c.id === valor) || null;
-            return { ...item, cartao: card };
-          }
-          return { ...item, [campo]: valor };
-        }));
+      const valores = [];
+      const reV = /(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?-?\d+,\d{2}/g;
+      let mv;
+      while ((mv = reV.exec(resto)) !== null) {
+        const valor = valorMoedaPDF(mv[0]);
+        if (Number.isFinite(valor)) valores.push({ valor, index: mv.index, length: mv[0].length });
       }
 
-      function ignorarItemPDF(id) {
-        setPdfPreview(prev => prev.filter(item => item.id !== id));
-        setPdfError("");
+      const valorInfo = [...valores].reverse().find(v => v.valor > 0);
+      if (!valorInfo) return null;
+
+      let descricao = resto;
+      if (parcelaInfo) {
+        descricao = descricao.slice(0, parcelaInfo.index) + " " +
+          descricao.slice(parcelaInfo.index + parcelaInfo.length);
       }
 
-      function importarUmLancamentoPDF(id) {
-      if (pdfImportando) return;
+      descricao = descricao
+        .replace(/(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?-?\d+,\d{2}/g, " ")
+        .replace(/\s+/g, " ")
+        .replace(/^[-–—]+\s*/, "")
+        .trim();
 
-      const item = (pdfPreview || []).find(r => r.id === id);
-      if (!item) return;
+      if (!descricao || descricao.length < 2) return null;
 
-      if (item.duplicado) {
-        return setPdfError("Este lançamento já está cadastrado e não precisa ser importado novamente.");
+      // Juros e IOF da fatura não são lançamentos de compra e devem ser ignorados.
+      const descricaoNormalizada = String(descricao)
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Z0-9]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (
+        /(^|\s)JUROS(\s|$)/.test(descricaoNormalizada) ||
+        /(^|\s)IOF(\s|$)/.test(descricaoNormalizada)
+      ) {
+        return null;
       }
 
-      if (!item.cartao?.id) {
-        return setPdfError("Selecione o cartão do lançamento antes de importar.");
-      }
+      const numeroParcela = parcelaInfo ? parcelaInfo.numero : 1;
+      const totalParcelas = parcelaInfo ? parcelaInfo.total : 1;
+      const classificacaoDePara = encontrarClassificacaoDeParaPDF(descricao);
 
-      if (!item.categoria?.id) {
-        return setPdfError("Selecione a categoria do lançamento antes de importar.");
-      }
-
-      if (!item.subcategoria?.id && !item.categoria?.isTransferencia) {
-        return setPdfError("Selecione a subcategoria do lançamento antes de importar.");
-      }
-
-      const competencia = String(item.competencia || "").slice(0, 7);
-      if (competencia && isFaturaFechada(competencia)) {
-        return setPdfError(`A fatura de ${formatMonthLabel(competencia)} está fechada. Reabra a fatura antes de importar este lançamento.`);
-      }
-
-      const duplicadoFinal = encontrarDuplicadoPDF(item);
-      if (duplicadoFinal) {
-        setPdfPreview(prev => prev.map(r => r.id === id ? { ...r, duplicado: true, selecionado: false } : r));
-        return setPdfError("Este lançamento já estava cadastrado e foi marcado como já lançado.");
-      }
-
-      const novoLancamento = {
+      return {
         id: uid(),
-        descricao: item.descricao,
-        observacao: `Importado da fatura PDF ${pdfArquivo}`,
-        total: Number(item.valor) * Number(item.totalParcelas || 1),
-        valorParcelaImportacao: Number(item.valor),
-        dataCompra: item.data,
-        parcelas: Number(item.totalParcelas || 1),
-        parcelaInicial: Number(item.numeroParcela || 1),
-        inicio: item.competencia,
-        recorrente: false,
-        cartaoId: item.cartao.id,
-        categoriaId: item.categoria.id,
-        subcategoriaId: item.subcategoria?.id || null,
-        status: "Em aberto",
-        bancoBaixaId: null,
-        dataBaixa: null,
-        criadoEm: Date.now(),
-        isImportacaoPDF: true,
-        tipoImportacao: "FATURA",
-        competenciaImportacao: item.competencia,
-        parcelaImportacao: `${item.numeroParcela || 1}/${item.totalParcelas || 1}`,
-        numeroParcelaImportacao: Number(item.numeroParcela || 1),
-        totalParcelasImportacao: Number(item.totalParcelas || 1)
+        data: parseDataPDF(dataBR, ano),
+        descricao,
+        valor: valorInfo.valor,
+        tipo: "FATURA",
+        cartao: cartaoAtual,
+        cartaoUltimos4,
+        competencia,
+        parcela: `${numeroParcela}/${totalParcelas}`,
+        numeroParcela,
+        totalParcelas,
+        categoria: classificacaoDePara?.categoria || null,
+        subcategoria: classificacaoDePara?.subcategoria || null,
+        deparaId: classificacaoDePara?.regra?.id || null,
+        classificacaoAutomaticaDePara: !!classificacaoDePara,
+        duplicado: false,
+        duplicadoId: null,
+        selecionado: true
       };
-
-      const nextPurchases = [...(purchases || []), novoLancamento];
-      setPurchases(nextPurchases);
-      saveDataToSupabase(nextPurchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
-      setPdfPreview(prev => prev.map(r => r.id === id ? { ...r, duplicado: true, selecionado: false } : r));
-      setPdfError("");
-      alert("Lançamento importado com sucesso.");
     }
-
     function confirmarImportacaoPDF() {
         if (pdfImportando) return;
         const novos = (pdfPreview || []).filter(r => r.selecionado && !r.duplicado);
