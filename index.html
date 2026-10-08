@@ -2946,4 +2946,1917 @@
     ReactDOM.createRoot(document.getElementById('root')).render(h(FaturaApp));
   </script>
 </body>
+</html>          // Alguns emissores de cartão quebram um lançamento em várias linhas do PDF:
+          // a data fica em uma linha, a descrição em outra e o valor em outra.
+          // A regra é: toda data DD/MM inicia um NOVO lançamento; linhas sem data
+          // continuam pertencendo ao último lançamento iniciado.
+          const registrosBrutos = [];
+          let registroAtual = null;
+
+          function finalizarRegistroBruto() {
+            if (!registroAtual || !String(registroAtual.texto || '').trim()) return;
+            registrosBrutos.push({ ...registroAtual, texto: registroAtual.texto.trim() });
+            registroAtual = null;
+          }
+
+          function adicionarRegistroBruto(trecho) {
+            const texto = String(trecho || '').replace(/\\s+/g, ' ').trim();
+            if (!texto) return;
+
+            const partes = separarLancamentosPorData(texto);
+            if (partes.length) {
+              for (const parte of partes) {
+                finalizarRegistroBruto();
+                registroAtual = {
+                  texto: parte,
+                  secao,
+                  cartao: cartaoAtual,
+                  cartaoUltimos4
+                };
+              }
+            } else if (registroAtual) {
+              registroAtual.texto += ' ' + texto;
+            }
+          }
+
+          for (const linhas of paginas) {
+            for (const linhaOriginal of linhas) {
+              const linha = linhaOriginal.replace(/\\s+/g, " ").trim();
+              if (!linha) continue;
+
+              const normal = normalizarTextoImportacao(linha);
+              const cab = linha.match(regexCabecalhoCartao);
+
+              if (cab) {
+                finalizarRegistroBruto();
+                cartaoUltimos4 = cab[1];
+                cartaoAtual = localizarCartaoPDF(cartaoUltimos4);
+                continue;
+              }
+
+              if (normal.includes("parcelamentos")) {
+                finalizarRegistroBruto();
+                secao = "parcelamentos";
+                continue;
+              }
+
+              if (normal.includes("despesas")) {
+                finalizarRegistroBruto();
+                secao = "despesas";
+                continue;
+              }
+
+              if (normal.includes("pagamento e demais creditos")) {
+                finalizarRegistroBruto();
+                secao = "creditos";
+                continue;
+              }
+
+              if (normal.startsWith("valor total") || normal.startsWith("resumo da fatura")) {
+                finalizarRegistroBruto();
+                continue;
+              }
+
+              if (!secao || secao === "creditos") continue;
+
+              adicionarRegistroBruto(linha);
+            }
+          }
+
+          finalizarRegistroBruto();
+
+          for (const registro of registrosBrutos) {
+            if (!registro.texto || registro.secao === "creditos") continue;
+
+            const trechosLancamento = separarLancamentosPorData(registro.texto);
+            for (const trecho of trechosLancamento) {
+              let m = null;
+              let tipoRegistro = registro.secao;
+
+              if (tipoRegistro === "parcelamentos") {
+                m = trecho.match(regexParcelamento);
+              } else if (tipoRegistro === "despesas") {
+                m = trecho.match(regexDespesa);
+              }
+
+              // Alguns PDFs apresentam a linha de forma diferente da esperada.
+              // Se não casar com o formato da seção, tenta o formato simples.
+              if (!m) {
+                m = trecho.match(regexDespesa);
+                tipoRegistro = "despesas";
+              }
+
+              if (!m) {
+                // Fallback para colunas quebradas: data no início e último
+                // valor monetário no final do registro.
+                const fallback = trecho.match(/^(?:\\d+\\s+)?(\\d{2}\\/\\d{2})\\s+(.+?)\\s+(-?\\d{1,3}(?:\\.\\d{3})*,\\d{2}|-?\\d+,\\d{2})$/);
+                if (!fallback) continue;
+                m = fallback;
+                tipoRegistro = "despesas";
+              }
+
+              let valor;
+              let dataBR;
+              let descricao;
+              let numeroParcela = 1;
+              let totalParcelas = 1;
+
+              if (tipoRegistro === "parcelamentos" && m.length >= 6) {
+                dataBR = m[1];
+                descricao = m[2];
+                numeroParcela = Number(m[3]);
+                totalParcelas = Number(m[4]);
+                valor = valorMoedaPDF(m[5]);
+              } else {
+                dataBR = m[1];
+                descricao = m[2];
+                valor = valorMoedaPDF(m[3]);
+              }
+
+              // Valores negativos são estornos e não devem ser importados.
+              if (!Number.isFinite(valor) || valor <= 0) continue;
+
+              const item = {
+                id: uid(),
+                data: parseDataPDF(dataBR, ano),
+                descricao: String(descricao || '').trim().replace(/^[-–—]+\\s*/, ""),
+                valor,
+                tipo: "FATURA",
+                cartao: registro.cartao,
+                cartaoUltimos4: registro.cartaoUltimos4,
+                competencia,
+                parcela: `${numeroParcela}/${totalParcelas}`,
+                numeroParcela,
+                totalParcelas,
+                categoria: null,
+                subcategoria: null,
+                duplicado: false,
+                duplicadoId: null,
+                selecionado: true
+              };
+
+              if (!item.cartao && cartoes.length === 1) item.cartao = cartoes[0];
+
+              const dup = encontrarDuplicadoPDF(item);
+              if (dup) {
+                item.duplicado = true;
+                item.duplicadoId = dup.id;
+                item.selecionado = false;
+              }
+
+              resultado.push(item);
+            }
+          }
+
+          const unicos = [];
+          const chaves = new Set();
+          for (const item of resultado) {
+            const chave = [item.data, normalizarDescricaoPDF(item.descricao), item.valor.toFixed(2), item.cartao?.id || item.cartaoUltimos4 || "", item.numeroParcela, item.totalParcelas].join("|");
+            if (chaves.has(chave)) continue;
+            chaves.add(chave);
+            unicos.push(item);
+          }
+
+          if (!unicos.length) {
+            throw new Error("Não encontrei lançamentos nas seções Parcelamentos/Despesas deste PDF. Verifique se a fatura está em formato de texto.");
+          }
+
+          setPdfPreview(unicos);
+        } catch (err) {
+          console.error("Erro ao ler fatura PDF:", err);
+          setPdfError(err?.message || "Não foi possível ler a fatura PDF.");
+        } finally {
+          setPdfImportando(false);
+          event.target.value = "";
+        }
+      }
+
+      function atualizarItemPDF(id, campo, valor) {
+        setPdfPreview(prev => prev.map(item => {
+          if (item.id !== id) return item;
+          if (campo === "totalParcelas") {
+            const total = Math.max(1, parseInt(valor, 10) || 1);
+            const atual = Math.min(total, Math.max(1, Number(item.numeroParcela || 1)));
+            return { ...item, totalParcelas: total, numeroParcela: atual, parcela: `${atual}/${total}` };
+          }
+          if (campo === "numeroParcela") {
+            const atual = Math.max(1, Math.min(Number(item.totalParcelas || 1), parseInt(valor, 10) || 1));
+            return { ...item, numeroParcela: atual, parcela: `${atual}/${item.totalParcelas || 1}` };
+          }
+          if (campo === "categoria") {
+            const cat = categorias.find(c => c.id === valor) || null;
+            return { ...item, categoria: cat, subcategoria: null };
+          }
+          if (campo === "subcategoria") {
+            const cat = item.categoria || null;
+            const sub = cat?.subcategorias?.find(s => s.id === valor) || null;
+            return { ...item, subcategoria: sub };
+          }
+          if (campo === "cartao") {
+            const card = cartoes.find(c => c.id === valor) || null;
+            return { ...item, cartao: card };
+          }
+          return { ...item, [campo]: valor };
+        }));
+      }
+
+      function ignorarItemPDF(id) {
+        setPdfPreview(prev => prev.filter(item => item.id !== id));
+        setPdfError("");
+      }
+
+      function confirmarImportacaoPDF() {
+        if (pdfImportando) return;
+        const novos = (pdfPreview || []).filter(r => r.selecionado && !r.duplicado);
+
+        if (!novos.length) {
+          return setPdfError("Não há lançamentos novos selecionados para importar.");
+        }
+
+        // Proteção definitiva: uma fatura fechada nunca pode receber novos lançamentos.
+        const competenciasFechadas = [...new Set(
+          novos.map(r => String(r.competencia || "").slice(0, 7)).filter(comp => comp && isFaturaFechada(comp))
+        )];
+        if (competenciasFechadas.length) {
+          return setPdfError(
+            `Não é possível importar. A(s) fatura(s) ${competenciasFechadas.map(formatMonthLabel).join(", ")} está(ão) fechada(s). Reabra a fatura antes de importar novos lançamentos.`
+          );
+        }
+
+        const semCartao = novos.filter(r => !r.cartao?.id);
+        if (semCartao.length) return setPdfError(`Selecione o cartão em ${semCartao.length} lançamento(s) que não foram identificados automaticamente.`);
+
+        const semCategoria = novos.filter(r => !r.categoria?.id);
+        if (semCategoria.length) return setPdfError(`Selecione a categoria em ${semCategoria.length} lançamento(s) novos.`);
+
+        const semSubcategoria = novos.filter(r => !r.subcategoria?.id && !r.categoria?.isTransferencia);
+        if (semSubcategoria.length) return setPdfError(`Selecione a subcategoria em ${semSubcategoria.length} lançamento(s) novos.`);
+
+        const nextPurchases = [...(purchases || [])];
+        const agora = Date.now();
+        let importados = 0;
+        let ignorados = 0;
+
+        for (const r of novos) {
+          // Segunda validação no momento da gravação, para impedir duplicidade mesmo
+          // se a prévia tiver sido alterada pelo usuário.
+          const duplicadoFinal = encontrarDuplicadoPDF(r);
+          if (duplicadoFinal) {
+            ignorados++;
+            continue;
+          }
+
+          const novoLancamento = {
+            id: uid(),
+            descricao: r.descricao,
+            observacao: `Importado da fatura PDF ${pdfArquivo}`,
+            total: Number(r.valor) * Number(r.totalParcelas || 1),
+            valorParcelaImportacao: Number(r.valor),
+            dataCompra: r.data,
+            parcelas: Number(r.totalParcelas || 1),
+            parcelaInicial: Number(r.numeroParcela || 1),
+            inicio: r.competencia,
+            recorrente: false,
+            cartaoId: r.cartao.id,
+            categoriaId: r.categoria.id,
+            subcategoriaId: r.subcategoria?.id || null,
+            status: "Em aberto",
+            bancoBaixaId: null,
+            dataBaixa: null,
+            criadoEm: agora,
+            isImportacaoPDF: true,
+            tipoImportacao: "FATURA",
+            competenciaImportacao: r.competencia,
+            parcelaImportacao: `${r.numeroParcela || 1}/${r.totalParcelas || 1}`,
+            numeroParcelaImportacao: Number(r.numeroParcela || 1),
+            totalParcelasImportacao: Number(r.totalParcelas || 1)
+          };
+
+          nextPurchases.push(novoLancamento);
+          importados++;
+        }
+
+        if (!importados) {
+          return setPdfError(`Nenhum lançamento foi importado. ${ignorados} lançamento(s) já estavam cadastrados e foram ignorados.`);
+        }
+
+        setPurchases(nextPurchases);
+        saveDataToSupabase(nextPurchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
+        // Depois que a importação foi concluída, a prévia não precisa mais ficar salva.
+        setPdfPreview([]);
+        setPdfArquivo("");
+        setPdfModalOpen(false);
+        alert(`${importados} lançamento(s) novo(s) importado(s). ${ignorados + pdfPreview.filter(r => r.duplicado).length} já lançado(s) foram ignorado(s).`);
+      }
+
+
+
+      function abrirImportacaoPlanilha() {
+        setPlanilhaError("");
+        setPlanilhaPreview([]);
+        setPlanilhaArquivo("");
+        setPlanilhaModalOpen(true);
+      }
+
+      function baixarModeloImportacao() {
+        if (!window.XLSX) return setPlanilhaError("Biblioteca Excel não carregada. Atualize a página e tente novamente.");
+        const dados = [
+          ["Data","Descrição","Valor","Tipo","Cartão","Competência","Conta","Categoria","Subcategoria","Parcela","Número da Parcela","Total de Parcelas","Observação"],
+          ["05/10/2026","SUPERMERCADO ABC",150.90,"FATURA","Nubank","2026-10","","Alimentação","Mercado","1/3",1,3,"Compra no cartão"],
+          ["10/10/2026","PAGAMENTO FORNECEDOR",850.00,"DESPESA","","2026-10","Banco do Brasil","Fornecedores","","","","Pagamento"],
+          ["10/10/2026","RECEBIMENTO CLIENTE",2500.00,"RECEITA","","2026-10","Banco do Brasil","Vendas","","","","Recebimento"]
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(dados);
+        ws["!cols"] = [{wch:13},{wch:30},{wch:15},{wch:14},{wch:24},{wch:14},{wch:24},{wch:22},{wch:22},{wch:12},{wch:19},{wch:20},{wch:35}];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Lançamentos");
+        const instrucoes = [
+          ["COLUNA","PREENCHIMENTO"],
+          ["Data","Opcional quando a Competência estiver informada. Se ficar vazia, será usada a data 01 da Competência."],
+          ["Descrição","Obrigatório."],
+          ["Valor","Obrigatório. Valor total do lançamento. Ex.: 150,90."],
+          ["Tipo","Obrigatório: DESPESA, RECEITA ou FATURA."],
+          ["Cartão","Obrigatório para FATURA. Informe exatamente o nome do cartão cadastrado no sistema."],
+          ["Competência","Opcional. Se a Data estiver preenchida, o sistema calcula automaticamente AAAA-MM. Se a Data estiver vazia, informe AAAA-MM e será usada a data do primeiro dia do mês."],
+          ["Conta","Opcional para DESPESA/RECEITA. Se informada, deve existir no cadastro. O lançamento será marcado como Baixado."],
+          ["Categoria","Opcional. Se informada, deve existir no cadastro."],
+          ["Subcategoria","Opcional. Se informada, deve existir dentro da categoria."],
+          ["Parcela","Opcional. Ex.: 1/3. Use uma linha por compra parcelada; não repita as parcelas futuras na planilha."],
+          ["Número da Parcela","Opcional. Ex.: 1."],
+          ["Total de Parcelas","Opcional. Ex.: 3."],
+          ["Observação","Opcional."]
+        ];
+        const wi = XLSX.utils.aoa_to_sheet(instrucoes);
+        wi["!cols"] = [{wch:24},{wch:95}];
+        XLSX.utils.book_append_sheet(wb, wi, "Instruções");
+        XLSX.writeFile(wb, "modelo_importacao_lancamentos.xlsx");
+      }
+
+      function lerPlanilhaImportacao(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        setPlanilhaError("");
+        setPlanilhaPreview([]);
+        setPlanilhaArquivo(file.name);
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            if (!window.XLSX) throw new Error("Biblioteca Excel não carregada.");
+
+            const wb = XLSX.read(e.target.result, { type: "array", cellDates: true });
+            const nomeAba = wb.SheetNames.find(n => normalizarTextoImportacao(n) === "lancamentos") || wb.SheetNames[0];
+            const ws = wb.Sheets[nomeAba];
+            const rows = XLSX.utils.sheet_to_json(ws, { defval: "", raw: true });
+
+            if (!rows.length) throw new Error("A planilha não possui lançamentos.");
+
+            const normalizarChave = (k) => normalizarTextoImportacao(k).replace(/[^a-z0-9]/g, "");
+
+            const aliases = {
+              data: ["data","datacompra","datadolancamento","datadacompra","datalancamento"],
+              descricao: ["descricao","historico","descricaolancamento","descrição","histórico"],
+              valor: ["valor","total","valorlancamento","valorlançamento"],
+              tipo: ["tipo","natureza","tipolancamento","tipodelancamento","classificacao","classificação"],
+              cartao: ["cartao","cartaoid","nomecartao","cartãodecredito","cartãocredito"],
+              competencia: ["competencia","competenciames","mescompetencia","mêscompetência"],
+              conta: ["conta","contabancaria","banco"],
+              categoria: ["categoria","categoriafinanceira"],
+              subcategoria: ["subcategoria","subcategoriafinanceira"],
+              parcela: ["parcela","parcelamento"],
+              numeroParcela: ["numerodaparcela","numeroparcela","nparcela","parcelan"],
+              totalParcelas: ["totaldeparcelas","totalparcelas","qtdparcelas","quantidadedeparcelas"],
+              observacao: ["observacao","obs","comentario","comentários","comentarioadicional"]
+            };
+
+            const chave = (obj, lista) => {
+              const keys = Object.keys(obj);
+              const normalizadas = keys.map(x => ({
+                original: x,
+                normalizada: normalizarChave(x)
+              }));
+
+              // Primeiro procura correspondência exata.
+              const exata = normalizadas.find(x => lista.includes(x.normalizada));
+              if (exata) return obj[exata.original];
+
+              // Depois procura correspondência aproximada, evitando
+              // que uma coluna seja confundida com outra.
+              const aproximada = normalizadas.find(x =>
+                lista.some(alias =>
+                  x.normalizada === alias ||
+                  (x.normalizada.length >= 6 && x.normalizada.includes(alias)) ||
+                  (alias.length >= 6 && alias.includes(x.normalizada))
+                )
+              );
+
+              return aproximada ? obj[aproximada.original] : "";
+            };
+
+            function normalizarTipoImportacao(valor) {
+              const t = normalizarTextoImportacao(valor).toUpperCase();
+
+              if (["DESPESA","DESPESAS","D","DEBITO","DEBITO","SAIDA","SAIDAS","PAGAMENTO","PAGAMENTOS"].includes(t)) return "DESPESA";
+              if (["RECEITA","RECEITAS","R","CREDITO","CREDITO","ENTRADA","ENTRADAS","RECEBIMENTO","RECEBIMENTOS"].includes(t)) return "RECEITA";
+              if (["FATURA","FATURAS","F"].includes(t)) return "FATURA";
+
+              return "";
+            }
+
+            function tipoDaCategoriaImportacao(cat) {
+              if (!cat) return "";
+              const t = normalizarTextoImportacao(cat.tipo);
+
+              if (["receita","receitas","r"].includes(t)) return "RECEITA";
+              if (["fatura","faturas","f"].includes(t)) return "FATURA";
+              if (["despesa","despesas","d"].includes(t)) return "DESPESA";
+
+              return "";
+            }
+
+            function localizarCategoriaFlexivel(nome) {
+              if (!nome) return null;
+              const alvo = normalizarTextoImportacao(nome);
+              if (!alvo) return null;
+
+              return (categorias || []).find(c =>
+                normalizarTextoImportacao(c?.nome) === alvo
+              ) || null;
+            }
+
+            function localizarSubcategoriaFlexivel(cat, nome) {
+              if (!nome) return null;
+              const alvo = normalizarTextoImportacao(nome);
+              if (!alvo) return null;
+
+              // Primeiro procura dentro da categoria informada.
+              if (cat && Array.isArray(cat.subcategorias)) {
+                const dentro = cat.subcategorias.find(s =>
+                  normalizarTextoImportacao(s?.nome) === alvo
+                );
+                if (dentro) return dentro;
+              }
+
+              // Depois procura globalmente, caso a subcategoria exista
+              // no cadastro mas esteja vinculada a outra categoria.
+              for (const categoria of (categorias || [])) {
+                const sub = Array.isArray(categoria?.subcategorias)
+                  ? categoria.subcategorias.find(s =>
+                      normalizarTextoImportacao(s?.nome) === alvo
+                    )
+                  : null;
+
+                if (sub) return sub;
+              }
+
+              return null;
+            }
+
+            const erros = [];
+            const preview = [];
+            const categoriasParaCriar = [];
+            const subcategoriasParaCriar = [];
+
+            rows.forEach((r, idx) => {
+              const linha = idx + 2;
+
+              let competencia = parseCompetenciaPlanilha(chave(r, aliases.competencia));
+              let data = parseDataPlanilha(chave(r, aliases.data));
+
+              const descricao = String(chave(r, aliases.descricao) ?? "").trim();
+              const valor = parseValorPlanilha(chave(r, aliases.valor));
+
+              const cartaoNome = String(chave(r, aliases.cartao) ?? "").trim();
+              let tipo = normalizarTipoImportacao(chave(r, aliases.tipo));
+
+              // REGRA PRINCIPAL DA IMPORTAÇÃO:
+              // Se a linha informa um Cartão, ela representa uma compra/fatura
+              // do cartão. O campo Cartão tem prioridade sobre o Tipo da planilha.
+              // Assim, mesmo que o Excel venha com DESPESA, "FATURA DO CARTÃO",
+              // "COMPRA", "CARTÃO" ou outro texto, a linha será enviada para
+              // purchases (Fatura do Cartão) e NUNCA para Contas a Pagar.
+              if (cartaoNome) {
+                tipo = "FATURA";
+              }
+
+              const contaNome = String(chave(r, aliases.conta) ?? "").trim();
+              const categoriaNome = String(chave(r, aliases.categoria) ?? "").trim();
+              const subcategoriaNome = String(chave(r, aliases.subcategoria) ?? "").trim();
+              const parcela = String(chave(r, aliases.parcela) ?? "").trim();
+              const numeroParcela = parseInt(chave(r, aliases.numeroParcela), 10) || 1;
+              const totalParcelas = parseInt(chave(r, aliases.totalParcelas), 10) || 1;
+              const observacao = String(chave(r, aliases.observacao) ?? "").trim();
+
+              // Data e Competência são intercambiáveis.
+              if (!data && competencia) data = dataDaCompetencia(competencia);
+              if (!competencia && data) competencia = data.slice(0, 7);
+
+              if (!data && !competencia) {
+                erros.push(`Linha ${linha}: informe Data ou Competência.`);
+              }
+
+              if (!descricao) {
+                erros.push(`Linha ${linha}: Descrição não informada.`);
+              }
+
+              if (!Number.isFinite(valor) || valor <= 0) {
+                erros.push(`Linha ${linha}: Valor inválido.`);
+              }
+
+              let categoria = localizarCategoriaFlexivel(categoriaNome);
+
+              // Se a categoria não existir, ela será criada na confirmação.
+              if (categoriaNome && !categoria) {
+                const existenteTemporario = categoriasParaCriar.find(c =>
+                  normalizarTextoImportacao(c.nome) === normalizarTextoImportacao(categoriaNome)
+                );
+
+                if (existenteTemporario) {
+                  categoria = existenteTemporario;
+                } else {
+                  categoria = {
+                    id: uid(),
+                    nome: categoriaNome,
+                    tipo: "",
+                    cor: CARD_COLORS[(categorias.length + categoriasParaCriar.length) % CARD_COLORS.length],
+                    isTransferencia: false,
+                    subcategorias: []
+                  };
+                  categoriasParaCriar.push(categoria);
+                }
+              }
+
+              // Se o tipo não foi informado ou veio com uma descrição diferente,
+              // tenta usar o tipo cadastrado na categoria.
+              if (!tipo && categoria) {
+                tipo = tipoDaCategoriaImportacao(categoria);
+              }
+
+              // Se houver cartão e nenhum tipo reconhecido, trata como FATURA.
+              if (!tipo && cartaoNome) {
+                tipo = "FATURA";
+              }
+
+              // Último fallback: DESPESA.
+              if (!tipo) {
+                tipo = "DESPESA";
+              }
+
+              const cartao = cartoes.find(c =>
+                normalizarTextoImportacao(c?.nome) === normalizarTextoImportacao(cartaoNome)
+              ) || null;
+
+              const conta = encontrarContaImportacao(contaNome);
+
+              if (cartaoNome && !cartao) {
+                erros.push(`Linha ${linha}: Cartão "${cartaoNome}" não encontrado no cadastro.`);
+              }
+
+              if (contaNome && !conta) {
+                erros.push(`Linha ${linha}: Conta "${contaNome}" não encontrada no cadastro.`);
+              }
+
+              // Localiza a subcategoria de forma flexível.
+              let subcategoria = localizarSubcategoriaFlexivel(categoria, subcategoriaNome);
+
+              // Se a subcategoria não existir, cria dentro da categoria informada.
+              if (subcategoriaNome && !subcategoria && categoria) {
+                subcategoria = {
+                  id: uid(),
+                  nome: subcategoriaNome
+                };
+
+                if (!Array.isArray(categoria.subcategorias)) {
+                  categoria.subcategorias = [];
+                }
+
+                categoria.subcategorias.push(subcategoria);
+
+                if (!subcategoriasParaCriar.some(s =>
+                  s.categoriaId === categoria.id &&
+                  normalizarTextoImportacao(s.nome) === normalizarTextoImportacao(subcategoriaNome)
+                )) {
+                  subcategoriasParaCriar.push({
+                    categoriaId: categoria.id,
+                    nome: subcategoriaNome
+                  });
+                }
+              }
+
+              if (tipo === "FATURA" && !cartaoNome) {
+                erros.push(`Linha ${linha}: Cartão é obrigatório para o tipo FATURA.`);
+              }
+
+              if (totalParcelas < 1 || numeroParcela < 1 || numeroParcela > totalParcelas) {
+                erros.push(`Linha ${linha}: Parcelamento inválido.`);
+              }
+
+              preview.push({
+                linha,
+                data,
+                competencia,
+                descricao,
+                valor,
+                tipo,
+                cartaoNome,
+                cartao,
+                contaNome,
+                conta,
+                categoriaNome,
+                categoria,
+                subcategoriaNome,
+                subcategoria,
+                parcela,
+                numeroParcela,
+                totalParcelas,
+                observacao
+              });
+            });
+
+            // Erros realmente impeditivos.
+            const errosBloqueantes = erros.filter(e =>
+              /Data ou Competência|Descrição não informada|Valor inválido|Cartão ".*" não encontrado|Conta ".*" não encontrado|Cartão é obrigatório|Parcelamento inválido/.test(e)
+            );
+
+            if (errosBloqueantes.length) {
+              setPlanilhaError(
+                errosBloqueantes.slice(0, 30).join("\n") +
+                (errosBloqueantes.length > 30 ? `\n... e mais ${errosBloqueantes.length - 30} erro(s).` : "")
+              );
+              return;
+            }
+
+            setPlanilhaPreview(preview);
+          } catch (err) {
+            console.error("Erro ao ler planilha:", err);
+            setPlanilhaError(err?.message || "Não foi possível ler a planilha.");
+          }
+        };
+
+        reader.readAsArrayBuffer(file);
+        event.target.value = "";
+      }
+
+
+      function confirmarImportacaoPlanilha() {
+        if (!planilhaPreview.length || planilhaImportando) return;
+
+        setPlanilhaImportando(true);
+
+        try {
+          const categoriasImportadas = [...(categorias || [])];
+
+          // Mantém categorias/subcategorias da planilha.
+          for (const r of planilhaPreview) {
+            if (!r.categoriaNome) continue;
+
+            let cat = categoriasImportadas.find(c =>
+              normalizarTextoImportacao(c?.nome) === normalizarTextoImportacao(r.categoriaNome)
+            );
+
+            if (!cat) {
+              cat = {
+                id: uid(),
+                nome: r.categoriaNome,
+                tipo: r.tipo === "RECEITA" ? "receita" : "despesa",
+                cor: CARD_COLORS[categoriasImportadas.length % CARD_COLORS.length],
+                isTransferencia: false,
+                subcategorias: []
+              };
+              categoriasImportadas.push(cat);
+            }
+
+            if (!Array.isArray(cat.subcategorias)) cat.subcategorias = [];
+
+            if (r.subcategoriaNome) {
+              let sub = cat.subcategorias.find(s =>
+                normalizarTextoImportacao(s?.nome) === normalizarTextoImportacao(r.subcategoriaNome)
+              );
+
+              if (!sub) {
+                sub = { id: uid(), nome: r.subcategoriaNome };
+                cat.subcategorias.push(sub);
+              }
+
+              r.categoria = cat;
+              r.subcategoria = sub;
+            } else {
+              r.categoria = cat;
+              r.subcategoria = null;
+            }
+          }
+
+          const novasFaturas = [];
+          const novosPagar = [];
+          const novosReceber = [];
+
+          for (const r of planilhaPreview) {
+            // REGRA DEFINITIVA DA IMPORTAÇÃO:
+            // FATURA = lançamento do cartão, nunca Contas a Pagar.
+            // DESPESA = Contas a Pagar.
+            // RECEITA = Contas a Receber.
+            const tipo = String(r.tipo || "").trim().toUpperCase();
+
+            const base = {
+              id: uid(),
+              descricao: r.descricao,
+              observacao: r.observacao,
+              // Na planilha, "Valor" representa o VALOR DA PARCELA.
+              // O sistema precisa guardar o valor total da compra para que
+              // o parcelamento seja calculado corretamente na fatura.
+              // Ex.: R$ 100,00 em 10x => total da compra = R$ 1.000,00.
+              total: r.valor * (r.totalParcelas || 1),
+              valorParcelaImportacao: r.valor,
+              dataCompra: r.data,
+              parcelas: r.totalParcelas || 1,
+              parcelaInicial: r.numeroParcela || 1,
+              inicio: r.competencia,
+              recorrente: false,
+              cartaoId: tipo === "FATURA" ? (r.cartao?.id || null) : null,
+              categoriaId: r.categoria?.id || null,
+              subcategoriaId: r.subcategoria?.id || null,
+              status: "Em aberto",
+              bancoBaixaId: null,
+              dataBaixa: null,
+              criadoEm: Date.now(),
+              isImportacaoPlanilha: true,
+              tipoImportacao: tipo,
+              competenciaImportacao: r.competencia,
+              parcelaImportacao: r.parcela || "",
+              numeroParcelaImportacao: r.numeroParcela || 1,
+              totalParcelasImportacao: r.totalParcelas || 1
+            };
+
+            if (tipo === "FATURA") {
+              // Vai exclusivamente para purchases, que alimenta a tela do cartão/fatura.
+              if (!base.cartaoId) {
+                throw new Error(`Linha ${r.linha}: FATURA sem cartão vinculado.`);
+              }
+              novasFaturas.push(base);
+            } else if (tipo === "DESPESA") {
+              novosPagar.push({
+                ...base,
+                cartaoId: null
+              });
+            } else if (tipo === "RECEITA") {
+              novosReceber.push({
+                ...base,
+                cartaoId: null
+              });
+            } else {
+              throw new Error(`Linha ${r.linha}: tipo de importação inválido: ${tipo || "(vazio)"}.`);
+            }
+          }
+
+          // Se uma importação anterior colocou FATURAS por engano no Contas a Pagar,
+          // migra esses registros para os lançamentos do cartão e evita duplicação.
+          const faturasAntigasNoPagar = (contasPagar || []).filter(p =>
+            p?.isImportacaoPlanilha === true &&
+            (
+              p?.tipoImportacao === "FATURA" ||
+              (!!p?.cartaoId && !p?.tipoImportacao)
+            )
+          );
+
+          const faturasAntigasNoReceber = (contasReceber || []).filter(p =>
+            p?.isImportacaoPlanilha === true &&
+            (
+              p?.tipoImportacao === "FATURA" ||
+              (!!p?.cartaoId && !p?.tipoImportacao)
+            )
+          );
+
+          const faturasMigradas = [
+            ...faturasAntigasNoPagar,
+            ...faturasAntigasNoReceber
+          ].map(p => ({
+            ...p,
+            tipoImportacao: "FATURA",
+            status: "Em aberto",
+            bancoBaixaId: null,
+            dataBaixa: null
+          }));
+
+          const idsMigrados = new Set(faturasMigradas.map(p => p.id));
+
+          const pagarSemFaturasImportadas = (contasPagar || []).filter(p => !idsMigrados.has(p.id));
+          const receberSemFaturasImportadas = (contasReceber || []).filter(p => !idsMigrados.has(p.id));
+
+          const nextPurchases = [
+            ...(purchases || []),
+            ...faturasMigradas,
+            ...novasFaturas
+          ];
+
+          const nextPagar = [
+            ...pagarSemFaturasImportadas,
+            ...novosPagar
+          ];
+
+          const nextReceber = [
+            ...receberSemFaturasImportadas,
+            ...novosReceber
+          ];
+
+          setCategorias(categoriasImportadas);
+          setPurchases(nextPurchases);
+          setContasPagar(nextPagar);
+          setContasReceber(nextReceber);
+
+          saveDataToSupabase(
+            nextPurchases,
+            nextPagar,
+            nextReceber,
+            cartoes,
+            contasBancarias,
+            categoriasImportadas,
+            deparaList,
+            faturasFechadas,
+            faturasBaixadas,
+            diasFechados,
+            mesesFechados
+          );
+
+          const totalImportado = planilhaPreview.length;
+          const totalFaturas = novasFaturas.length;
+          const totalDespesas = novosPagar.length;
+          const totalReceitas = novosReceber.length;
+          const totalMigradas = faturasMigradas.length;
+
+          setPlanilhaPreview([]);
+          setPlanilhaArquivo("");
+          setPlanilhaModalOpen(false);
+
+          alert(
+            `${totalImportado} lançamento(s) importado(s) com sucesso.\\n\\n` +
+            `FATURAS no cartão: ${totalFaturas}.\\n` +
+            `DESPESAS no Contas a Pagar: ${totalDespesas}.\\n` +
+            `RECEITAS no Contas a Receber: ${totalReceitas}.` +
+            (totalMigradas ? `\\n\\n${totalMigradas} fatura(s) que estavam indevidamente no Contas a Pagar/Receber foram corrigidas e movidas para o cartão.` : "")
+          );
+        } catch (err) {
+          console.error("Erro ao importar lançamentos:", err);
+          setPlanilhaError(err?.message || "Erro ao importar os lançamentos.");
+        } finally {
+          setPlanilhaImportando(false);
+        }
+      }
+
+      function handleSaveLancamento(e) {
+        e.preventDefault(); setFormError(""); setFormSuccess("");
+        if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : null; if (itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
+        
+        if (lancamentoTab === "cartao") {
+            if (!cartaoId) return setFormError("É obrigatório selecionar um cartão.");
+            const itemExistente = editingId ? purchases.find(p => p.id === editingId) : null;
+            const isCorrigindoFaltaDeCartao = itemExistente && !itemExistente.cartaoId && cartaoId;
+            if (isFaturaFechada(faturaMes) && !isCorrigindoFaltaDeCartao) return setFormError(`A fatura inicial deste lançamento (${formatMonthLabel(faturaMes)}) está fechada. Reabra-a para poder editar.`);
+        }
+
+        if (isDiaFechado(dataLancamento)) return setFormError("Este dia está fechado."); 
+        if (lancamentoTab !== "cartao" && isMesFechado(faturaMes)) return setFormError("Mês de competência fechado.");
+
+        const total = parseValorInput(valorTotal); const n = parseInt(parcelas, 10); const atual = parseInt(parcelaAtual, 10);
+        
+        const cat = getCategoria(categoriaId);
+        const exigeSubcat = cat && !cat.isTransferencia;
+
+        if (!descricao.trim() || !categoriaId || (exigeSubcat && !subcategoriaId) || !Number.isFinite(total) || total <= 0 || !faturaMes) {
+          return setFormError("Preencha todos os campos obrigatórios corretamente.");
+        }
+
+        const competenciaInicial = faturaMes;
+        const novoRegistro = { 
+          id: editingId || uid(), descricao: descricao.trim(), observacao: observacao.trim(), total, dataCompra: dataLancamento || currentDate(), 
+          parcelas: isRecorrente ? 1 : n, parcelaInicial: isRecorrente ? 1 : atual, inicio: competenciaInicial, 
+          recorrente: isRecorrente, cartaoId: null, categoriaId, subcategoriaId: exigeSubcat ? subcategoriaId : null, 
+          status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now() 
+        };
+
+        if (lancamentoTab === "receber") { 
+            if (editingId) { updateContasReceber(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
+            else { updateContasReceber(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
+        }
+        else if (lancamentoTab === "pagar") { 
+            if (editingId) { updateContasPagar(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
+            else { updateContasPagar(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
+        }
+        else { 
+            novoRegistro.cartaoId = cartaoId || null; 
+            if (editingId) { updatePurchases(prev => prev.map(p => p.id === editingId ? { ...novoRegistro, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
+            else { updatePurchases(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
+        }
+      }
+
+      function handleSaveLancamentoRapido(e) {
+        e.preventDefault(); setLrError("");
+        const total = parseValorInput(lrValor);
+        const cat = getCategoria(lrCategoriaId);
+        const exigeSub = cat && !cat.isTransferencia;
+
+        if (!lrDescricao.trim() || !Number.isFinite(total) || total <= 0 || !lrData || !lrContaOrigem || !lrCategoriaId || (exigeSub && !lrSubcategoriaId)) {
+          return setLrError("Preencha todos os campos obrigatórios corretamente.");
+        }
+
+        if (lrIsTransferencia && !lrContaDestino) {
+          return setLrError("Selecione a conta de destino para a transferência.");
+        }
+
+        if (lrIsTransferencia && lrContaOrigem === lrContaDestino) {
+          return setLrError("A conta de origem e destino não podem ser iguais.");
+        }
+
+        const faturaMes = lrData.substring(0, 7);
+
+        if (isDiaFechado(lrData) || isMesFechado(faturaMes)) {
+          return setLrError("Dia ou mês bloqueado/fechado. Abra-o para fazer o lançamento.");
+        }
+
+        const transId = lrIsTransferencia ? uid() : null;
+
+        if (lrIsTransferencia) {
+          const debitoEntry = {
+            id: uid(), descricao: `Transferência enviada: ${lrDescricao.trim()}`, observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
+            inicio: faturaMes, recorrente: false, cartaoId: null, categoriaId: lrCategoriaId,
+            subcategoriaId: null, status: "Baixado", criadoEm: Date.now(),
+            transferenciaId: transId, isLancamentoDireto: true, bancoBaixaId: lrContaOrigem, dataBaixa: lrData
+          };
+          
+          const creditoEntry = {
+            id: uid(), descricao: `Transferência recebida: ${lrDescricao.trim()}`, observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
+            inicio: faturaMes, recorrente: false, cartaoId: null, categoriaId: lrCategoriaId,
+            subcategoriaId: null, status: "Baixado", criadoEm: Date.now(),
+            transferenciaId: transId, isLancamentoDireto: true, bancoBaixaId: lrContaDestino, dataBaixa: lrData
+          };
+
+          updateContasPagar(prev => [...prev, debitoEntry]);
+          updateContasReceber(prev => [...prev, creditoEntry]);
+        } else {
+          const entry = {
+            id: uid(), descricao: lrDescricao.trim(), observacao: lrObservacao.trim(), total, dataCompra: lrData, parcelas: 1, parcelaInicial: 1,
+            inicio: faturaMes, recorrente: false, cartaoId: null, categoriaId: lrCategoriaId,
+            subcategoriaId: lrSubcategoriaId, status: "Baixado", criadoEm: Date.now(),
+            transferenciaId: null, isLancamentoDireto: true, bancoBaixaId: lrContaOrigem, dataBaixa: lrData
+          };
+
+          if (lrTipo === 'despesa') updateContasPagar(prev => [...prev, entry]);
+          else updateContasReceber(prev => [...prev, entry]);
+        }
+        
+        setLrModalOpen(false);
+      }
+
+      function handleLrCategoriaChange(catId) {
+        setLrCategoriaId(catId);
+        setLrSubcategoriaId('');
+        const cat = getCategoria(catId);
+        if (cat && cat.isTransferencia) {
+          setLrIsTransferencia(true);
+        } else {
+          setLrIsTransferencia(false);
+          setLrContaDestino('');
+        }
+      }
+
+      function executarBaixaIndividual(type, id, bancoId, dataBaixaStr) {
+        if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
+        if (type === "pagar") updateContasPagar(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); else if (type === "receber") updateContasReceber(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p));
+        setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
+      }
+
+      function executarBaixaLote(type, bancoId, ids, dataBaixaStr) {
+        if (!bancoId || !ids || ids.length === 0 || !dataBaixaStr) return alert("Preencha todos os campos."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
+        if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchReceberIds([]); }
+        setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate() });
+      }
+
+      function executarEstornoBaixa(type, id, dataBaixa) {
+        if (dataBaixa && (isDiaFechado(dataBaixa) || isMesFechado(dataBaixa.substring(0, 7)))) return alert("Dia ou mês bloqueado."); 
+        if (!window.confirm("Deseja estornar baixa?")) return;
+        
+        let transId = null;
+        if (type === "pagar") { const item = contasPagar.find(p => p.id === id); transId = item?.transferenciaId; }
+        else if (type === "receber") { const item = contasReceber.find(p => p.id === id); transId = item?.transferenciaId; }
+
+        const estornoUpdater = prev => prev.map(p => (p.id === id || (transId && p.transferenciaId === transId)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p);
+
+        if (type === "pagar") { 
+          updateContasPagar(estornoUpdater); 
+          if (transId) updateContasReceber(estornoUpdater); 
+        } 
+        else if (type === "receber") { 
+          updateContasReceber(estornoUpdater); 
+          if (transId) updateContasPagar(estornoUpdater); 
+        }
+      }
+
+      function executarEstornoLote(type, ids) {
+        if (!ids || ids.length === 0) return alert("Nenhum item selecionado."); const listaAlvo = type === "pagar" ? contasPagar : contasReceber;
+        for (const id of ids) { const item = listaAlvo.find(i => i.id === id); if (item && item.dataBaixa) { if (isDiaFechado(item.dataBaixa) || isMesFechado(item.dataBaixa.substring(0, 7))) return alert(`Estorno cancelado: Há itens cuja data de baixa (${formatDateBR(item.dataBaixa)}) ou mês está bloqueada.`); } }
+        if (!window.confirm(`Deseja estornar a baixa dos ${ids.length} itens?`)) return;
+        if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p)); setBatchReceberIds([]); }
+      }
+
+      const movimentacoesConciliacao = useMemo(() => {
+        if (!concilExibido || !concilContaId) return []; const lista = [];
+        contasPagar.forEach(p => { if (p.status === "Baixado" && p.bancoBaixaId === concilContaId && p.dataBaixa) { if (p.dataBaixa >= concilDataIni && p.dataBaixa <= concilDataFim) lista.push({ id: p.id, tipoOrigem: 'pagar', itemRef: p, data: p.dataBaixa, descricao: p.descricao, observacao: p.observacao, tipo: "Débito", valorDebito: p.recorrente ? p.valorParcela : (p.valorParcela || p.total), valorCredito: 0 }); } });
+        contasReceber.forEach(r => { if (r.status === "Baixado" && r.bancoBaixaId === concilContaId && r.dataBaixa) { if (r.dataBaixa >= concilDataIni && r.dataBaixa <= concilDataFim) lista.push({ id: r.id, tipoOrigem: 'receber', itemRef: r, data: r.dataBaixa, descricao: r.descricao, observacao: r.observacao, tipo: "Crédito", valorDebito: 0, valorCredito: r.recorrente ? r.valorParcela : (r.valorParcela || r.total) }); } });
+        Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
+          if (baixa && baixa.status === 'Baixado' && baixa.bancoId === concilContaId && baixa.dataBaixa) {
+            if (baixa.dataBaixa >= concilDataIni && baixa.dataBaixa <= concilDataFim) {
+              const values = purchases.map(p => { 
+                const idx = monthDiff(p.inicio, comp); if (idx < 0) return 0; 
+                if (p.canceladoEm && comp >= p.canceladoEm) return 0;
+                const mesesExcluidos = p.mesesExcluidos || []; if (mesesExcluidos.includes(comp)) return 0;
+                if (p.recorrente) return p.total;
+                const pInicial = p.parcelaInicial || 1; const qtdRestante = p.parcelas - pInicial + 1; if (idx >= qtdRestante) return 0; 
+                const split = splitInstallments(p.total, p.parcelas); return split[(pInicial - 1) + idx]; 
+              });
+              const totalComp = values.reduce((s, v) => s + v, 0); if (totalComp > 0) lista.push({ id: `fat-${comp}`, tipoOrigem: 'fatura', competenciaRef: comp, baixaRef: baixa, data: baixa.dataBaixa, descricao: `Pagamento Fatura Cartão: ${formatMonthLabel(comp)}`, observacao: '', tipo: "Débito", valorDebito: totalComp, valorCredito: 0 });
+            }
+          }
+        });
+        lista.sort((a, b) => a.data.localeCompare(b.data)); let saldoAcumulado = 0; return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); return { ...item, saldo: saldoAcumulado }; });
+      }, [concilExibido, concilContaId, concilDataIni, concilDataFim, contasPagar, contasReceber, faturasBaixadas, purchases]);
+
+      const resumoDiarioConcil = useMemo(() => {
+        const grupos = {}; movimentacoesConciliacao.forEach(m => { if (!grupos[m.data]) grupos[m.data] = { data: m.data, debitos: 0, creditos: 0, itens: [] }; grupos[m.data].debitos += m.valorDebito; grupos[m.data].creditos += m.valorCredito; grupos[m.data].itens.push(m); });
+        return Object.values(grupos).sort((a, b) => a.data.localeCompare(b.data));
+      }, [movimentacoesConciliacao]);
+
+      const totalDebitosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorDebito, 0);
+      const totalCreditosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorCredito, 0);
+      const saldoFinalConcil = totalCreditosConcil - totalDebitosConcil;
+
+      const calendarioDiasDoMes = useMemo(() => {
+        const [ano, mes] = concilCalMes.split("-").map(Number); const ultimoDia = new Date(ano, mes, 0).getDate(); const dias = []; let acumulado = 0;
+        for (let d = 1; d <= ultimoDia; d++) {
+          const strD = `${ano}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`; let deb = 0; let cred = 0;
+          if (concilContaId) {
+            contasPagar.forEach(p => { if (p.status === "Baixado" && p.bancoBaixaId === concilContaId && p.dataBaixa === strD) deb += p.recorrente ? (p.valorParcela||p.total) : (p.valorParcela || p.total); });
+            contasReceber.forEach(r => { if (r.status === "Baixado" && r.bancoBaixaId === concilContaId && r.dataBaixa === strD) cred += r.recorrente ? (r.valorParcela||r.total) : (r.valorParcela || r.total); });
+            Object.entries(faturasBaixadas).forEach(([comp, baixa]) => {
+              if (baixa && baixa.status === 'Baixado' && baixa.bancoId === concilContaId && baixa.dataBaixa === strD) {
+                const values = purchases.map(p => { 
+                  const idx = monthDiff(p.inicio, comp); if (idx < 0) return 0;
+                  if (p.canceladoEm && comp >= p.canceladoEm) return 0;
+                  const mesesExcluidos = p.mesesExcluidos || []; if (mesesExcluidos.includes(comp)) return 0;
+                  if(p.recorrente) return p.total;
+                  const pInicial = p.parcelaInicial || 1; const qtdRestante = p.parcelas - pInicial + 1; if (idx >= qtdRestante) return 0; 
+                  const split = splitInstallments(p.total, p.parcelas); return split[(pInicial - 1) + idx]; 
+                });
+                deb += values.reduce((s, v) => s + v, 0);
+              }
+            });
+          }
+          acumulado += (cred - deb); dias.push({ data: strD, diaNum: d, debitos: deb, cred: cred, saldo: acumulado });
+        }
+        return dias;
+      }, [concilCalMes, concilContaId, contasPagar, contasReceber, faturasBaixadas, purchases]);
+
+      const contasPagarFiltradasRelatorio = useMemo(() => {
+        return contasPagarForMonth.filter(p => {
+          if (relFiltroDataIni && (!p.dataCompra || p.dataCompra < relFiltroDataIni)) return false;
+          if (relFiltroDataFim && (!p.dataCompra || p.dataCompra > relFiltroDataFim)) return false;
+          if (relFiltroBaixaIni && (!p.dataBaixa || p.dataBaixa < relFiltroBaixaIni)) return false;
+          if (relFiltroBaixaFim && (!p.dataBaixa || p.dataBaixa > relFiltroBaixaFim)) return false;
+          if (relFiltroStatus !== "todos") { const st = p.status || "Em aberto"; if (relFiltroStatus === "baixado" && st !== "Baixado") return false; if (relFiltroStatus === "aberto" && st !== "Em aberto") return false; }
+          return true;
+        });
+      }, [contasPagarForMonth, relFiltroDataIni, relFiltroDataFim, relFiltroBaixaIni, relFiltroBaixaFim, relFiltroStatus]);
+
+      const contasReceberFiltradasRelatorio = useMemo(() => {
+        return contasReceberForMonth.filter(p => {
+          if (relFiltroDataIni && (!p.dataCompra || p.dataCompra < relFiltroDataIni)) return false;
+          if (relFiltroDataFim && (!p.dataCompra || p.dataCompra > relFiltroDataFim)) return false;
+          if (relFiltroBaixaIni && (!p.dataBaixa || p.dataBaixa < relFiltroBaixaIni)) return false;
+          if (relFiltroBaixaFim && (!p.dataBaixa || p.dataBaixa > relFiltroBaixaFim)) return false;
+          if (relFiltroStatus !== "todos") { const st = p.status || "Em aberto"; if (relFiltroStatus === "baixado" && st !== "Baixado") return false; if (relFiltroStatus === "aberto" && st !== "Em aberto") return false; }
+          return true;
+        });
+      }, [contasReceberForMonth, relFiltroDataIni, relFiltroDataFim, relFiltroBaixaIni, relFiltroBaixaFim, relFiltroStatus]);
+
+      const totalMesPagarRelatorio = useMemo(() => contasPagarFiltradasRelatorio.reduce((s, p) => s + p.valorParcela, 0), [contasPagarFiltradasRelatorio]);
+      const totalMesReceberRelatorio = useMemo(() => contasReceberFiltradasRelatorio.reduce((s, p) => s + p.valorParcela, 0), [contasReceberFiltradasRelatorio]);
+
+      function exportRelatorioExcel() {
+        const lista = relatorioTab === "pagar" ? contasPagarFiltradasRelatorio : contasReceberFiltradasRelatorio; if (lista.length === 0) return alert("Sem dados para exportar.");
+        let csv = `\uFEFFData;Descrição;Observação;Categoria;Parcela;Status;Data Baixa;Valor\n`;
+        lista.forEach(p => { const cat = getCategoria(p.categoriaId); csv += `${formatDateBR(p.dataCompra)};"${p.descricao}";"${p.observacao || ''}";"${cat?.nome || ''}";"${p.recorrente ? 'Recorr.' : p.index + '/' + p.parcelas}";"${p.status || 'Em aberto'}";${formatDateBR(p.dataBaixa)};${p.valorParcela.toFixed(2).replace('.', ',')}\n`; });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `relatorio_${relatorioTab}_${month}.csv`; a.click();
+      }
+
+      function exportConciliacaoExcel() {
+        if (movimentacoesConciliacao.length === 0) return alert("Sem movimentações.");
+        let csv = `\uFEFFData;Descrição;Observação;Tipo;Débito;Crédito;Saldo\n`;
+        movimentacoesConciliacao.forEach(m => { csv += `${formatDateBR(m.data)};"${m.descricao}";"${m.observacao || ''}";"${m.tipo}";${m.valorDebito ? m.valorDebito.toFixed(2).replace('.', ',') : '0,00'};${m.valorCredito ? m.valorCredito.toFixed(2).replace('.', ',') : '0,00'};${m.saldo.toFixed(2).replace('.', ',')}\n`; });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `conciliacao_${concilContaId}_${concilDataIni}_ate_${concilDataFim}.csv`; a.click();
+      }
+
+      function exportToExcel() {
+        if (installmentsForMonth.length === 0) return alert("Sem lançamentos.");
+        let csv = "\uFEFFData;Descrição;Observação;Cartão;Categoria;Subcategoria;Parcela;Valor Parcela;Valor Total\n";
+        installmentsForMonth.forEach(p => { const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const cartao = getCartao(p.cartaoId); csv += `${formatDateBR(p.dataCompra)};"${p.descricao}";"${p.observacao || ''}";"${cartao?.nome || ''}";"${cat?.nome || ''}";"${sub?.nome || ''}";"${p.recorrente ? 'Recorr.' : p.index + '/' + p.parcelas}";${p.valorParcela.toFixed(2).replace('.', ',')};${(p.recorrente ? p.valorParcela : p.total).toFixed(2).replace('.', ',')}\n`; });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `fatura_${month}.csv`; a.click();
+      }
+
+      function exportToPDF() { window.print(); }
+
+      if (authLoading) return h('div', { style: { textAlign: 'center', padding: '50px', fontFamily: 'sans-serif' } }, "Carregando sistema...");
+      if (!session) {
+        return h('div', { className: 'fatura-app', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--paper)' } },
+          h('div', { className: 'form-card', style: { width: '100%', maxWidth: '420px', padding: '36px', boxShadow: '0 4px 16px rgba(0,0,0,0.06)', borderRadius: '8px' } },
+            h('div', { style: { textAlign: 'center', marginBottom: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '20px', fontWeight: 'bold', color: 'var(--ink)' } }, h(Lock, { size: 22 }), " Acesso Restrito"),
+            h('form', { onSubmit: handleLogin, style: { display: 'flex', flexDirection: 'column', gap: '16px' } },
+              h('div', { className: 'field' }, h('label', null, "E-mail"), h('input', { type: 'email', value: authEmail, onChange: e => setAuthEmail(e.target.value), required: true })),
+              h('div', { className: 'field' }, h('label', null, "Senha"), h('input', { type: 'password', value: authPassword, onChange: e => setAuthPassword(e.target.value), required: true })),
+              authError && h('div', { style: { color: 'var(--red)', fontSize: '13px', background: 'var(--red-soft)', padding: '8px 12px', borderRadius: '4px' } }, authError),
+              h('button', { type: 'submit', className: 'primary', style: { justifyContent: 'center', marginTop: '10px', padding: '12px', background: '#223825', fontWeight: 'bold', fontSize: '15px' } }, "Entrar")
+            )
+          )
+        );
+      }
+      // O sistema não fica mais bloqueado enquanto sincroniza os dados da nuvem.
+      // A tela abre imediatamente e os dados são preenchidos assim que o Supabase responder.
+      return h('div', { className: 'fatura-app-layout' },
+        h('style', null, `
+          .fatura-app-layout { --paper: #ECE8DD; --card: #FAF8F2; --ink: #262117; --ink-soft: #6B6355; --line: #D8D0BC; --green: #2F5233; --red: #8C3B2E; --red-soft: #F1E4DF; --amber: #D97706; --amber-soft: #FEF3C7; font-family: sans-serif; color: var(--ink); display: flex; min-height: 100vh; background-color: var(--paper); }
+          
+          .sidebar { width: 260px; background: var(--card); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 24px 16px; flex-shrink: 0; justify-content: space-between; transition: all 0.3s ease; overflow-x: hidden; white-space: nowrap; z-index: 100; }
+          .sidebar-brand { font-weight: bold; font-size: 16px; color: var(--ink); display: flex; align-items: center; gap: 10px; margin-bottom: 30px; padding-left: 8px; width: 100%; box-sizing: border-box; }
+          .sidebar-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+          .sidebar-nav button { background: none; border: none; text-align: left; padding: 12px 14px; font-size: 14px; font-weight: 500; color: var(--ink-soft); cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 10px; transition: all 0.2s; overflow: hidden; }
+          .sidebar-nav button:hover { background: var(--paper); color: var(--ink); }
+          .sidebar-nav button.active { background: var(--green); color: #fff; font-weight: 600; }
+          .sidebar-footer { border-top: 1px solid var(--line); padding-top: 16px; overflow: hidden; }
+          
+          .nav-text { opacity: 1; transition: opacity 0.2s; }
+
+          .main-content { flex: 1; padding: 24px; overflow-y: auto; max-width: 1200px; display: flex; flex-direction: column; transition: margin-left 0.3s ease; }
+
+          @media (max-width: 850px) {
+            .sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 65px; padding: 24px 12px; }
+            .sidebar .nav-text { opacity: 0; visibility: hidden; display: none; }
+            .sidebar-brand { padding-left: 4px; }
+            .sidebar-nav button { padding: 12px; justify-content: center; }
+            .main-content { margin-left: 65px; width: calc(100% - 65px); padding: 16px; }
+            
+            .sidebar:hover, .sidebar:active, .sidebar:focus-within { width: 260px; padding: 24px 16px; box-shadow: 4px 0 24px rgba(0,0,0,0.15); }
+            .sidebar:hover .nav-text, .sidebar:active .nav-text, .sidebar:focus-within .nav-text { opacity: 1; visibility: visible; display: inline; }
+            .sidebar:hover .sidebar-nav button { justify-content: flex-start; }
+          }
+
+          .fatura-app-layout * { box-sizing: border-box; }
+          .num { font-family: monospace; }
+          .sub-nav { display: flex; gap: 20px; border-bottom: 1px solid var(--line); margin-bottom: 18px; padding-bottom: 8px; flex-wrap: wrap; }
+          .sub-nav button { background: none; border: none; padding: 8px 2px; font-size: 15px; font-weight: bold; color: var(--ink-soft); cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+          .sub-nav button.active { color: var(--ink); border-color: var(--green); }
+          .top, .form-card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 20px; margin-bottom: 16px; }
+          .brand { display: flex; align-items: center; justify-content: space-between; color: var(--ink-soft); font-size: 13px; margin-bottom: 14px; }
+          .nav-month { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+          .nav-month button { background: none; border: 1px solid var(--line); border-radius: 5px; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+          .month-label { font-size: 20px; font-weight: bold; }
+          .total-mes { font-size: 40px; font-weight: bold; margin-top: 10px; }
+          .total-sub { color: var(--ink-soft); font-size: 13px; }
+          
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+          th, td { padding: 10px 6px; border-bottom: 1px solid var(--line); font-size: 13px; text-align: left; vertical-align: middle; }
+          th.right, td.right { text-align: right; }
+          th.center, td.center { text-align: center; }
+          .badge { font-size: 11px; padding: 2px 6px; background: var(--paper); border-radius: 4px; color: var(--ink-soft); white-space: nowrap; }
+          .badge.baixado { background: #D1FAE5; color: #065F46; }
+          .badge.aberto { background: #FEF3C7; color: #92400E; }
+          .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+          
+          .lock-btn { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 5px; font-size: 13px; cursor: pointer; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+          .lock-btn.closed { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); }
+          
+          .action-btn { background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 6px; color: var(--ink-soft); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+          .action-btn:hover { border-color: var(--ink); color: var(--ink); }
+          .action-btn.delete:hover { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+
+          .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; padding: 12px; z-index: 50; }
+          .modal-content { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 20px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+          .modal-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          .field { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+          .field.full { grid-column: span 2; }
+          label { font-size: 12px; color: var(--ink-soft); }
+          input, select, textarea { font-family: inherit; font-size: 14px; padding: 8px; border: 1px solid var(--line); border-radius: 5px; background: #fff; width: 100%; }
+          .submit-row { grid-column: span 2; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; flex-wrap: wrap; gap: 8px; }
+          
+          button.primary { background: var(--green); color: #fff; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+          button.danger { background: var(--red); color: #fff; border: none; border-radius: 5px; padding: 8px 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+          button.icon { background: none; border: none; color: var(--ink-soft); cursor: pointer; padding: 4px; }
+          
+          .color-swatches { display: flex; gap: 6px; }
+          .color-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+          .color-swatch.selected { border-color: var(--ink); }
+          
+          .list-vertical { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+          .list-item { border: 1px solid var(--line); border-radius: 6px; background: #fff; padding: 12px; transition: background 0.2s; }
+          .list-item.clickable { cursor: pointer; }
+          .list-item.clickable:hover { background: var(--paper); }
+          .list-item-main { display: flex; align-items: center; justify-content: space-between; font-weight: 500; font-size: 15px; }
+          .subcategory-item-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--ink); padding: 4px 0; border-bottom: 1px dashed var(--line); }
+          .add-subcat-form { display: flex; gap: 8px; margin-top: 8px; padding-left: 16px; }
+
+          .warning-box { background: var(--amber-soft); border: 1px solid var(--amber); border-radius: 6px; padding: 12px 16px; margin: 16px 0; }
+          .warning-box-title { font-weight: bold; color: #92400E; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+          .warning-box ul { margin: 0; padding-left: 20px; color: #92400E; font-size: 13px; }
+          .warning-box li { margin-bottom: 4px; }
+
+          @media print {
+            body { background: #fff !important; }
+            .sidebar, .global-header, .form-card > div:first-child, .export-buttons, button, .sub-nav, .nav-month, .warning-box { display: none !important; }
+            .main-content { padding: 0 !important; width: 100% !important; max-width: none !important; }
+            .top, .form-card { border: none !important; background: #fff !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+          }
+        `),
+
+        h('div', { className: 'sidebar' },
+          h('div', null,
+            h('div', { className: 'sidebar-brand' }, 
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', minWidth: 'max-content' } }, h(CreditCard, { size: 22 }), h('span', { className: 'nav-text' }, "Samuel Gomes"))
+            ),
+            h('div', { className: 'sidebar-nav' },
+              h('button', { className: screen === "cadastros" ? "active" : "", onClick: () => setScreen("cadastros") }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
+              h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => setScreen("lancamentos") }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
+              h('button', { className: screen === "faturas" ? "active" : "", onClick: () => setScreen("faturas") }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
+              h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => setScreen("relatorios") }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
+              h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => setScreen("conciliacao") }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária"))
+            )
+          ),
+          h('div', { className: 'sidebar-footer' }, 
+            h('button', { type: 'button', className: 'action-btn', onClick: handleLogout, style: { width: '100%', justifyContent: 'flex-start', paddingLeft: '12px', color: 'var(--red)', borderColor: 'var(--red)', background: '#fff', display: 'flex', alignItems: 'center', gap: '10px' } }, 
+              h('span', {style: {fontSize: 16}}, "🚪"), 
+              h('span', { className: 'nav-text' }, "Sair")
+            )
+          )
+        ),
+
+        h('div', { className: 'main-content' },
+
+          h('div', { className: 'global-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid var(--line)' } },
+            h('h2', { style: { margin: 0, fontSize: '20px', color: 'var(--ink)' } }, 
+              screen === 'cadastros' ? 'Cadastros e Configurações' :
+              screen === 'lancamentos' ? 'Gestão de Lançamentos' :
+              screen === 'faturas' ? 'Faturas de Cartão' :
+              screen === 'relatorios' ? 'Relatórios Financeiros' : 'Conciliação Bancária'
+            ),
+            h('button', {
+              className: 'action-btn',
+              style: { 
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontWeight: 'bold', 
+                background: valoresOcultos ? 'var(--amber-soft)' : '#fff', 
+                color: valoresOcultos ? 'var(--amber)' : 'var(--ink)',
+                borderColor: valoresOcultos ? 'var(--amber)' : 'var(--line)'
+              },
+              onClick: () => setValoresOcultos(!valoresOcultos)
+            },
+              valoresOcultos ? h(EyeOff, { size: 18 }) : h(Eye, { size: 18 }),
+              valoresOcultos ? "Exibir Valores" : "Ocultar Valores"
+            )
+          ),
+
+          screen === "cadastros" && h('div', { className: 'form-card' },
+            h('div', { className: 'sub-nav' },
+              h('button', { className: cadastroTab === "cartoes" ? "active" : "", onClick: () => setCadastroTab("cartoes") }, "Cartões"),
+              h('button', { className: cadastroTab === "contas" ? "active" : "", onClick: () => setCadastroTab("contas") }, "🏦 Contas"),
+              h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => setCadastroTab("categorias") }, "Categorias"),
+              h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => setCadastroTab("depara") }, "De-Para (Regras)"),
+              h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => setCadastroTab("importar-txt") }, "📥 Importar TXT")
+            ),
+            cadastroTab === "cartoes" && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, h('div', { style: { fontSize: 14, color: 'var(--ink-soft)' } }, "Meus Cartões"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingCartaoId(null); setNovoCartaoNome(""); setNovoCartaoBanco("033"); setNovoCartaoCor(CARD_COLORS[0]); setNovoCartaoFechamento("01"); setNovoCartaoVencimento("10"); setCartaoModalOpen(true); } }, h(Plus), " Novo Cartão")),
+              h('div', { className: 'list-vertical', style: { marginTop: 12 } }, cartoes.map((c) => h('div', { className: 'list-item', key: c.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', { className: 'dot', style: { background: c.cor } }), h('div', null, h('div', null, c.nome), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `Fecha dia ${c.fechamento || '01'} • Vence dia ${c.vencimento || '10'}`))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingCartaoId(c.id); setNovoCartaoNome(c.nome); setNovoCartaoBanco(c.bancoCode || "033"); setNovoCartaoCor(c.cor || CARD_COLORS[0]); setNovoCartaoFechamento(c.fechamento || "01"); setNovoCartaoVencimento(c.vencimento || "10"); setCartaoModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'cartao', id: c.id, title: 'Excluir Cartão', message: `Excluir ${c.nome}?`, option: "all" }) }, h(Trash2, { size: 14 })))))))
+            ),
+            cadastroTab === "contas" && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, h('div', { style: { fontSize: 14, color: 'var(--ink-soft)' } }, "Minhas Contas Bancárias e Caixas"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingContaId(null); setNovaContaNome(""); setNovaContaBanco("033"); setNovaContaTipo("corrente"); setNovaContaAgencia(""); setNovaContaNumero(""); setContaModalOpen(true); } }, h(Plus), " Nova Conta")),
+              h('div', { className: 'list-vertical', style: { marginTop: 12 } }, contasBancarias.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, "Nenhuma conta cadastrada.") : contasBancarias.map((conta) => { const bancoObj = BANCOS_FEBRABAN.find(b => b.code === conta.bancoCode); const tipoLabel = conta.tipo === 'corrente' ? 'Conta Corrente' : conta.tipo === 'investimento' ? 'Investimento' : conta.tipo === 'dinheiro' ? 'Dinheiro / Caixa' : 'Outros'; return h('div', { className: 'list-item', key: conta.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h(Landmark, { size: 20 }), h('div', null, h('div', { style: { fontWeight: '600' } }, conta.nome), h('div', { style: { fontSize: '12px', color: 'var(--ink-soft)', marginTop: '2px' } }, `${bancoObj ? bancoObj.name : conta.bancoCode} • ${tipoLabel}` + (conta.agencia || conta.numero ? ` • Ag: ${conta.agencia || '-'} | Conta: ${conta.numero || '-'}` : '')))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingContaId(conta.id); setNovaContaNome(conta.nome); setNovaContaBanco(conta.bancoCode || "033"); setNovaContaTipo(conta.tipo || "corrente"); setNovaContaAgencia(conta.agencia || ""); setNovaContaNumero(conta.numero || ""); setContaModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'conta', id: conta.id, title: 'Excluir Conta', message: `Excluir a conta ${conta.nome}?`, option: "all" }) }, h(Trash2, { size: 14 }))))); }))
+            ),
+            cadastroTab === "categorias" && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', gap: 10, marginBottom: 16 } }, h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'despesa' ? 'active' : ''}`, style: { padding: '6px 14px', fontWeight: categoriaTipoTab === 'despesa' ? 'bold' : 'normal', background: categoriaTipoTab === 'despesa' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'despesa' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('despesa') }, "🔴 Categorias de Despesa"), h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'receita' ? 'active' : ''}`, style: { padding: '6px 14px', fontWeight: categoriaTipoTab === 'receita' ? 'bold' : 'normal', background: categoriaTipoTab === 'receita' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'receita' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('receita') }, "🟢 Categorias de Receita")),
+              h('form', { onSubmit: handleAddCategoria, style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, 
+                h('input', { type: 'text', placeholder: `Nova categoria de ${categoriaTipoTab === 'despesa' ? 'despesa' : 'receita'}`, value: novaCategoriaNome, onChange: (e) => setNovaCategoriaNome(e.target.value), style: { flex: 1, minWidth: 160 }, required: true }), 
+                h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', background: '#fff', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, 
+                  h('input', { type: 'checkbox', checked: novaCategoriaIsTransferencia, onChange: e => setNovaCategoriaIsTransferencia(e.target.checked), style: { width: 'auto', margin: 0 } }), 
+                  "🔄 Transferência"
+                ),
+                h('button', { type: 'submit', className: 'primary' }, h(Plus), " Cadastrar")
+              ),
+              h('div', { className: 'list-vertical' }, categorias.filter(cat => (cat.tipo || 'despesa') === categoriaTipoTab).map((cat) => h('div', { className: 'list-item', key: cat.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', { className: 'dot', style: { background: cat.cor } }), h('span', null, cat.nome), cat.isTransferencia && h('span', { className: 'badge', style: { background: '#DBEAFE', color: '#1E40AF' } }, "🔄 Transferência")), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setEditCategoriaModal({ open: true, id: cat.id, nome: cat.nome, cor: cat.cor || CARD_COLORS[0], isTransferencia: !!cat.isTransferencia }) }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'categoria', id: cat.id, title: 'Excluir Categoria', message: `Excluir ${cat.nome}?`, option: "all" }) }, h(Trash2, { size: 14 })))), cat.subcategorias && cat.subcategorias.map((sub) => h('div', { className: 'subcategory-item-row', key: sub.id }, h('span', null, "↳ ", sub.nome), h('div', { style: { display: 'flex', gap: 4 } }, h('button', { type: 'button', className: 'action-btn', style: { padding: 3 }, onClick: () => setEditSubcategoriaModal({ open: true, catId: cat.id, subId: sub.id, nome: sub.nome }) }, h(Pencil, { size: 12 })), h('button', { type: 'button', className: 'action-btn delete', style: { padding: 3 }, onClick: () => setDeleteModal({ open: true, type: 'subcategoria', id: cat.id, subId: sub.id, title: 'Excluir Subcategoria', message: `Excluir ${sub.nome}?`, option: "all" }) }, h(Trash2, { size: 12 }))))), !cat.isTransferencia && h('div', { className: 'add-subcat-form' }, h('input', { type: 'text', placeholder: '+ Adicionar subcategoria', style: { padding: '4px 8px', fontSize: 12, flex: 1 }, value: subInputs[cat.id] || "", onChange: (e) => setSubInputs({ ...subInputs, [cat.id]: e.target.value }), onKeyDown: (e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubcategoria(cat.id); } } }), h('button', { type: 'button', className: 'primary', style: { padding: '4px 8px', fontSize: 12 }, onClick: () => handleAddSubcategoria(cat.id) }, "Incluir")))))
+            ),
+            cadastroTab === "depara" && h(React.Fragment, null,
+              h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, "Regras de De-Para obrigatórias para importação de PDF do Santander."),
+              h('form', { onSubmit: handleAddDepara, style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end', flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Descrição Fatura *"), h('input', { type: 'text', placeholder: 'Ex: UBER *TRIP', value: novoDeparaFatura, onChange: (e) => setNovoDeparaFatura(e.target.value), required: true })), h('div', { className: 'field' }, h('label', null, "Categoria *"), h('select', { value: novoDeparaCategoriaId, onChange: (e) => { setNovoDeparaCategoriaId(e.target.value); setNovoDeparaSubcategoriaId(""); }, required: true }, h('option', { value: "" }, "Selecione..."), categorias.map(c => h('option', { key: c.id, value: c.id }, `${c.nome} (${c.tipo === 'receita' ? 'Receita' : 'Despesa'})`)))), h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: novoDeparaSubcategoriaId, onChange: (e) => setNovoDeparaSubcategoriaId(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), subcategoriasDeparaDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome)))), h('button', { type: 'submit', className: 'primary', style: { height: 38 } }, h(Plus), " Adicionar")),
+              h('div', { className: 'list-vertical' }, deparaList.map((d) => { const cat = getCategoria(d.categoriaId); const sub = getSubcategoria(d.categoriaId, d.subcategoriaId); return h('div', { className: 'list-item', key: d.id }, h('div', { className: 'list-item-main', style: { fontSize: 13 } }, h('span', null, h('b', null, d.fatura), " ➔ ", cat?.nome, " > ", sub?.nome), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'depara', id: d.id, title: 'Excluir Regra', message: 'Excluir regra De-Para?', option: "all" }) }, h(Trash2, { size: 14 })))) }))
+            ),
+            cadastroTab === "importar-txt" && h(React.Fragment, null,
+              h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 } }, "Selecione se deseja importar para Despesas ou Receitas, e cole abaixo ou carregue um arquivo .txt."),
+              h('div', { style: { display: 'flex', gap: 10, marginBottom: 12 } }, h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'despesa' ? 'active' : ''}`, style: { background: categoriaTipoTab === 'despesa' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'despesa' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('despesa') }, "🔴 Importar para Despesas"), h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'receita' ? 'active' : ''}`, style: { background: categoriaTipoTab === 'receita' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'receita' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('receita') }, "🟢 Importar para Receitas")),
+              h('div', { style: { display: 'flex', gap: 10, marginBottom: 10 } }, h('input', { type: 'file', accept: '.txt', ref: txtInputRef, style: { display: 'none' }, onChange: handleUploadTxtFile }), h('button', { type: 'button', className: 'action-btn', onClick: () => txtInputRef.current && txtInputRef.current.click() }, "📁 Carregar arquivo .txt")),
+              h('form', { onSubmit: handleProcessarTxtCategorias, style: { display: 'flex', flexDirection: 'column', gap: 10 } }, h('textarea', { rows: 10, placeholder: 'Exemplo:\nAlimentação\n\t- Supermercado\n\t- Restaurante', value: txtCategoriasContent, onChange: (e) => setTxtCategoriasContent(e.target.value), required: true }), h('button', { type: 'submit', className: 'primary', style: { alignSelf: 'flex-start' } }, h(Plus), ` Importar para ${categoriaTipoTab === 'despesa' ? 'Despesas' : 'Receitas'}`))
+            )
+          ),
+
+          screen === "lancamentos" && h('div', { className: 'form-card' },
+            h('div', { className: 'sub-nav' },
+              h('button', { className: lancamentoTab === "cartao" ? "active" : "", onClick: () => setLancamentoTab("cartao") }, h(CreditCard, { size: 16 }), " Cartão de Crédito"),
+              h('button', { className: lancamentoTab === "pagar" ? "active" : "", onClick: () => setLancamentoTab("pagar") }, h(ArrowDownCircle, { size: 16 }), " Contas a Pagar"),
+              h('button', { className: lancamentoTab === "receber" ? "active" : "", onClick: () => setLancamentoTab("receber") }, h(ArrowUpCircle, { size: 16 }), " Contas a Receber")
+            ),
+
+            lancamentoTab === "cartao" && h(React.Fragment, null,
+              h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
+                h('div', { className: 'brand' },
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(CreditCard), " Lançamentos do cartão"),
+                  h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, 
+                    h('button', { className: `lock-btn ${fechadaAtual ? 'closed' : ''}`, onClick: (e) => toggleFaturaFechada(month, e) }, fechadaAtual ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14 }), fechadaAtual ? ' Fatura Fechada' : ' Fatura Aberta'),
+                    h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
+                  )
+                ),
+                h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
+                h('div', { className: 'total-mes num' }, showMoney(totalMes)),
+                h('div', { className: 'total-sub', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h('span', null, installmentsForMonth.length === 0 ? "Nenhum lançamento nesta fatura" : `${installmentsForMonth.length} lançamento(s)`), selectedCartaoIds.length > 0 && h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, h(Trash2, { size: 14 }), ` Excluir selecionados (${selectedCartaoIds.length})`)),
+                  h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, h('input', { type: 'file', accept: '.pdf', ref: fileInputRef, style: { display: 'none' } }), h('input', { type: 'file', accept: '.csv,.txt', ref: planilhaInputRef, style: { display: 'none' } }), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirImportacaoPlanilha, title: 'Importar lançamentos por planilha' }, h(ArrowDownCircle, { size: 14 }), " Importar Lançamentos"),
+                    h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirAlteracaoCompetenciaLote, title: 'Alterar competência dos lançamentos selecionados' }, h(FileText, { size: 14 }), " Alterar Competência"),
+                    h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirImportacaoPDF, title: 'Importar fatura em PDF' }, h(FileText, { size: 14 }), " Importar Fatura PDF"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
+                ),
+                
+                terminandoCartao.length > 0 && h('div', { className: 'warning-box' }, 
+                  h('div', { className: 'warning-box-title' }, h(Bell, { size: 16 }), `Atenção: ${terminandoCartao.length} lançamento(s) terminando`), 
+                  h('ul', null, terminandoCartao.map(p => h('li', { key: `term-cartao-${p.id}` }, `${p.descricao} - Parcela ${p.index}/${p.parcelas} (${showMoney(p.valorParcela)})`))), 
+                  h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid #D97706' } },
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, h('span', null, "Total destes lançamentos:"), h('span', null, showMoney(totalTerminandoCartao))),
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid rgba(146,64,14,0.25)' } }, h('span', null, "Total das próximas faturas:"), h('span', null, showMoney(totalProximasFaturas)))
+                  )
+                ),
+
+                h('table', null,
+                  h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonth.length > 0 && selectedCartaoIds.length === installmentsForMonth.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
+                  h('tbody', null, installmentsForMonth.length === 0 ? h('tr', null, h('td', { colSpan: 9, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum lançamento no cartão nesta fatura.")) : installmentsForMonth.map((p) => {
+                    const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const cartao = getCartao(p.cartaoId); const isSelected = selectedCartaoIds.includes(p.id);
+                    return h('tr', { key: `${p.id}-${p.index}`, style: { background: isSelected ? 'var(--paper)' : 'transparent' } },
+                      h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual })),
+                      h('td', null, formatDateBR(p.dataCompra)), 
+                      h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', italic: true } }, `📝 ${p.observacao}`), cartao ? h('div', { style: { fontSize: 11, color: '#6B6355' } }, cartao.nome) : h('div', { style: { fontSize: 11, color: 'var(--red)', fontWeight: 'bold' } }, '⚠️ SEM CARTÃO VINCULADO')),
+                      h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)),
+                      h('td', { className: 'right num' }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)),
+                      h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, 
+                        h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput(p.valorParcela.toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })), 
+                        h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao + ' (Cópia)'); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput((p.recorrente ? p.valorParcela : p.total).toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual('1'); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Duplicar' }, h(Copy, { size: 14 })),
+                        h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: ``, option: 'current' }), disabled: fechadaAtual, title: 'Excluir' }, h(Trash2, { size: 14 }))
+                      ))
+                    );
+                  })),
+                  h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '6', style: { textAlign: 'right', padding: '10px 6px' } }, "Total da Fatura:"), h('td', { className: 'right num' }, showMoney(totalValorParcelaTabela)), h('td', { className: 'right num' }, showMoney(totalValorTotalTabela)), h('td', null)))
+                )
+              )
+            ),
+
+            lancamentoTab === "pagar" && h(React.Fragment, null,
+              h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
+                h('div', { className: 'brand' },
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(ArrowDownCircle), " Contas a Pagar"),
+                  h('div', { style: { display: 'flex', gap: 8 } }, batchPagarIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('pagar', batchPagarIds) }, `Estornar Baixa (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchPagarIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('pagar'); setModalOpen(true); } }, h(Plus), " Nova Conta a Pagar"))
+                ),
+                h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
+                h('div', { className: 'total-mes num' }, showMoney(totalPagarParcelaTabela)),
+                h('div', { className: 'total-sub', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h('span', null, `${contasPagarForMonth.length} conta(s) a pagar neste mês`), batchPagarIds.length > 0 && h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, h(Trash2, { size: 14 }), ` Excluir selecionados (${batchPagarIds.length})`)),
+                  h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: () => {
+                    if (contasPagarForMonth.length === 0) return alert("Sem dados."); let csv = "\uFEFFData;Descrição;Observação;Categoria;Subcategoria;Parcela;Status;Valor Parcela;Valor Total\n"; contasPagarForMonth.forEach(p => { const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); csv += `${formatDateBR(p.dataCompra)};"${p.descricao}";"${p.observacao || ''}";"${cat?.nome || ''}";"${sub?.nome || ''}";"${p.recorrente ? 'Recorrente' : p.index + '/' + p.parcelas}";"${p.status || 'Em aberto'}";${p.valorParcela.toFixed(2).replace('.', ',')};${(p.recorrente ? p.valorParcela : p.total).toFixed(2).replace('.', ',')}\n`; }); const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `contas_pagar_${month}.csv`; a.click();
+                  } }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
+                ),
+                
+                terminandoPagar.length > 0 && h('div', { className: 'warning-box' }, 
+                  h('div', { className: 'warning-box-title' }, h(Bell, { size: 16 }), `Atenção: ${terminandoPagar.length} conta(s) terminando`), 
+                  h('ul', null, terminandoPagar.map(p => h('li', { key: `term-pagar-${p.id}` }, `${p.descricao} - Parcela ${p.index}/${p.parcelas} (${showMoney(p.valorParcela)})`))), 
+                  h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', justifyContent: 'space-between', border: '1px solid #D97706' } }, h('span', null, "Total destas contas:"), h('span', null, showMoney(totalTerminandoPagar)))
+                ),
+
+                h('table', null,
+                  h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: contasPagarForMonth.length > 0 && batchPagarIds.length === contasPagarForMonth.length, onChange: toggleSelectAllPagar })), h('th', null, "Vencimento"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
+                  h('tbody', null, contasPagarForMonth.length === 0 ? h('tr', null, h('td', { colSpan: 9, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta a pagar.")) : contasPagarForMonth.map((p) => {
+                    const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const bancoBaixa = getConta(p.bancoBaixaId); const isChecked = batchPagarIds.includes(p.id); const isBaixado = p.status === "Baixado";
+                    return h('tr', { key: `pagar-tab-${p.id}`, style: { background: isChecked ? 'var(--paper)' : 'transparent' } },
+                      h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isChecked, onChange: () => toggleSelectPagarItem(p.id) })),
+                      h('td', null, formatDateBR(p.dataCompra)), 
+                      h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', italic: true } }, `📝 ${p.observacao}`), h('div', { style: { fontSize: 11, color: isBaixado ? '#065F46' : '#92400E', marginTop: 2 } }, isBaixado ? `Baixado em ${formatDateBR(p.dataBaixa)} (${bancoBaixa?.nome || 'Banco'})` : 'Em aberto'), p.linkFatura && h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', fontSize: 10, marginTop: 6, display: 'inline-flex', gap: 4 }, onClick: () => { setLancamentoTab('cartao'); setMonth(p.linkFatura); } }, h(FileText, { size: 10 }), "Ver Fatura do Cartão")),
+                      h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)),
+                      h('td', { className: 'right num' }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)),
+                      h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, 
+                        !isBaixado ? h('button', { type: 'button', className: 'primary', style: { padding: '4px' }, onClick: () => setBaixaModal({ open: true, type: 'pagar', id: p.id, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }), title: 'Baixar Lançamento' }, h(CheckCircle, { size: 14 })) : h('button', { type: 'button', className: 'danger', style: { padding: '4px' }, onClick: () => executarEstornoBaixa('pagar', p.id, p.dataBaixa), title: 'Estornar Baixa' }, h(RefreshCw, { size: 14 })), 
+                        !isBaixado && h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput(p.valorParcela.toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('pagar'); setModalOpen(true); }, title: 'Editar' }, h(Pencil, { size: 14 })), 
+                        h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao + ' (Cópia)'); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput((p.recorrente ? p.valorParcela : p.total).toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual('1'); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('pagar'); setModalOpen(true); }, title: 'Duplicar' }, h(Copy, { size: 14 })),
+                        h('button', { type: 'button', className: 'action-btn delete', title: isBaixado ? 'Baixado: Exclusão bloqueada' : 'Excluir', onClick: () => setDeleteModal({ open: true, type: 'pagar', id: p.id, purchase: p, title: 'Excluir Conta', message: isBaixado ? 'ERRO: Este lançamento já está baixado e não pode ser excluído.' : ``, option: 'current' }) }, h(Trash2, { size: 14 }))
+                      ))
+                    );
+                  })),
+                  h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '6', style: { textAlign: 'right', padding: '10px 6px' } }, "Total do Mês:"), h('td', { className: 'right num' }, showMoney(totalPagarParcelaTabela)), h('td', { className: 'right num' }, showMoney(totalPagarTotalTabela)), h('td', null)))
+                )
+              )
+            ),
+
+            lancamentoTab === "receber" && h(React.Fragment, null,
+              h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
+                h('div', { className: 'brand' },
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(ArrowUpCircle), " Contas a Receber"),
+                  h('div', { style: { display: 'flex', gap: 8 } }, batchReceberIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }) }, `Baixar Selecionados (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('receber', batchReceberIds) }, `Estornar Baixa (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchReceberIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('receber'); setModalOpen(true); } }, h(Plus), " Nova Conta a Receber"))
+                ),
+                h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
+                h('div', { className: 'total-mes num' }, showMoney(totalReceberParcelaTabela)),
+                h('div', { className: 'total-sub', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h('span', null, `${contasReceberForMonth.length} receita(s) neste mês`), batchReceberIds.length > 0 && h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, h(Trash2, { size: 14 }), ` Excluir selecionados (${batchReceberIds.length})`)),
+                  h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: () => {
+                    if (contasReceberForMonth.length === 0) return alert("Sem dados."); let csv = "\uFEFFData;Descrição;Observação;Categoria;Subcategoria;Parcela;Status;Valor Parcela;Valor Total\n"; contasReceberForMonth.forEach(p => { const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); csv += `${formatDateBR(p.dataCompra)};"${p.descricao}";"${p.observacao || ''}";"${cat?.nome || ''}";"${sub?.nome || ''}";"${p.recorrente ? 'Recorrente' : p.index + '/' + p.parcelas}";"${p.status || 'Em aberto'}";${p.valorParcela.toFixed(2).replace('.', ',')};${(p.recorrente ? p.valorParcela : p.total).toFixed(2).replace('.', ',')}\n`; }); const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `contas_receber_${month}.csv`; a.click();
+                  } }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
+                ),
+                
+                terminandoReceber.length > 0 && h('div', { className: 'warning-box' }, 
+                  h('div', { className: 'warning-box-title' }, h(Bell, { size: 16 }), `Atenção: ${terminandoReceber.length} conta(s) terminando`), 
+                  h('ul', null, terminandoReceber.map(p => h('li', { key: `term-receber-${p.id}` }, `${p.descricao} - Parcela ${p.index}/${p.parcelas} (${showMoney(p.valorParcela)})`))), 
+                  h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', justifyContent: 'space-between', border: '1px solid #D97706' } }, h('span', null, "Total destas contas:"), h('span', null, showMoney(totalTerminandoReceber)))
+                ),
+
+                h('table', null,
+                  h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: contasReceberForMonth.length > 0 && batchReceberIds.length === contasReceberForMonth.length, onChange: toggleSelectAllReceber })), h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
+                  h('tbody', null, contasReceberForMonth.length === 0 ? h('tr', null, h('td', { colSpan: 9, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma receita para este mês.")) : contasReceberForMonth.map((p) => {
+                    const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const bancoBaixa = getConta(p.bancoBaixaId); const isChecked = batchReceberIds.includes(p.id); const isBaixado = p.status === "Baixado";
+                    return h('tr', { key: `receber-tab-${p.id}`, style: { background: isChecked ? 'var(--paper)' : 'transparent' } },
+                      h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isChecked, onChange: () => toggleSelectReceberItem(p.id) })),
+                      h('td', null, formatDateBR(p.dataCompra)), 
+                      h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', italic: true } }, `📝 ${p.observacao}`), h('div', { style: { fontSize: 11, color: isBaixado ? '#065F46' : '#92400E', marginTop: 2 } }, isBaixado ? `Baixado em ${formatDateBR(p.dataBaixa)} (${bancoBaixa?.nome || 'Banco'})` : 'Em aberto')),
+                      h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)),
+                      h('td', { className: 'right num', style: { color: 'var(--green)' } }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)),
+                      h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, 
+                        !isBaixado ? h('button', { type: 'button', className: 'primary', style: { padding: '4px' }, onClick: () => setBaixaModal({ open: true, type: 'receber', id: p.id, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }), title: 'Baixar Recebimento' }, h(CheckCircle, { size: 14 })) : h('button', { type: 'button', className: 'danger', style: { padding: '4px' }, onClick: () => executarEstornoBaixa('receber', p.id, p.dataBaixa), title: 'Estornar Baixa' }, h(RefreshCw, { size: 14 })), 
+                        !isBaixado && h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput(p.valorParcela.toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('receber'); setModalOpen(true); }, title: 'Editar' }, h(Pencil, { size: 14 })), 
+                        h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao + ' (Cópia)'); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput((p.recorrente ? p.valorParcela : p.total).toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual('1'); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('receber'); setModalOpen(true); }, title: 'Duplicar' }, h(Copy, { size: 14 })),
+                        h('button', { type: 'button', className: 'action-btn delete', title: isBaixado ? 'Baixado: Exclusão bloqueada' : 'Excluir', onClick: () => setDeleteModal({ open: true, type: 'receber', id: p.id, purchase: p, title: 'Excluir Receita', message: isBaixado ? 'ERRO: Este lançamento já está baixado e não pode ser excluído.' : ``, option: 'current' }) }, h(Trash2, { size: 14 }))
+                      ))
+                    );
+                  })),
+                  h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '6', style: { textAlign: 'right', padding: '10px 6px' } }, "Total do Mês:"), h('td', { className: 'right num' }, showMoney(totalReceberParcelaTabela)), h('td', { className: 'right num' }, showMoney(totalReceberTotalTabela)), h('td', null)))
+                )
+              )
+            )
+          ),
+
+          screen === "faturas" && h('div', { className: 'form-card' },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } }, h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Resumo de Faturas por Ano"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 20 } }, "Navegue pelos anos e clique em um mês para visualizar e gerenciar seus lançamentos logo abaixo."),
+            h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 } }, h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) - 1).toString()) }, h(ChevronLeft)), h('div', { style: { fontSize: 22, fontWeight: 'bold' } }, faturaAno), h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) + 1).toString()) }, h(ChevronRight))),
+            h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' } }, Array.from({ length: 12 }).map((_, i) => {
+              const mesNum = String(i + 1).padStart(2, "0"); const compStr = `${faturaAno}-${mesNum}`; const dataFat = faturasAgrupadas.find(f => f.competencia === compStr); const total = dataFat ? dataFat.total : 0; const qtd = dataFat ? dataFat.qtd : 0; const fechada = isFaturaFechada(compStr); const isSelectedComp = month === compStr; const dateParaNome = new Date(parseInt(faturaAno), i, 1); const nomeMes = dateParaNome.toLocaleDateString('pt-BR', { month: 'long' });
+              return h('div', { key: compStr, className: 'list-item clickable', onClick: () => setMonth(compStr), style: { borderColor: isSelectedComp ? 'var(--green)' : 'var(--line)', background: isSelectedComp ? 'var(--paper)' : '#fff', borderWidth: isSelectedComp ? '2px' : '1px', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 12px' } }, h('div', { style: { fontSize: 14, fontWeight: 'bold', textTransform: 'capitalize', marginBottom: 8 } }, nomeMes), h('div', { className: 'num', style: { fontSize: 18, fontWeight: 'bold', color: total > 0 ? 'var(--ink)' : 'var(--ink-soft)' } }, showMoney(total)), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, `${qtd} lançamento(s)`), h('div', { style: { display: 'flex', gap: 6, marginTop: 12, minHeight: 28 } }, h('button', { type: 'button', className: 'action-btn', style: { padding: '4px 8px', background: fechada ? 'var(--amber-soft)' : '#fff', borderColor: fechada ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => { e.stopPropagation(); toggleFaturaFechada(compStr, e); } }, fechada ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14, color: 'var(--green)' }))));
+            })),
+            h('div', { style: { marginTop: 24, borderTop: '2px solid var(--line)', paddingTop: 16 } },
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
+                h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, `Lançamentos da Fatura: ${formatMonthLabel(month)}`),
+                h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+                  h('button', { className: `lock-btn ${fechadaAtual ? 'closed' : ''}`, onClick: (e) => toggleFaturaFechada(month, e) }, fechadaAtual ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14 }), fechadaAtual ? ' Fatura Fechada' : ' Fatura Aberta'),
+                  h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 8px' }, onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
+                )
+              ),
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 10, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
+              
+              terminandoCartao.length > 0 && h('div', { className: 'warning-box' }, 
+                h('div', { className: 'warning-box-title' }, h(Bell, { size: 16 }), `Atenção: ${terminandoCartao.length} lançamento(s) terminando`), 
+                h('ul', null, terminandoCartao.map(p => h('li', { key: `term-fatura-${p.id}` }, `${p.descricao} - Parcela ${p.index}/${p.parcelas} (${showMoney(p.valorParcela)})`))), 
+                h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid #D97706' } },
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, h('span', null, "Total destes lançamentos:"), h('span', null, showMoney(totalTerminandoCartao))),
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid rgba(146,64,14,0.25)' } }, h('span', null, "Total das próximas faturas:"), h('span', null, showMoney(totalProximasFaturas)))
+                  )
+              ),
+
+              installmentsForMonth.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, padding: '16px 0' } }, "Nenhum lançamento para esta fatura.") : h('table', null,
+                h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonth.length > 0 && selectedCartaoIds.length === installmentsForMonth.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
+                h('tbody', null, installmentsForMonth.map((p) => {
+                  const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const isSelected = selectedCartaoIds.includes(p.id); const cartao = getCartao(p.cartaoId);
+                  return h('tr', { key: `fat-det-${p.id}-${p.index}`, style: { background: isSelected ? 'var(--paper)' : 'transparent' } }, h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual })), h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', italic: true } }, `📝 ${p.observacao}`), cartao ? h('div', { style: { fontSize: 11, color: '#6B6355' } }, cartao.nome) : h('div', { style: { fontSize: 11, color: 'var(--red)', fontWeight: 'bold' } }, '⚠️ SEM CARTÃO')), h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'right num' }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)), h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput(p.valorParcela.toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: ``, option: 'current' }), disabled: fechadaAtual, title: 'Excluir' }, h(Trash2, { size: 14 })))));
+                })),
+                h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '6', style: { textAlign: 'right', padding: '10px 6px' } }, "Total da Fatura:"), h('td', { className: 'right num' }, showMoney(totalValorParcelaTabela)), h('td', { className: 'right num' }, showMoney(totalValorTotalTabela)), h('td', null)))
+              )
+            )
+          ),
+
+          screen === "relatorios" && h('div', { className: 'form-card' },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Relatórios Financeiros"),
+              h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: exportRelatorioExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
+            ),
+            h('div', { className: 'sub-nav' }, h('button', { className: relatorioTab === "pagar" ? "active" : "", onClick: () => setRelatorioTab("pagar") }, "🔴 Contas a Pagar"), h('button', { className: relatorioTab === "receber" ? "active" : "", onClick: () => setRelatorioTab("receber") }, "🟢 Contas a Receber")),
+            h('div', { className: 'nav-month', style: { marginBottom: 16 } }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
+
+            h('div', { style: { background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6, padding: '12px 16px', marginBottom: 16, display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end' } },
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Lançamento De"), h('input', { type: 'date', value: relFiltroDataIniInput, onChange: e => setRelFiltroDataIniInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Lançamento Até"), h('input', { type: 'date', value: relFiltroDataFimInput, onChange: e => setRelFiltroDataFimInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Baixa De"), h('input', { type: 'date', value: relFiltroBaixaIniInput, onChange: e => setRelFiltroBaixaIniInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Baixa Até"), h('input', { type: 'date', value: relFiltroBaixaFimInput, onChange: e => setRelFiltroBaixaFimInput(e.target.value), style: { width: '135px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } })),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } }, h('label', { style: { fontSize: '12px', color: 'var(--ink-soft)' } }, "Status"), h('select', { value: relFiltroStatusInput, onChange: e => setRelFiltroStatusInput(e.target.value), style: { width: '120px', padding: '8px', border: '1px solid var(--line)', borderRadius: '5px' } }, h('option', { value: "todos" }, "Todos"), h('option', { value: "aberto" }, "Em aberto"), h('option', { value: "baixado" }, "Baixado"))),
+              h('div', { style: { display: 'flex', gap: '6px', height: '34px', alignItems: 'center' } }, 
+                h('button', { type: 'button', className: 'primary', style: { height: '34px', padding: '0 12px', fontSize: '13px', fontWeight: 'bold' }, onClick: () => { setRelFiltroDataIni(relFiltroDataIniInput); setRelFiltroDataFim(relFiltroDataFimInput); setRelFiltroBaixaIni(relFiltroBaixaIniInput); setRelFiltroBaixaFim(relFiltroBaixaFimInput); setRelFiltroStatus(relFiltroStatusInput); } }, "Consultar"), 
+                h('button', { type: 'button', className: 'action-btn', style: { height: '34px', padding: '0 10px', fontSize: '13px' }, onClick: () => { setRelFiltroDataIniInput(""); setRelFiltroDataFimInput(""); setRelFiltroBaixaIniInput(""); setRelFiltroBaixaFimInput(""); setRelFiltroStatusInput("todos"); setRelFiltroDataIni(""); setRelFiltroDataFim(""); setRelFiltroBaixaIni(""); setRelFiltroBaixaFim(""); setRelFiltroStatus("todos"); } }, "Limpar")
+              )
+            ),
+
+            relatorioTab === "pagar" && h(React.Fragment, null,
+              h('div', { className: 'total-mes num' }, showMoney(totalMesPagarRelatorio)), h('div', { className: 'total-sub', style: { marginBottom: 12 } }, `Total de Contas a Pagar filtradas para ${formatMonthLabel(month)} (${contasPagarFiltradasRelatorio.length} itens)`),
+              h('table', null,
+                h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'center' }, "Status / Baixa"), h('th', { className: 'right' }, "Valor"))),
+                h('tbody', null, contasPagarFiltradasRelatorio.length === 0 ? h('tr', null, h('td', { colSpan: 6, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum registro encontrado.")) : contasPagarFiltradasRelatorio.map(p => {
+                  const cat = getCategoria(p.categoriaId); return h('tr', { key: `rel-pag-${p.id}` }, h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${p.observacao}`)), h('td', null, cat?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'center' }, h('span', { className: `badge ${p.status === 'Baixado' ? 'baixado' : 'aberto'}` }, p.status === 'Baixado' ? `Baixado (${formatDateBR(p.dataBaixa)})` : 'Em aberto')), h('td', { className: 'right num' }, showMoney(p.valorParcela)));
+                })),
+                h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '5', style: { textAlign: 'right' } }, "Total Filtrado:"), h('td', { className: 'right num' }, showMoney(totalMesPagarRelatorio))))
+              )
+            ),
+            relatorioTab === "receber" && h(React.Fragment, null,
+              h('div', { className: 'total-mes num' }, showMoney(totalMesReceberRelatorio)), h('div', { className: 'total-sub', style: { marginBottom: 12 } }, `Total de Contas a Receber filtradas para ${formatMonthLabel(month)} (${contasReceberFiltradasRelatorio.length} itens)`),
+              h('table', null,
+                h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'center' }, "Status / Baixa"), h('th', { className: 'right' }, "Valor"))),
+                h('tbody', null, contasReceberFiltradasRelatorio.length === 0 ? h('tr', null, h('td', { colSpan: 6, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum registro encontrado.")) : contasReceberFiltradasRelatorio.map(p => {
+                  const cat = getCategoria(p.categoriaId); return h('tr', { key: `rel-rec-${p.id}` }, h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${p.observacao}`)), h('td', null, cat?.nome || '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'center' }, h('span', { className: `badge ${p.status === 'Baixado' ? 'baixado' : 'aberto'}` }, p.status === 'Baixado' ? `Baixado (${formatDateBR(p.dataBaixa)})` : 'Em aberto')), h('td', { className: 'right num' }, showMoney(p.valorParcela)));
+                })),
+                h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '5', style: { textAlign: 'right' } }, "Total Filtrado:"), h('td', { className: 'right num' }, showMoney(totalMesReceberRelatorio))))
+              )
+            )
+          ),
+
+          screen === "conciliacao" && h('div', { className: 'form-card' },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Conciliação Bancária"),
+              h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } },
+                h('button', { type: 'button', className: 'primary', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
+                concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
+                concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
+              )
+            ),
+            h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")),
+
+            concilExibido && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap' } },
+                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Débitos (Pagamentos)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--red)' } }, showMoney(totalDebitosConcil))),
+                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Créditos (Recebimentos)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--green)' } }, showMoney(totalCreditosConcil))),
+                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo Final da Conta"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoFinalConcil)))
+              ),
+
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: '#F2EFE9', borderRadius: 6, border: '1px solid var(--line)' } }, 
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }, onClick: () => setCalendarioExpandido(!calendarioExpandido) }, 
+                  h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Calendário de Saldos do Mês"),
+                  h('button', { type: 'button', className: 'action-btn', style: { padding: 4, borderRadius: '50%' } }, calendarioExpandido ? h(ChevronUp, {size: 16}) : h(ChevronDown, {size: 16})),
+                  !calendarioExpandido && h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Clique para expandir")
+                ),
+                h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' }, onClick: e => e.stopPropagation() }, 
+                  h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, `Mês:`), 
+                  h('input', { type: 'month', value: concilCalMes, onChange: e => setConcilCalMes(e.target.value), style: { width: 140 } }), 
+                  calendarioExpandido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF, title: 'Imprimir Calendário' }, h(Printer, { size: 14 }), " Imprimir")
+                )
+              ),
+
+              calendarioExpandido && h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 24 } }, calendarioDiasDoMes.map(d => {
+                const fechado = isDiaFechado(d.data); return h('div', { key: d.data, style: { background: '#fff', border: '1px solid var(--line)', borderRadius: 5, padding: 8, fontSize: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', marginBottom: 4 } }, h('span', null, formatDateBR(d.data)), h('button', { type: 'button', className: 'action-btn', style: { padding: 2, background: fechado ? 'var(--amber-soft)' : '#fff', borderColor: fechado ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => toggleDiaFechado(d.data, e) }, fechado ? h(Lock, { size: 10, color: 'var(--amber)' }) : h(Unlock, { size: 10, color: 'var(--green)' }))), h('div', { style: { color: 'var(--red)', fontSize: 11 } }, `(-) ${showMoney(d.debitos)}`), h('div', { style: { color: 'var(--green)', fontSize: 11 } }, `(+) ${showMoney(d.cred)}`), h('div', { className: 'num', style: { fontWeight: 'bold', marginTop: 4, borderTop: '1px solid var(--line)', paddingTop: 2 } }, `Saldo: ${showMoney(d.saldo)}`));
+              })),
+
+              h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottom: '2px solid var(--line)', paddingBottom: 8 } }, "Movimentação Detalhada do Período Filtrado"),
+
+              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e) }, isDiaFechado(grupo.data) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { style: { marginTop: 0 } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('a', { href: '#', style: { color: 'var(--green)', fontWeight: 'bold', textDecoration: 'underline', fontSize: '12px' }, onClick: (e) => { e.preventDefault(); setConcilEditModal({ open: true, item }); } }, "🔗 Abrir / Alterar")), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo))))))))
+            )
+          )
+
+        ),
+
+        lrModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 480 } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 12 } }, h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Lançamento Direto na Conciliação"), h('button', { type: 'button', className: 'icon', onClick: () => setLrModalOpen(false) }, h(XIcon))),
+            h('form', { className: 'modal-form', onSubmit: handleSaveLancamentoRapido },
+              
+              h('div', { className: 'field full', style: { display: 'flex', flexDirection: 'row', justifyContent: 'center', gap: 24, marginBottom: 16, paddingBottom: 12, borderBottom: '1px dashed var(--line)' } },
+                h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'bold', color: lrTipo === 'despesa' ? 'var(--red)' : 'var(--ink-soft)' } }, h('input', { type: 'radio', name: 'lrTipo', checked: lrTipo === 'despesa', onChange: () => setLrTipo('despesa'), style: { width: 'auto', margin: 0 } }), "🔴 Saída"),
+                h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'bold', color: lrTipo === 'receita' ? 'var(--green)' : 'var(--ink-soft)' } }, h('input', { type: 'radio', name: 'lrTipo', checked: lrTipo === 'receita', onChange: () => setLrTipo('receita'), style: { width: 'auto', margin: 0 } }), "🟢 Entrada")
+              ),
+              
+              h('div', { className: 'field' }, h('label', null, "Data *"), h('input', { type: 'date', value: lrData, onChange: e => setLrData(e.target.value), required: true })),
+              h('div', { className: 'field' }, h('label', null, "Valor *"), h('input', { type: 'text', value: lrValor, onChange: e => setLrValor(e.target.value), required: true, placeholder: '0,00' })),
+              
+              h('div', { className: 'field full' }, h('label', null, "Descrição *"), h('input', { type: 'text', value: lrDescricao, onChange: e => setLrDescricao(e.target.value), required: true, placeholder: 'Ex: Tarifa de Manutenção ou Rendimento' })),
+              h('div', { className: 'field full' }, h('label', null, "Observação (Opcional)"), h('input', { type: 'text', value: lrObservacao, onChange: e => setLrObservacao(e.target.value), placeholder: 'Campo de detalhamento livre' })),
+              
+              h('div', { className: 'field full' }, h('label', null, "Categoria *"), h('select', { value: lrCategoriaId, onChange: e => handleLrCategoriaChange(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), categorias.filter(c => (c.tipo || 'despesa') === lrTipo).map(c => h('option', { key: c.id, value: c.id }, `${c.nome} ${c.isTransferencia ? '(🔄 Transferência)' : ''}`)))),
+              
+              !lrIsTransferencia && h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: lrSubcategoriaId, onChange: e => setLrSubcategoriaId(e.target.value), required: !lrIsTransferencia }, h('option', { value: "" }, "Selecione..."), subcategoriasLrDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome)))),
+              !lrIsTransferencia && h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('select', { value: lrContaOrigem, onChange: e => setLrContaOrigem(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+              
+              lrIsTransferencia && h('div', { className: 'field' }, h('label', null, "Conta de Origem *"), h('select', { value: lrContaOrigem, onChange: e => setLrContaOrigem(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+              lrIsTransferencia && h('div', { className: 'field' }, h('label', null, "Conta de Destino *"), h('select', { value: lrContaDestino, onChange: e => setLrContaDestino(e.target.value), required: true }, h('option', { value: "" }, "Selecione destino..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+              
+              lrError && h('div', { style: { color: 'var(--red)', fontSize: 12, gridColumn: 'span 2' } }, lrError),
+              h('div', { className: 'submit-row', style: { marginTop: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setLrModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, h(CheckCircle, {size: 16}), " Lançar"))
+            )
+          )
+        ),
+
+        concilEditModal.open && concilEditModal.item && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 12 } }, h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Detalhes do Lançamento"), h('button', { type: 'button', className: 'icon', onClick: () => setConcilEditModal({ open: false, item: null }) }, h(XIcon))),
+            concilEditModal.item.tipoOrigem === 'fatura' ? h('div', null,
+              h('p', null, `Pagamento de Fatura referente à competência: ${formatMonthLabel(concilEditModal.item.competenciaRef)}`), h('p', null, `Data do Pagamento: ${formatDateBR(concilEditModal.item.baixaRef.dataBaixa)}`), h('p', null, `Conta: ${getConta(concilEditModal.item.baixaRef.bancoId)?.nome || '-'}`),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setConcilEditModal({ open: false, item: null }) }, "Fechar"))
+            ) : h('div', null,
+              h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Descrição: "), concilEditModal.item.itemRef.descricao),
+              concilEditModal.item.itemRef.observacao && h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Observação: "), concilEditModal.item.itemRef.observacao),
+              h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Valor: "), showMoney(concilEditModal.item.itemRef.recorrente ? concilEditModal.item.itemRef.valorParcela : (concilEditModal.item.itemRef.valorParcela || concilEditModal.item.itemRef.total))), h('div', { style: { fontSize: 14, marginBottom: 10 } }, h('b', null, "Status: "), concilEditModal.item.itemRef.status), h('div', { style: { fontSize: 14, marginBottom: 16 } }, h('b', null, "Baixado em: "), formatDateBR(concilEditModal.item.itemRef.dataBaixa), ` (${getConta(concilEditModal.item.itemRef.bancoBaixaId)?.nome || '-'})`),
+              
+              (() => {
+                  const isDireto = concilEditModal.item.itemRef.isLancamentoDireto;
+                  return h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 20 } },
+                      isDireto 
+                      ? h('button', { type: 'button', className: 'danger', onClick: () => { setDeleteModal({ open: true, type: concilEditModal.item.tipoOrigem, id: concilEditModal.item.itemRef.id, purchase: concilEditModal.item.itemRef, title: 'Excluir Lançamento Direto', message: 'Este é um lançamento direto e será permanentemente apagado. Deseja excluir?', option: 'all' }); setConcilEditModal({ open: false, item: null }); } }, h(Trash2, { size: 14 }), " Excluir") 
+                      : h('button', { type: 'button', className: 'danger', onClick: () => { const tipo = concilEditModal.item.tipoOrigem; const id = concilEditModal.item.itemRef.id; const dataBaixa = concilEditModal.item.itemRef.dataBaixa; setConcilEditModal({ open: false, item: null }); executarEstornoBaixa(tipo, id, dataBaixa); } }, "Estornar Baixa"),
+                      
+                      h('div', { style: { display: 'flex', gap: 8 } }, 
+                          h('button', { type: 'button', className: 'action-btn', onClick: () => setConcilEditModal({ open: false, item: null }) }, "Cancelar"), 
+                          !isDireto && h('button', { type: 'button', className: 'primary', onClick: () => { const ref = concilEditModal.item.itemRef; const tipo = concilEditModal.item.tipoOrigem; setConcilEditModal({ open: false, item: null }); setEditingId(ref.id); setDescricao(ref.descricao); setObservacao(ref.observacao || ''); setValorTotal(ref.total.toFixed(2).replace('.', ',')); setValorParcelaInput(ref.recorrente ? '' : (ref.valorParcela || ref.total).toFixed(2).replace('.', ',')); setDataLancamento(ref.dataCompra || currentDate()); setFaturaMes(ref.inicio || month); setParcelas(ref.parcelas.toString()); setParcelaAtual((ref.parcelaInicial || 1).toString()); setCategoriaId(ref.categoriaId || ''); setSubcategoriaId(ref.subcategoriaId || ''); setIsRecorrente(!!ref.recorrente); setLancamentoTab(tipo); setModalOpen(true); } }, "Editar")
+                      )
+                  );
+              })()
+            )
+          )
+        ),
+
+        pdfModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', style: { maxWidth: 1050, width: '96%', maxHeight: '90vh', overflowY: 'auto' }, onClick: e => e.stopPropagation() },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
+              h('strong', { style: { fontSize: 18 } }, 'Importar Fatura do Cartão — PDF'),
+              h('button', { type: 'button', className: 'action-btn', onClick: () => setPdfModalOpen(false), disabled: pdfImportando }, h(XIcon, { size: 16 }))
+            ),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione o PDF da fatura. O sistema identifica os lançamentos, marca duplicados e permite informar categoria, subcategoria e parcelas dos novos. Faturas fechadas não aceitam novas importações.'),
+            h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12, background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
+              h(FileText, { size: 17 }), ' Selecionar PDF para Importação',
+              h('input', { ref: pdfInputRef, type: 'file', accept: '.pdf,application/pdf', style: { display: 'none' }, onChange: lerFaturaPDF })
+            ),
+            pdfArquivo && h('div', { style: { fontSize: 12, marginBottom: 8 } }, 'Arquivo: ' + pdfArquivo),
+            pdfImportando && h('div', { style: { padding: 10, background: '#FAF8F2', marginBottom: 10 } }, 'Lendo a fatura...'),
+            pdfError && h('div', { style: { color: 'var(--red)', background: '#FEE2E2', padding: 10, marginBottom: 10, whiteSpace: 'pre-line' } }, pdfError),
+            pdfPreview.length > 0 && h('div', null,
+              h('div', { style: { fontWeight: 'bold', marginBottom: 8 } }, pdfPreview.length + ' lançamento(s) identificados. Novos: ' + pdfPreview.filter(r => !r.duplicado).length + ' | Já lançados: ' + pdfPreview.filter(r => r.duplicado).length),
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 } },
+                h('span', { style: { fontSize: 12, fontWeight: 'bold' } }, 'Mostrar:'),
+                h('select', { value: pdfFiltro, onChange: e => setPdfFiltro(e.target.value), style: { width: 190 } },
+                  h('option', { value: 'todos' }, 'Todos os lançamentos'),
+                  h('option', { value: 'novos' }, 'Ainda não lançados'),
+                  h('option', { value: 'lancados' }, 'Já lançados')
+                )
+              ),
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8, padding: '8px 10px', background: '#FAF8F2', border: '1px solid var(--line)', borderRadius: 6 } },
+                h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Os lançamentos já cadastrados ficam desmarcados automaticamente.'),
+                h('button', { type: 'button', className: 'action-btn', onClick: toggleSelecionarTodosPDF },
+                  pdfPreview.filter(r => !r.duplicado).length > 0 && pdfPreview.filter(r => !r.duplicado).every(r => r.selecionado) ? 'Desmarcar todos' : 'Marcar todos'
+                )
+              ),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+                pdfPreview.filter(r => pdfFiltro === 'todos' || (pdfFiltro === 'novos' && !r.duplicado) || (pdfFiltro === 'lancados' && r.duplicado)).map(r => h('div', { key: r.id, style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, opacity: r.duplicado ? 0.6 : 1 } },
+                  h('div', { style: { display: 'grid', gridTemplateColumns: '36px 1fr 110px 160px 150px 100px', gap: 8, alignItems: 'center' } },
+                    h('input', { type: 'checkbox', checked: !!r.selecionado && !r.duplicado, disabled: !!r.duplicado, onChange: e => atualizarItemPDF(r.id, 'selecionado', e.target.checked) }),
+                    h('div', null, h('strong', null, r.descricao), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, formatDateBR(r.data))),
+                    h('div', { className: 'num' }, formatBRL(r.valor)),
+                    h('select', { value: r.cartao?.id || '', onChange: e => atualizarItemPDF(r.id, 'cartao', e.target.value) }, h('option', { value: '' }, 'Cartão'), cartoes.map(c => h('option', { key: c.id, value: c.id }, c.nome))),
+                    h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+                      h('select', { value: r.categoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'categoria', e.target.value) }, h('option', { value: '' }, 'Categoria'), categorias.filter(c => c.tipo !== 'receita').map(c => h('option', { key: c.id, value: c.id }, c.nome))),
+                      h('select', { value: r.subcategoria?.id || '', onChange: e => atualizarItemPDF(r.id, 'subcategoria', e.target.value), disabled: !r.categoria || r.categoria.isTransferencia }, h('option', { value: '' }, r.categoria?.isTransferencia ? 'Não aplicável' : 'Subcategoria'), (r.categoria?.subcategorias || []).map(s => h('option', { key: s.id, value: s.id }, s.nome)))
+                    ),
+                    h('button', { type: 'button', className: 'danger', style: { padding: '7px 10px', fontSize: 12, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }, onClick: () => ignorarItemPDF(r.id), title: 'Excluir este lançamento da importação' }, h(Trash2, { size: 14 }), ' Excluir')
+                  ),
+                  h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, fontSize: 12 } },
+                    h('span', null, 'Parcela:'),
+                    h('input', { type: 'number', min: 1, max: 60, value: r.numeroParcela || 1, onChange: e => atualizarItemPDF(r.id, 'numeroParcela', e.target.value), style: { width: 60 } }),
+                    h('span', null, '/'),
+                    h('input', { type: 'number', min: 1, max: 60, value: r.totalParcelas || 1, onChange: e => atualizarItemPDF(r.id, 'totalParcelas', e.target.value), style: { width: 60 } }),
+                    r.duplicado ? h('strong', { style: { color: 'var(--green)' } }, 'Já lançado — ignorado') : h('span', null, 'Novo')
+                  )
+                ))
+              ),
+              h('div', { style: { marginTop: 10, padding: 10, background: '#FAF8F2', fontSize: 12 } }, 'Valor Parcela = valor do PDF. Valor Total = Valor Parcela × Total de Parcelas.'),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 } },
+                h('button', { type: 'button', className: 'action-btn', onClick: () => { setPdfPreview([]); setPdfError(''); } }, 'Limpar'),
+                h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoPDF, disabled: pdfImportando || pdfPreview.some(r => r.selecionado && !r.duplicado && isFaturaFechada(String(r.competencia || '').slice(0, 7))) }, 'Importar lançamentos novos')
+              )
+            )
+          )
+        ),
+
+        planilhaModalOpen && h('div', { className: 'modal-overlay', onClick: () => !planilhaImportando && setPlanilhaModalOpen(false) },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 980, width: '95%', maxHeight: '88vh', overflowY: 'auto' } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "📥 Importar Lançamentos por Planilha"),
+              h('button', { type: 'button', className: 'action-btn', onClick: () => setPlanilhaModalOpen(false), disabled: planilhaImportando }, h(XIcon, { size: 16 }))
+            ),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 } }, "Importe DESPESAS, RECEITAS ou FATURAS. Data e Competência são aceitas; se a Competência não for informada, ela será calculada pela Data. Se Tipo ficar vazio, o sistema usa FATURA quando houver Cartão e DESPESA nos demais casos. Também são aceitos Débito/Entrada/Saída/Crédito/Pagamento/Recebimento."),
+            h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 } },
+              h('button', { type: 'button', className: 'action-btn', onClick: baixarModeloImportacao }, h(FileSpreadsheet, { size: 15 }), " Baixar Modelo Excel"),
+              h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer' } },
+                h(ArrowDownCircle, { size: 15 }), " Selecionar Planilha",
+                h('input', { type: 'file', accept: '.xlsx,.xls,.csv', style: { display: 'none' }, onChange: lerPlanilhaImportacao })
+              )
+            ),
+            planilhaArquivo && h('div', { style: { fontSize: 12, marginBottom: 10, color: 'var(--ink-soft)' } }, `Arquivo: ${planilhaArquivo}`),
+            planilhaError && h('div', { style: { whiteSpace: 'pre-line', color: 'var(--red)', background: '#FEE2E2', border: '1px solid #FCA5A5', padding: 10, borderRadius: 6, fontSize: 12, marginBottom: 12 } }, planilhaError),
+            planilhaPreview.length > 0 && h('div', null,
+              h('div', { style: { fontWeight: 'bold', marginBottom: 8 } }, `${planilhaPreview.length} lançamento(s) prontos para importar`),
+              h('div', { style: { overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 6, maxHeight: 360 } },
+                h('table', { style: { minWidth: 900 } },
+                  h('thead', null, h('tr', null, h('th', null, "Data"), h('th', null, "Descrição"), h('th', { className: 'right' }, "Valor"), h('th', null, "Tipo"), h('th', null, "Cartão"), h('th', null, "Competência"), h('th', null, "Conta"), h('th', null, "Categoria"), h('th', null, "Parcela"))),
+                  h('tbody', null, planilhaPreview.map((r, idx) => h('tr', { key: idx }, h('td', null, formatDateBR(r.data)), h('td', null, r.descricao), h('td', { className: 'right num' }, formatBRL(r.valor)), h('td', null, r.tipo), h('td', null, r.cartao?.nome || "-"), h('td', null, r.competencia || "-"), h('td', null, r.conta?.nome || "-"), h('td', null, r.categoria?.nome || "-"), h('td', null, r.totalParcelas > 1 ? `${r.numeroParcela}/${r.totalParcelas}` : "-"))))
+                )
+              ),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 } },
+                h('button', { type: 'button', className: 'action-btn', onClick: () => { setPlanilhaPreview([]); setPlanilhaError(""); } }, "Cancelar Importação"),
+                h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoPlanilha, disabled: planilhaImportando }, planilhaImportando ? "Importando..." : `Confirmar Importação (${planilhaPreview.length})`)
+              )
+            )
+          )
+        ),
+
+        batchCompetenciaModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 10 } }, "Alterar Competência em Lote"),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 } },
+              `Você selecionou ${selectedCartaoIds.length} lançamento(s) da fatura ${formatMonthLabel(month)}. A parcela atual será mantida e apenas a competência será deslocada.`
+            ),
+            h('div', { className: 'field', style: { marginBottom: 16 } },
+              h('label', null, "Nova competência *"),
+              h('input', { type: 'month', value: batchCompetenciaNova, onChange: e => setBatchCompetenciaNova(e.target.value), required: true })
+            ),
+            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } },
+              h('button', { type: 'button', className: 'action-btn', onClick: () => setBatchCompetenciaModalOpen(false) }, "Cancelar"),
+              h('button', { type: 'button', className: 'primary', onClick: confirmarAlteracaoCompetenciaLote }, h(FileText, { size: 15 }), " Alterar Competência")
+            )
+          )
+        ),
+
+        modalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation() },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 12 } }, h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, editingId ? "Editar Lançamento" : (lancamentoTab === "receber" ? "Nova Conta a Receber" : lancamentoTab === "pagar" ? "Nova Conta a Pagar" : "Novo Lançamento")), h('button', { type: 'button', className: 'icon', onClick: () => { setModalOpen(false); setFormSuccess(""); } }, h(XIcon))),
+            h('form', { className: 'modal-form', onSubmit: handleSaveLancamento },
+              
+              h('div', { className: 'field full' }, h('label', null, "Descrição *"), h('input', { type: 'text', value: descricao, onChange: e => setDescricao(e.target.value), required: true })),
+              h('div', { className: 'field full' }, h('label', null, "Observação (Opcional)"), h('input', { type: 'text', value: observacao, onChange: e => setObservacao(e.target.value), placeholder: 'Campo livre para detalhes adicionais' })),
+              h('div', { className: 'field' }, h('label', null, "Data *"), h('input', { type: 'date', value: dataLancamento, onChange: e => setDataLancamento(e.target.value), required: true })), 
+              h('div', { className: 'field' }, h('label', null, "Competência Mês *"), h('input', { type: 'month', value: faturaMes, onChange: e => setFaturaMes(e.target.value), required: true })),
+              
+              lancamentoTab === "cartao" && h('div', { className: 'field full' }, h('label', null, "Cartão *"), h('select', { value: cartaoId, onChange: e => setCartaoId(e.target.value), required: true }, h('option', { value: "" }, "Selecione o cartão..."), cartoes.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+              
+              h('div', { className: 'field' }, h('label', null, "Categoria *"), h('select', { value: categoriaId, onChange: e => { setCategoriaId(e.target.value); setSubcategoriaId(''); }, required: true }, h('option', { value: "" }, "Selecione..."), categoriasDisponiveisModal.map(c => h('option', { key: c.id, value: c.id }, c.nome)))), 
+              
+              h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: subcategoriaId, onChange: e => setSubcategoriaId(e.target.value), required: getCategoria(categoriaId) ? !getCategoria(categoriaId).isTransferencia : true, disabled: getCategoria(categoriaId)?.isTransferencia }, h('option', { value: "" }, getCategoria(categoriaId)?.isTransferencia ? "Não aplicável" : "Selecione..."), subcategoriasDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome)))),
+              
+              h('div', { className: 'field' }, h('label', null, isRecorrente ? "Valor Mensal *" : "Valor Total *"), h('input', { type: 'text', value: valorTotal, onChange: e => handleValorTotalChange(e.target.value), required: true })), 
+              !isRecorrente && h('div', { className: 'field' }, h('label', null, "Valor Parcela"), h('input', { type: 'text', value: valorParcelaInput, onChange: e => handleValorParcelaChange(e.target.value) })), 
+              !isRecorrente && h('div', { className: 'field' }, h('label', null, "Parcela Atual"), h('input', { type: 'number', min: '1', value: parcelaAtual, onChange: e => setParcelaAtual(e.target.value) })), 
+              !isRecorrente && h('div', { className: 'field' }, h('label', null, "Total Parcelas"), h('input', { type: 'number', min: '1', max: '60', value: parcelas, onChange: e => handleParcelasChange(e.target.value) })),
+              
+              h('div', { className: 'field full', style: { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, marginBottom: 8, background: 'var(--paper)', padding: 10, borderRadius: 6, border: '1px solid var(--line)' } }, 
+                h('input', { type: 'checkbox', checked: isRecorrente, onChange: e => setIsRecorrente(e.target.checked), style: { width: 18, height: 18, cursor: 'pointer' } }), 
+                h('label', { style: { fontSize: 14, fontWeight: 'bold', color: 'var(--ink)', cursor: 'pointer' }, onClick: () => setIsRecorrente(!isRecorrente) }, "Lançamento Recorrente (Repetir todo mês)")
+              ),
+
+              formError && h('div', { style: { color: 'var(--red)', fontSize: 12, gridColumn: 'span 2' } }, formError),
+              formSuccess && h('div', { style: { color: 'var(--green)', fontSize: 13, gridColumn: 'span 2', fontWeight: 'bold', background: '#D1FAE5', padding: '6px 10px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 6 } }, h(CheckCircle, {size: 14}), formSuccess),
+              h('div', { className: 'submit-row' }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setModalOpen(false); setFormSuccess(""); } }, "Fechar"), h('button', { type: 'submit', className: 'primary' }, h(Plus), " Salvar Lançamento"))
+            )
+          )
+        ),
+
+        fecharFaturaModal.open && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 450 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, `Fechar Fatura - ${formatMonthLabel(fecharFaturaModal.comp)}`),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 16 } }, "Confirme as datas de vencimento para gerar automaticamente os lançamentos no Contas a Pagar."),
+            
+            h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16, borderBottom: '1px solid var(--line)', paddingBottom: 16 } },
+              h('div', { className: 'field' }, h('label', null, "Categoria (Contas a Pagar) *"), h('select', { value: fecharFaturaCatId, onChange: e => { setFecharFaturaCatId(e.target.value); setFecharFaturaSubId(''); } }, h('option', { value: "" }, "Selecione..."), categorias.filter(c => c.tipo === 'despesa').map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+              h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: fecharFaturaSubId, onChange: e => setFecharFaturaSubId(e.target.value) }, h('option', { value: "" }, "Selecione..."), getCategoria(fecharFaturaCatId)?.subcategorias?.map(s => h('option', { key: s.id, value: s.id }, s.nome)) || []))
+            ),
+
+            h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 } },
+              fecharFaturaModal.totais.map(t => h('div', { key: t.cartaoId, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--paper)', padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--line)', flexWrap: 'wrap', gap: 10 } },
+                h('div', null, h('div', { style: { fontWeight: 'bold', fontSize: 14 } }, t.nome), h('div', { className: 'num', style: { color: 'var(--red)', fontSize: 14, marginTop: 4 } }, showMoney(t.valor))),
+                h('div', { className: 'field', style: { width: 140 } }, h('label', null, "Vencimento"), h('input', { type: 'date', value: fecharFaturaModal.vencimentos[t.cartaoId] || '', onChange: e => setFecharFaturaModal(prev => ({ ...prev, vencimentos: { ...prev.vencimentos, [t.cartaoId]: e.target.value } })) }))
+              ))
+            ),
+            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setFecharFaturaModal({ open: false, comp: "", totais: [], vencimentos: {} }) }, "Cancelar"), h('button', { type: 'button', className: 'primary', onClick: confirmarFecharFatura }, h(CheckCircle, { size: 16 }), " Gerar Contas a Pagar"))
+          )
+        ),
+
+        baixaModal.open && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 360 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, "Efetuar Baixa da Conta"),
+            h('div', { className: 'field', style: { marginBottom: 10 } }, h('label', null, "Data da Baixa *"), h('input', { type: 'date', value: baixaModal.dataBaixa, onChange: e => setBaixaModal({ ...baixaModal, dataBaixa: e.target.value }) })), h('div', { className: 'field', style: { marginBottom: 14 } }, h('label', null, "Selecione o Banco / Conta *"), h('select', { value: baixaModal.bancoId, onChange: e => setBaixaModal({ ...baixaModal, bancoId: e.target.value }) }, h('option', { value: "" }, "Selecione..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() }) }, "Cancelar"), h('button', { type: 'button', className: 'primary', onClick: () => executarBaixaIndividual(baixaModal.type, baixaModal.id, baixaModal.bancoId, baixaModal.dataBaixa) }, "Confirmar Baixa"))
+          )
+        ),
+
+        batchBaixaModal.open && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 360 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, "Baixar Contas Selecionadas em Lote"),
+            h('div', { className: 'field', style: { marginBottom: 10 } }, h('label', null, "Data da Baixa *"), h('input', { type: 'date', value: batchBaixaModal.dataBaixa, onChange: e => setBatchBaixaModal({ ...batchBaixaModal, dataBaixa: e.target.value }) })), h('div', { className: 'field', style: { marginBottom: 14 } }, h('label', null, "Selecione o Banco / Conta *"), h('select', { value: batchBaixaModal.bancoId, onChange: e => setBatchBaixaModal({ ...batchBaixaModal, bancoId: e.target.value }) }, h('option', { value: "" }, "Selecione..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate() }) }, "Cancelar"), h('button', { type: 'button', className: 'primary', onClick: () => executarBaixaLote(lancamentoTab, batchBaixaModal.bancoId, lancamentoTab === 'pagar' ? batchPagarIds : batchReceberIds, batchBaixaModal.dataBaixa) }, "Confirmar Baixa"))
+          )
+        ),
+
+        editCategoriaModal.open && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, "Editar Categoria"),
+            h('form', { onSubmit: handleSaveEditCategoria, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+              h('div', { className: 'field' }, h('label', null, "Nome da Categoria *"), h('input', { type: 'text', value: editCategoriaModal.nome, onChange: e => setEditCategoriaModal({ ...editCategoriaModal, nome: e.target.value }), required: true })),
+              h('div', { className: 'field' }, h('label', null, "Cor"), h('div', { className: 'color-swatches' }, CARD_COLORS.map(cor => h('button', { type: 'button', key: cor, className: `color-swatch ${editCategoriaModal.cor === cor ? 'selected' : ''}`, style: { background: cor }, onClick: () => setEditCategoriaModal({ ...editCategoriaModal, cor }) })))),
+              h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', background: '#fff', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, 
+                h('input', { type: 'checkbox', checked: editCategoriaModal.isTransferencia, onChange: e => setEditCategoriaModal({ ...editCategoriaModal, isTransferencia: e.target.checked }), style: { width: 'auto', margin: 0 } }), 
+                "🔄 Transferência"
+              ),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setEditCategoriaModal({ open: false, id: null, nome: "", cor: CARD_COLORS[0], isTransferencia: false }) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
+            )
+          )
+        ),
+
+        editSubcategoriaModal.open && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, "Editar Subcategoria"),
+            h('form', { onSubmit: handleSaveEditSubcategoria, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+              h('div', { className: 'field' }, h('label', null, "Nome da Subcategoria *"), h('input', { type: 'text', value: editSubcategoriaModal.nome, onChange: e => setEditSubcategoriaModal({ ...editSubcategoriaModal, nome: e.target.value }), required: true })),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setEditSubcategoriaModal({ open: false, catId: null, subId: null, nome: "" }) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
+            )
+          )
+        ),
+
+        batchDeleteModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: 'var(--red)' } }, "Excluir em Lote"), h('div', { style: { fontSize: 13, marginBottom: 14 } }, "Digite ", h('b', null, "EXCLUIR"), ` para apagar os itens selecionados:`),
+            h('form', { onSubmit: handleBatchDeleteConfirm, style: { display: 'flex', flexDirection: 'column', gap: 10 } }, h('input', { type: 'text', placeholder: 'EXCLUIR', value: batchConfirmText, onChange: e => setBatchConfirmText(e.target.value), required: true }), h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setBatchDeleteModalOpen(false); setBatchConfirmText(""); } }, "Cancelar"), h('button', { type: 'submit', className: 'danger' }, "Confirmar")))
+          )
+        ),
+
+        deleteModal.open && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 400 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, deleteModal.title),
+            
+            deleteModal.purchase && (deleteModal.purchase.recorrente || deleteModal.purchase.parcelas > 1) ? 
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 } },
+                h('div', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Este lançamento é recorrente ou parcelado. Como deseja realizar a exclusão?"),
+                h('label', { style: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, cursor: 'pointer' } },
+                  h('input', { type: 'radio', name: 'del_opt', checked: deleteModal.option === 'current', onChange: () => setDeleteModal({...deleteModal, option: 'current'}) }),
+                  h('div', null, h('div', { style: { fontWeight: 'bold' } }, "Excluir SOMENTE deste mês"), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Será ocultado da fatura de ${formatMonthLabel(month)}.`))
+                ),
+                h('label', { style: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, cursor: 'pointer' } },
+                  h('input', { type: 'radio', name: 'del_opt', checked: deleteModal.option === 'future', onChange: () => setDeleteModal({...deleteModal, option: 'future'}) }),
+                  h('div', null, h('div', { style: { fontWeight: 'bold' } }, "Excluir deste mês em diante"), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Cancela o lançamento a partir do mês atual."))
+                ),
+                h('label', { style: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, cursor: 'pointer' } },
+                  h('input', { type: 'radio', name: 'del_opt', checked: deleteModal.option === 'all', onChange: () => setDeleteModal({...deleteModal, option: 'all'}) }),
+                  h('div', null, h('div', { style: { fontWeight: 'bold' } }, "Excluir todas as ocorrências"), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Apaga o lançamento inteiro do sistema."))
+                )
+              ) : 
+              h('div', { style: { fontSize: 14, marginBottom: 20 } }, deleteModal.message || "Tem certeza que deseja excluir?"),
+            
+            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' } }, 
+              h('button', { type: 'button', className: 'action-btn', onClick: () => setDeleteModal({ open: false, type: null, id: null, subId: null, purchase: null, title: "", message: "", option: "all" }) }, "Cancelar"), 
+              deleteModal.message && deleteModal.message.includes("ERRO") ? null : h('button', { type: 'button', className: 'danger', onClick: handleConfirmDelete }, "Confirmar Exclusão")
+            )
+          )
+        ),
+
+        cartaoModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, editingCartaoId ? "Editar Cartão" : "Novo Cartão"),
+            h('form', { onSubmit: handleSaveCartao, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+              h('div', { className: 'field' }, h('label', null, "Nome *"), h('input', { type: 'text', value: novoCartaoNome, onChange: e => setNovoCartaoNome(e.target.value), required: true })), 
+              h('div', { className: 'field' }, h('label', null, "Banco"), h('select', { value: novoCartaoBanco, onChange: e => setNovoCartaoBanco(e.target.value) }, BANCOS_FEBRABAN.map(b => h('option', { key: b.code, value: b.code }, b.name)))), 
+              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, 
+                h('div', { className: 'field' }, h('label', null, "Dia do Fechamento"), h('input', { type: 'number', min: 1, max: 31, value: novoCartaoFechamento, onChange: e => setNovoCartaoFechamento(e.target.value), required: true })),
+                h('div', { className: 'field' }, h('label', null, "Dia do Vencimento"), h('input', { type: 'number', min: 1, max: 31, value: novoCartaoVencimento, onChange: e => setNovoCartaoVencimento(e.target.value), required: true }))
+              ),
+              h('div', { className: 'field' }, h('label', null, "Cor"), h('div', { className: 'color-swatches' }, CARD_COLORS.map(cor => h('button', { type: 'button', key: cor, className: `color-swatch ${novoCartaoCor === cor ? 'selected' : ''}`, style: { background: cor }, onClick: () => setNovoCartaoCor(cor) })))), cartaoError && h('div', { style: { color: 'var(--red)', fontSize: 12 } }, cartaoError),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setCartaoModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
+            )
+          )
+        ),
+
+        contaModalOpen && h('div', { className: 'modal-overlay' },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 420 } },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, editingContaId ? "Editar Conta" : "Nova Conta"),
+            h('form', { onSubmit: handleSaveConta, style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+              h('div', { className: 'field' }, h('label', null, "Nome da Conta *"), h('input', { type: 'text', value: novaContaNome, onChange: e => setNovaContaNome(e.target.value), placeholder: 'Ex: Caixa Principal, Conta PJ Santander', required: true })), h('div', { className: 'field' }, h('label', null, "Banco *"), h('select', { value: novaContaBanco, onChange: e => setNovaContaBanco(e.target.value) }, BANCOS_FEBRABAN.map(b => h('option', { key: b.code, value: b.code }, b.name)))), h('div', { className: 'field' }, h('label', null, "Categoria / Tipo de Conta *"), h('select', { value: novaContaTipo, onChange: e => setNovaContaTipo(e.target.value) }, h('option', { value: "corrente" }, "Conta Corrente"), h('option', { value: "investimento" }, "Conta Investimento"), h('option', { value: "dinheiro" }, "Dinheiro / Caixa Físico"), h('option', { value: "outros" }, "Outros"))), h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, h('div', { className: 'field' }, h('label', null, "Número da Agência"), h('input', { type: 'text', value: novaContaAgencia, onChange: e => setNovaContaAgencia(e.target.value), placeholder: 'Ex: 1234' })), h('div', { className: 'field' }, h('label', null, "Número da Conta"), h('input', { type: 'text', value: novaContaNumero, onChange: e => setNovaContaNumero(e.target.value), placeholder: 'Ex: 56789-0' }))), contaError && h('div', { style: { color: 'var(--red)', fontSize: 12 } }, contaError),
+              h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setContaModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
+            )
+          )
+        )
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(h(FaturaApp));
+  </script>
+</body>
 </html>
