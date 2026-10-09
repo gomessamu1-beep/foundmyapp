@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "planilha-importacao-2026-10-08-syntax-fix";
+    const APP_BUILD = "pdf-import-fix-2026-10-08";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -1074,10 +1074,37 @@
         setPdfImportando(true);
 
         try {
-          if (!window.pdfjsLib) throw new Error("Biblioteca PDF não carregada. Atualize a página e tente novamente.");
+          // Tenta carregar a biblioteca PDF por CDNs alternativos caso o primeiro esteja indisponível.
+          if (!window.pdfjsLib) {
+            const fontesPDF = [
+              "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+              "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"
+            ];
+            let ultimoErroPDF = null;
+            for (const src of fontesPDF) {
+              try {
+                await new Promise((resolve, reject) => {
+                  const script = document.createElement("script");
+                  script.src = src;
+                  script.onload = resolve;
+                  script.onerror = () => reject(new Error("Não foi possível carregar " + src));
+                  document.head.appendChild(script);
+                });
+                if (window.pdfjsLib) break;
+              } catch (e) { ultimoErroPDF = e; }
+            }
+            if (!window.pdfjsLib) throw new Error("Não foi possível carregar o leitor de PDF. Verifique a conexão com a internet e tente novamente." + (ultimoErroPDF?.message ? " Detalhe: " + ultimoErroPDF.message : ""));
+          }
 
           const buffer = await file.arrayBuffer();
-          const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+          let pdf;
+          try {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+            pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+          } catch (erroLeituraPDF) {
+            console.warn("[FoundMyApp] Leitura PDF com worker falhou; tentando sem worker:", erroLeituraPDF);
+            pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(buffer), disableWorker: true, isEvalSupported: false }).promise;
+          }
           const paginas = [];
           let textoCompleto = "";
 
@@ -2663,9 +2690,11 @@
               h('button', { type: 'button', className: 'action-btn', onClick: () => setPdfModalOpen(false), disabled: pdfImportando }, h(XIcon, { size: 16 }))
             ),
             h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione o PDF da fatura. O sistema identifica os lançamentos, marca duplicados e permite informar categoria, subcategoria e parcelas dos novos. Faturas fechadas não aceitam novas importações.'),
-            h('label', { className: 'primary', style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12, background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
-              h(FileText, { size: 17 }), ' Selecionar PDF para Importação',
-              h('input', { ref: pdfInputRef, type: 'file', accept: '.pdf,application/pdf', style: { display: 'none' }, onChange: lerFaturaPDF })
+            h('div', { style: { display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12 } },
+              h('button', { type: 'button', className: 'primary', onClick: () => { if (pdfInputRef.current) pdfInputRef.current.click(); }, disabled: pdfImportando, style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: pdfImportando ? 'wait' : 'pointer', background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
+                h(FileText, { size: 17 }), ' Selecionar PDF para Importação'
+              ),
+              h('input', { ref: pdfInputRef, type: 'file', accept: 'application/pdf,.pdf', style: { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }, onChange: lerFaturaPDF })
             ),
             pdfArquivo && h('div', { style: { fontSize: 12, marginBottom: 8 } }, 'Arquivo: ' + pdfArquivo),
             pdfImportando && h('div', { style: { padding: 10, background: '#FAF8F2', marginBottom: 10 } }, 'Lendo a fatura...'),
