@@ -1224,7 +1224,16 @@
         selecionado: true
       };
     }
-    function confirmarImportacaoPDF() {
+      } catch (err) {
+          console.error("[FoundMyApp] Erro ao ler fatura PDF:", err);
+          setPdfError(err?.message || "Não foi possível processar a fatura PDF.");
+        } finally {
+          setPdfImportando(false);
+          if (pdfInputRef.current) pdfInputRef.current.value = "";
+        }
+      }
+
+          function confirmarImportacaoPDF() {
         if (pdfImportando) return;
         const novos = (pdfPreview || []).filter(r => r.selecionado && !r.duplicado);
 
