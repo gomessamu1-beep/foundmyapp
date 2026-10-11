@@ -3,6 +3,11 @@ package br.com.foundmyapp
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.content.ComponentName
+import android.provider.Settings
+import android.provider.Settings.Secure
+import android.webkit.JavascriptInterface
+import org.json.JSONArray
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
@@ -26,6 +31,42 @@ class MainActivity : Activity() {
         private const val FILE_CHOOSER_REQUEST_CODE = 4102
         private const val APP_URL = "https://gomessamu1-beep.github.io/foundmyapp/"
         private const val APP_HOST = "gomessamu1-beep.github.io"
+    }
+
+    private inner class NotificationBridge {
+        @JavascriptInterface
+        fun getPendingNotifications(): String {
+            return getSharedPreferences("foundmyapp_santander_notifications", MODE_PRIVATE)
+                .getString("pending", "[]") ?: "[]"
+        }
+
+        @JavascriptInterface
+        fun markHandled(id: String) {
+            val prefs = getSharedPreferences("foundmyapp_santander_notifications", MODE_PRIVATE)
+            val current = try { JSONArray(prefs.getString("pending", "[]")) } catch (_: Exception) { JSONArray() }
+            val next = JSONArray()
+            for (i in 0 until current.length()) {
+                val item = current.optJSONObject(i) ?: continue
+                if (item.optString("id") != id) next.put(item)
+            }
+            prefs.edit().putString("pending", next.toString()).apply()
+        }
+
+        @JavascriptInterface
+        fun hasNotificationAccess(): Boolean {
+            val enabled = Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
+            val component = ComponentName(this@MainActivity, SantanderNotificationListener::class.java).flattenToString()
+            return enabled.split(":").any { it.equals(component, ignoreCase = true) }
+        }
+
+        @JavascriptInterface
+        fun openNotificationAccessSettings() {
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                } catch (_: Exception) { }
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -55,6 +96,8 @@ class MainActivity : Activity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
+        webView.addJavascriptInterface(NotificationBridge(), "FoundMyAppAndroid")
+
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
