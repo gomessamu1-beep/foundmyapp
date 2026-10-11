@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "pdf-import-fix-2026-10-08";
+    const APP_BUILD = "mobile-responsive-2026-10-11";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -2259,6 +2259,168 @@
           .warning-box-title { font-weight: bold; color: #92400E; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 14px; }
           .warning-box ul { margin: 0; padding-left: 20px; color: #92400E; font-size: 13px; }
           .warning-box li { margin-bottom: 4px; }
+
+
+          /* Ajustes de responsividade para celulares */
+          @media (max-width: 600px) {
+            html, body, #root {
+              width: 100%;
+              max-width: 100%;
+              min-width: 0;
+              overflow-x: hidden;
+            }
+
+            .sidebar {
+              width: 52px;
+              padding: 18px 6px;
+            }
+
+            .sidebar-brand {
+              padding-left: 0;
+            }
+
+            .sidebar-nav button {
+              width: 40px;
+              min-width: 40px;
+              padding: 11px 8px;
+            }
+
+            .main-content {
+              margin-left: 52px;
+              width: calc(100% - 52px);
+              max-width: calc(100% - 52px);
+              min-width: 0;
+              padding: 12px 10px 20px;
+            }
+
+            .main-content > *,
+            .fatura-app-layout,
+            .fatura-app-layout > *,
+            .top,
+            .form-card,
+            .list-item,
+            .modal-content {
+              min-width: 0;
+              max-width: 100%;
+            }
+
+            .top,
+            .form-card {
+              padding: 12px;
+              margin-bottom: 12px;
+            }
+
+            .month-label {
+              font-size: 16px;
+              text-align: center;
+            }
+
+            .total-mes {
+              font-size: clamp(24px, 7vw, 34px);
+              overflow-wrap: anywhere;
+            }
+
+            .sub-nav {
+              gap: 8px;
+              overflow-x: auto;
+              flex-wrap: nowrap;
+              max-width: 100%;
+              padding-bottom: 8px;
+            }
+
+            .sub-nav button {
+              flex: 0 0 auto;
+              font-size: 13px;
+              white-space: nowrap;
+            }
+
+            .modal-overlay {
+              align-items: flex-start;
+              padding: 8px;
+              overflow-y: auto;
+            }
+
+            .modal-content {
+              width: 100%;
+              max-width: 100%;
+              max-height: calc(100dvh - 16px);
+              padding: 14px;
+              margin: auto 0;
+            }
+
+            .modal-form {
+              grid-template-columns: minmax(0, 1fr);
+            }
+
+            .modal-form .field.full,
+            .modal-form .submit-row {
+              grid-column: auto;
+            }
+
+            .submit-row {
+              align-items: stretch;
+            }
+
+            .submit-row button,
+            .modal-content button.primary,
+            .modal-content button.danger {
+              justify-content: center;
+            }
+
+            /* Mantém tabelas e listas largas acessíveis por rolagem lateral,
+               em vez de cortar colunas ou botões na borda da tela. */
+            table {
+              display: block;
+              width: 100%;
+              max-width: 100%;
+              overflow-x: auto;
+              -webkit-overflow-scrolling: touch;
+            }
+
+            th, td {
+              white-space: nowrap;
+              padding: 8px 6px;
+              font-size: 12px;
+            }
+
+            input, select, textarea {
+              min-width: 0;
+              max-width: 100%;
+              font-size: 16px;
+            }
+
+            button {
+              max-width: 100%;
+              overflow-wrap: anywhere;
+            }
+
+            .brand {
+              align-items: flex-start;
+              gap: 8px;
+              flex-wrap: wrap;
+            }
+
+            .warning-box {
+              padding: 10px;
+              overflow-wrap: anywhere;
+            }
+          }
+
+          @media (max-width: 380px) {
+            .main-content {
+              padding-left: 8px;
+              padding-right: 8px;
+            }
+
+            .top,
+            .form-card {
+              padding: 10px;
+            }
+
+            .action-btn {
+              padding: 5px;
+            }
+          }
 
           @media print {
             body { background: #fff !important; }
