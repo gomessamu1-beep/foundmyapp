@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "mobile-responsive-2026-10-11";
+    const APP_BUILD = "launch-fullscreen-mobile-2026-10-11";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -2406,6 +2406,83 @@
             }
           }
 
+          /* Tela de lançamento em modo integral no celular */
+          @media (max-width: 600px) {
+            .launch-modal-overlay {
+              position: fixed;
+              inset: 0;
+              z-index: 9999;
+              display: flex;
+              align-items: stretch;
+              justify-content: stretch;
+              width: 100%;
+              height: 100%;
+              height: 100dvh;
+              max-height: 100dvh;
+              padding: 0;
+              margin: 0;
+              overflow: hidden;
+              background: var(--card, #ffffff);
+              isolation: isolate;
+            }
+
+            .launch-modal-content {
+              position: relative;
+              display: block;
+              width: 100%;
+              max-width: none !important;
+              height: 100%;
+              height: 100dvh;
+              max-height: 100dvh !important;
+              min-height: 0;
+              margin: 0;
+              padding: 16px 14px calc(20px + env(safe-area-inset-bottom));
+              border: 0;
+              border-radius: 0;
+              box-shadow: none;
+              overflow-x: hidden;
+              overflow-y: auto;
+              overscroll-behavior: contain;
+              -webkit-overflow-scrolling: touch;
+              background: var(--card, #ffffff);
+            }
+
+            .launch-modal-content form {
+              min-width: 0;
+              max-width: 100%;
+            }
+
+            .launch-modal-content .modal-form {
+              grid-template-columns: minmax(0, 1fr);
+              gap: 12px;
+            }
+
+            .launch-modal-content .modal-form .field,
+            .launch-modal-content .modal-form .field.full,
+            .launch-modal-content .modal-form .submit-row {
+              grid-column: 1 / -1;
+              min-width: 0;
+            }
+
+            .launch-modal-content .submit-row {
+              position: sticky;
+              bottom: calc(-1 * (20px + env(safe-area-inset-bottom)));
+              z-index: 2;
+              margin: 12px -14px calc(-20px - env(safe-area-inset-bottom));
+              padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+              background: var(--card, #ffffff);
+              border-top: 1px solid var(--line, #dddddd);
+            }
+
+            .launch-modal-content input,
+            .launch-modal-content select,
+            .launch-modal-content textarea {
+              min-width: 0;
+              max-width: 100%;
+              font-size: 16px;
+            }
+          }
+
           @media (max-width: 380px) {
             .main-content {
               padding-left: 8px;
@@ -2969,8 +3046,8 @@
           )
         ),
 
-        modalOpen && h('div', { className: 'modal-overlay' },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation() },
+        modalOpen && h('div', { className: 'modal-overlay launch-modal-overlay' },
+          h('div', { className: 'modal-content launch-modal-content', onClick: e => e.stopPropagation() },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 12 } }, h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, editingId ? "Editar Lançamento" : (lancamentoTab === "receber" ? "Nova Conta a Receber" : lancamentoTab === "pagar" ? "Nova Conta a Pagar" : "Novo Lançamento")), h('button', { type: 'button', className: 'icon', onClick: () => { setModalOpen(false); setFormSuccess(""); } }, h(XIcon))),
             h('form', { className: 'modal-form', onSubmit: handleSaveLancamento },
               
