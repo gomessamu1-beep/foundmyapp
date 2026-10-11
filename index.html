@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "mobile-menu-scroll-fix-2026-10-11";
+    const APP_BUILD = "mobile-menu-compact-2026-10-11";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -2279,11 +2279,11 @@
               height: 100vh;
               height: 100dvh;
               max-height: 100dvh;
-              padding: 14px 7px calc(14px + env(safe-area-inset-bottom));
+              padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
               display: flex;
               flex-direction: column;
               justify-content: flex-start;
-              gap: 12px;
+              gap: 6px;
               overflow-x: hidden;
               overflow-y: auto;
               overscroll-behavior: contain;
@@ -2298,8 +2298,8 @@
 
             .sidebar-brand {
               flex: 0 0 auto;
-              min-height: 34px;
-              margin-bottom: 8px;
+              min-height: 28px;
+              margin-bottom: 3px;
               padding-left: 0;
               justify-content: center;
             }
@@ -2307,14 +2307,14 @@
             .sidebar-nav {
               flex: 0 0 auto;
               width: 100%;
-              gap: 8px;
+              gap: 4px;
             }
 
             .sidebar-nav button {
-              width: 44px;
-              min-width: 44px;
-              min-height: 44px;
-              padding: 11px 8px;
+              width: 42px;
+              min-width: 42px;
+              min-height: 40px;
+              padding: 8px 6px;
               margin: 0 auto;
               justify-content: center;
               flex: 0 0 auto;
@@ -2323,14 +2323,14 @@
             .sidebar-footer {
               flex: 0 0 auto;
               margin-top: auto;
-              padding-top: 12px;
+              padding-top: 7px;
             }
 
             .sidebar:hover,
             .sidebar:active,
             .sidebar:focus-within {
               width: 58px;
-              padding: 14px 7px calc(14px + env(safe-area-inset-bottom));
+              padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
             }
 
             .sidebar:hover .nav-text,
