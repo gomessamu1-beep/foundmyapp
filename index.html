@@ -205,12 +205,12 @@
           if (!window.confirm("Encontrei " + pendentes.length + " notificação(ões) de possível compra do Santander. Quer revisar a mais antiga agora para lançar na fatura?")) return;
 
           const textoCompleto = [item.title, item.text].filter(Boolean).join(" — ");
-          const valorMatch = textoCompleto.match(/(?:R\\$\\s*)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})/);
-          const valor = valorMatch ? valorMatch[1].replace(/\\./g, "") : "";
+          const valorMatch = textoCompleto.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/);
+          const valor = valorMatch ? valorMatch[1].replace(/\./g, "") : "";
           const dataNotificacao = item.postedAt ? new Date(Number(item.postedAt)) : new Date();
           const dataISO = dataNotificacao.getFullYear() + "-" + String(dataNotificacao.getMonth() + 1).padStart(2, "0") + "-" + String(dataNotificacao.getDate()).padStart(2, "0");
           const cartaoSantander = cartoes.find(x => /santander/i.test(x.nome || ""));
-          const descricaoSugerida = (item.text || item.title || "Compra Santander").replace(/\\s+/g, " ").trim().slice(0, 120);
+          const descricaoSugerida = (item.text || item.title || "Compra Santander").replace(/\s+/g, " ").trim().slice(0, 120);
 
           setScreen("faturas");
           setMonth(dataISO.slice(0, 7));
