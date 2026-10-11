@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "mobile-safe-top-2026-10-11";
+    const APP_BUILD = "mobile-safe-top-fix-2026-10-11";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -2345,7 +2345,7 @@
               width: calc(100% - 52px);
               max-width: calc(100% - 52px);
               min-width: 0;
-              padding: calc(12px + env(safe-area-inset-top, 24px)) 10px 20px;
+              padding: calc(36px + env(safe-area-inset-top, 0px)) 10px 20px;
             }
 
             .main-content > *,
