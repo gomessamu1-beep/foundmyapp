@@ -27,7 +27,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "mobile-menu-compact-2026-10-11";
+    const APP_BUILD = "mobile-safe-top-2026-10-11";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -2279,7 +2279,7 @@
               height: 100vh;
               height: 100dvh;
               max-height: 100dvh;
-              padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+              padding: calc(8px + env(safe-area-inset-top, 24px)) 6px calc(8px + env(safe-area-inset-bottom));
               display: flex;
               flex-direction: column;
               justify-content: flex-start;
@@ -2330,7 +2330,7 @@
             .sidebar:active,
             .sidebar:focus-within {
               width: 58px;
-              padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+              padding: calc(8px + env(safe-area-inset-top, 24px)) 6px calc(8px + env(safe-area-inset-bottom));
             }
 
             .sidebar:hover .nav-text,
@@ -2345,7 +2345,7 @@
               width: calc(100% - 52px);
               max-width: calc(100% - 52px);
               min-width: 0;
-              padding: 12px 10px 20px;
+              padding: calc(12px + env(safe-area-inset-top, 24px)) 10px 20px;
             }
 
             .main-content > *,
