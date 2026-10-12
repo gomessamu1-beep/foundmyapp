@@ -2324,6 +2324,13 @@
           .warning-box li { margin-bottom: 4px; }
 
 
+          /* Filtros da conciliação em coluna no celular */
+          @media (max-width: 600px) {
+            .concil-filter-grid { grid-template-columns: minmax(0, 1fr) !important; }
+            .concil-filter-grid > .field { min-width: 0; }
+            .concil-filter-grid > button { width: 100%; }
+          }
+
           /* Ajustes de responsividade para celulares */
           @media (max-width: 600px) {
             .mobile-menu-backdrop {
@@ -3150,7 +3157,7 @@
                 )
               )
             ),
-            concilTab !== "" && h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Conta"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")),
+            concilTab !== "" && h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr auto', gap: 10, alignItems: 'end', marginBottom: 20 } }, h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Conta"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")),
 
             concilExibido && h(React.Fragment, null,
               concilTab === 'resumo' && h('div', { style: { display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap' } },
