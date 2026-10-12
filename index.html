@@ -2867,22 +2867,28 @@
           screen === "lancamentos" && h('div', { className: 'form-card' },
             h('div', {
               className: 'sub-nav' + (lancamentoTab === "" ? ' launch-choice-nav' : ''),
-              style: lancamentoTab === "" ? { display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 420, margin: '18px auto 8px' } : {}
+              style: lancamentoTab === "" ? { display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 420, margin: '18px auto 8px' } : { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, marginBottom: 16 }
             },
-              h('button', {
+              lancamentoTab !== "" && h('button', {
+                type: 'button',
+                className: 'action-btn',
+                onClick: () => setLancamentoTab(""),
+                style: { marginBottom: 4 }
+              }, "← Voltar às opções"),
+              (lancamentoTab === "" || lancamentoTab === "cartao") && h('button', {
                 className: lancamentoTab === "cartao" ? "active" : "",
                 onClick: () => setLancamentoTab("cartao"),
-                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--green)' } : {}
+                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--green)' } : { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
               }, h(CreditCard, { size: 20 }), " Cartão de Crédito"),
-              h('button', {
+              (lancamentoTab === "" || lancamentoTab === "pagar") && h('button', {
                 className: lancamentoTab === "pagar" ? "active" : "",
                 onClick: () => setLancamentoTab("pagar"),
-                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--red)' } : {}
+                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--red)' } : { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
               }, h(ArrowDownCircle, { size: 20 }), " Contas a Pagar"),
-              h('button', {
+              (lancamentoTab === "" || lancamentoTab === "receber") && h('button', {
                 className: lancamentoTab === "receber" ? "active" : "",
                 onClick: () => setLancamentoTab("receber"),
-                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--green)' } : {}
+                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--green)' } : { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
               }, h(ArrowUpCircle, { size: 20 }), " Contas a Receber")
             ),
 
