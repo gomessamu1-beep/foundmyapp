@@ -3175,7 +3175,7 @@
 
               calendarioExpandido && h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 24 } }, calendarioDiasDoMes.map(d => {
                 const fechado = isDiaFechado(d.data); return h('div', { key: d.data, style: { background: '#fff', border: '1px solid var(--line)', borderRadius: 5, padding: 8, fontSize: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', marginBottom: 4 } }, h('span', null, formatDateBR(d.data)), h('button', { type: 'button', className: 'action-btn', style: { padding: 2, background: fechado ? 'var(--amber-soft)' : '#fff', borderColor: fechado ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => toggleDiaFechado(d.data, e) }, fechado ? h(Lock, { size: 10, color: 'var(--amber)' }) : h(Unlock, { size: 10, color: 'var(--green)' }))), h('div', { style: { color: 'var(--red)', fontSize: 11 } }, `(-) ${showMoney(d.debitos)}`), h('div', { style: { color: 'var(--green)', fontSize: 11 } }, `(+) ${showMoney(d.cred)}`), h('div', { className: 'num', style: { fontWeight: 'bold', marginTop: 4, borderTop: '1px solid var(--line)', paddingTop: 2 } }, `Saldo: ${showMoney(d.saldo)}`));
-              }))),
+              })),
               ),
 
               concilTab === 'movimentacoes' && h(React.Fragment, null,
