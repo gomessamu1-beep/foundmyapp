@@ -2519,6 +2519,34 @@
               visibility: hidden;
             }
 
+            /* Quando o menu hambúrguer é aberto, mostrar o menu completo com os nomes. */
+            .sidebar.mobile-open {
+              width: min(285px, 84vw) !important;
+              max-width: 84vw !important;
+              padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px)) !important;
+              transform: translateX(0) !important;
+              z-index: 300 !important;
+            }
+
+            .sidebar.mobile-open .nav-text {
+              display: inline !important;
+              visibility: visible !important;
+            }
+
+            .sidebar.mobile-open .sidebar-brand {
+              justify-content: flex-start !important;
+              padding-left: 8px !important;
+            }
+
+            .sidebar.mobile-open .sidebar-nav button {
+              width: 100% !important;
+              min-width: 0 !important;
+              min-height: 46px !important;
+              margin: 0 !important;
+              padding: 12px 14px !important;
+              justify-content: flex-start !important;
+            }
+
             .main-content {
               margin-left: 52px;
               width: calc(100% - 52px);
