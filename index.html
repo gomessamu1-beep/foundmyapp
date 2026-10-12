@@ -2877,23 +2877,23 @@
           screen === "lancamentos" && h('div', { className: 'form-card' },
             lancamentoTab === "" ? h('div', {
               className: 'sub-nav launch-choice-nav',
-              style: { display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: '100%', margin: '18px auto 8px', alignItems: 'stretch' }
+              style: { display: 'flex', flexDirection: 'column', gap: isAndroidApp ? 10 : 12, width: '100%', maxWidth: isAndroidApp ? '100%' : 420, margin: '18px auto 8px', alignItems: 'stretch' }
             },
               h('button', {
                 type: 'button',
                 onClick: () => setLancamentoTab("cartao"),
-                style: { width: '100%', boxSizing: 'border-box', minHeight: 58, justifyContent: 'flex-start', gap: 10, textAlign: 'left', whiteSpace: 'normal', padding: '14px 16px', borderRadius: 10, fontSize: 15, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--green)' }
-              }, h(CreditCard, { size: 20 }), " Cartão de Crédito"),
+                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: isAndroidApp ? 10 : 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--green)' : '1px solid var(--green)' }
+              }, h(CreditCard, { size: isAndroidApp ? 40 : 20 }), " Cartão de Crédito"),
               h('button', {
                 type: 'button',
                 onClick: () => setLancamentoTab("pagar"),
-                style: { width: '100%', boxSizing: 'border-box', minHeight: 58, justifyContent: 'flex-start', gap: 10, textAlign: 'left', whiteSpace: 'normal', padding: '14px 16px', borderRadius: 10, fontSize: 15, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--red)' }
-              }, h(ArrowDownCircle, { size: 20 }), " Contas a Pagar"),
+                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--red)' : '1px solid var(--red)' }
+              }, h(ArrowDownCircle, { size: isAndroidApp ? 40 : 20 }), " Contas a Pagar"),
               h('button', {
                 type: 'button',
                 onClick: () => setLancamentoTab("receber"),
-                style: { width: '100%', boxSizing: 'border-box', minHeight: 58, justifyContent: 'flex-start', gap: 10, textAlign: 'left', whiteSpace: 'normal', padding: '14px 16px', borderRadius: 10, fontSize: 15, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--green)' }
-              }, h(ArrowUpCircle, { size: 20 }), " Contas a Receber")
+                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--green)' : '1px solid var(--green)' }
+              }, h(ArrowUpCircle, { size: isAndroidApp ? 40 : 20 }), " Contas a Receber")
             ) : h('div', {
               className: 'sub-nav launch-selected-nav',
               style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, marginBottom: 16 }
