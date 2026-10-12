@@ -3133,15 +3133,19 @@
           ),
 
           screen === "conciliacao" && h('div', { className: 'form-card' },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
-              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Conciliação Bancária"),
-              h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } },
-                h('button', { type: 'button', className: 'primary', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
-                concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
-                concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
+            h('div', { style: { marginBottom: 16 } },
+              h('div', { style: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 } }, "Conciliação Bancária"),
+              h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 420 } },
+                h('button', { type: 'button', className: 'primary', style: { width: '100%', justifyContent: 'flex-start', padding: '12px 14px' }, onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
+                h('button', { type: 'button', className: 'action-btn', style: { width: '100%', textAlign: 'left', padding: '12px 14px', borderColor: 'var(--green)' }, onClick: () => { setConcilExibido(true); document.getElementById('concil-filtros')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, "Consultar Conciliação"),
+                h('button', { type: 'button', className: 'action-btn', style: { width: '100%', textAlign: 'left', padding: '12px 14px' }, onClick: () => { setCalendarioExpandido(true); setConcilExibido(true); document.getElementById('concil-calendario')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, "Calendário de Saldos"),
+                concilExibido && h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+                  h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
+                  h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
+                )
               )
             ),
-            h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")),
+            h('div', { id: 'concil-filtros', style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))), h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")),
 
             concilExibido && h(React.Fragment, null,
               h('div', { style: { display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap' } },
@@ -3150,7 +3154,7 @@
                 h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo Final da Conta"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoFinalConcil)))
               ),
 
-              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: '#F2EFE9', borderRadius: 6, border: '1px solid var(--line)' } }, 
+              h('div', { id: 'concil-calendario', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: '#F2EFE9', borderRadius: 6, border: '1px solid var(--line)' } }, 
                 h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }, onClick: () => setCalendarioExpandido(!calendarioExpandido) }, 
                   h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Calendário de Saldos do Mês"),
                   h('button', { type: 'button', className: 'action-btn', style: { padding: 4, borderRadius: '50%' } }, calendarioExpandido ? h(ChevronUp, {size: 16}) : h(ChevronDown, {size: 16})),
