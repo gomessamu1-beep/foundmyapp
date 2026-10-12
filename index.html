@@ -2777,7 +2777,7 @@
             ),
             h('div', { className: 'sidebar-nav' },
               h('button', { className: screen === "cadastros" ? "active" : "", onClick: () => { setScreen("cadastros"); setMenuMobileOpen(false); } }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
-              h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => { setScreen("lancamentos"); setMenuMobileOpen(false); } }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
+              h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => { setScreen("lancamentos"); setLancamentoTab(""); setMenuMobileOpen(false); } }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
               h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setMenuMobileOpen(false); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
               h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => { setScreen("relatorios"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
               h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => { setScreen("conciliacao"); setMenuMobileOpen(false); } }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária"))
@@ -2865,10 +2865,25 @@
           ),
 
           screen === "lancamentos" && h('div', { className: 'form-card' },
-            h('div', { className: 'sub-nav' },
-              h('button', { className: lancamentoTab === "cartao" ? "active" : "", onClick: () => setLancamentoTab("cartao") }, h(CreditCard, { size: 16 }), " Cartão de Crédito"),
-              h('button', { className: lancamentoTab === "pagar" ? "active" : "", onClick: () => setLancamentoTab("pagar") }, h(ArrowDownCircle, { size: 16 }), " Contas a Pagar"),
-              h('button', { className: lancamentoTab === "receber" ? "active" : "", onClick: () => setLancamentoTab("receber") }, h(ArrowUpCircle, { size: 16 }), " Contas a Receber")
+            h('div', {
+              className: 'sub-nav' + (lancamentoTab === "" ? ' launch-choice-nav' : ''),
+              style: lancamentoTab === "" ? { display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 420, margin: '18px auto 8px' } : {}
+            },
+              h('button', {
+                className: lancamentoTab === "cartao" ? "active" : "",
+                onClick: () => setLancamentoTab("cartao"),
+                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--green)' } : {}
+              }, h(CreditCard, { size: 20 }), " Cartão de Crédito"),
+              h('button', {
+                className: lancamentoTab === "pagar" ? "active" : "",
+                onClick: () => setLancamentoTab("pagar"),
+                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--red)' } : {}
+              }, h(ArrowDownCircle, { size: 20 }), " Contas a Pagar"),
+              h('button', {
+                className: lancamentoTab === "receber" ? "active" : "",
+                onClick: () => setLancamentoTab("receber"),
+                style: lancamentoTab === "" ? { width: '100%', minHeight: 58, justifyContent: 'flex-start', padding: '16px 18px', borderRadius: 10, fontSize: 16, fontWeight: 600, background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--green)' } : {}
+              }, h(ArrowUpCircle, { size: 20 }), " Contas a Receber")
             ),
 
             lancamentoTab === "cartao" && h(React.Fragment, null,
