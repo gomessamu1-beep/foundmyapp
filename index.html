@@ -118,6 +118,7 @@
       const [mesesFechados, setMesesFechados] = useState({});
       
       const [screen, setScreen] = useState(() => sessionStorage.getItem('fatura-screen-v1') || "cadastros");
+      const [menuMobileOpen, setMenuMobileOpen] = useState(false);
       const [cadastroTab, setCadastroTab] = useState(() => sessionStorage.getItem('fatura-cadtab-v1') || "cartoes");
       const [categoriaTipoTab, setCategoriaTipoTab] = useState("despesa");
       const [lancamentoTab, setLancamentoTab] = useState("cartao");
@@ -2324,6 +2325,123 @@
 
           /* Ajustes de responsividade para celulares */
           @media (max-width: 600px) {
+            .mobile-menu-backdrop {
+              position: fixed;
+              inset: 0;
+              background: rgba(20, 18, 14, 0.48);
+              z-index: 299;
+            }
+
+            .mobile-menu-button {
+              display: flex !important;
+              align-items: center;
+              justify-content: center;
+              flex: 0 0 42px;
+              width: 42px;
+              height: 42px;
+              padding: 0;
+              border: 1px solid var(--line);
+              border-radius: 7px;
+              background: var(--card);
+              color: var(--ink);
+              font-size: 27px;
+              line-height: 1;
+              cursor: pointer;
+            }
+
+            .global-header {
+              justify-content: flex-start !important;
+              gap: 10px;
+              padding-top: 2px;
+            }
+
+            .global-header h2 {
+              flex: 1;
+              min-width: 0;
+              font-size: 16px !important;
+              line-height: 1.25;
+            }
+
+            .global-header > .action-btn {
+              flex: 0 0 auto;
+              padding: 8px !important;
+              font-size: 0;
+            }
+
+            .sidebar {
+              left: 0;
+              top: 0;
+              bottom: 0;
+              width: min(285px, 84vw);
+              max-width: 84vw;
+              height: 100dvh;
+              padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px));
+              transform: translateX(-105%);
+              transition: transform 0.25s ease;
+              box-shadow: none;
+              z-index: 300;
+              overflow-y: auto;
+            }
+
+            .sidebar.mobile-open {
+              transform: translateX(0);
+              box-shadow: 6px 0 28px rgba(0,0,0,0.2);
+            }
+
+            .sidebar .nav-text {
+              display: inline !important;
+              opacity: 1 !important;
+              visibility: visible !important;
+            }
+
+            .sidebar-brand {
+              justify-content: flex-start;
+              padding-left: 8px;
+              margin-bottom: 22px;
+              font-size: 17px;
+            }
+
+            .sidebar-nav {
+              gap: 7px;
+            }
+
+            .sidebar-nav button {
+              width: 100%;
+              min-width: 0;
+              min-height: 46px;
+              margin: 0;
+              padding: 12px 14px;
+              justify-content: flex-start;
+              font-size: 15px;
+            }
+
+            .sidebar-footer {
+              margin-top: auto;
+              padding-top: 14px;
+            }
+
+            .sidebar:hover,
+            .sidebar:active,
+            .sidebar:focus-within {
+              width: min(285px, 84vw);
+              max-width: 84vw;
+              padding: calc(14px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px));
+              transform: translateX(-105%);
+            }
+
+            .sidebar.mobile-open:hover,
+            .sidebar.mobile-open:active,
+            .sidebar.mobile-open:focus-within {
+              transform: translateX(0);
+            }
+
+            .sidebar:hover .nav-text,
+            .sidebar:active .nav-text,
+            .sidebar:focus-within .nav-text {
+              display: inline !important;
+              visibility: visible !important;
+            }
+
             html, body, #root {
               width: 100%;
               max-width: 100%;
@@ -2623,17 +2741,18 @@
           }
         `),
 
-        h('div', { className: 'sidebar' },
+        menuMobileOpen && h('div', { className: 'mobile-menu-backdrop', onClick: () => setMenuMobileOpen(false), 'aria-hidden': 'true' }),
+        h('div', { className: 'sidebar' + (menuMobileOpen ? ' mobile-open' : '') },
           h('div', null,
             h('div', { className: 'sidebar-brand' }, 
               h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', minWidth: 'max-content' } }, h(CreditCard, { size: 22 }), h('span', { className: 'nav-text' }, "Samuel Gomes"))
             ),
             h('div', { className: 'sidebar-nav' },
-              h('button', { className: screen === "cadastros" ? "active" : "", onClick: () => setScreen("cadastros") }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
-              h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => setScreen("lancamentos") }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
-              h('button', { className: screen === "faturas" ? "active" : "", onClick: () => setScreen("faturas") }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
-              h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => setScreen("relatorios") }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
-              h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => setScreen("conciliacao") }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária"))
+              h('button', { className: screen === "cadastros" ? "active" : "", onClick: () => { setScreen("cadastros"); setMenuMobileOpen(false); } }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
+              h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => { setScreen("lancamentos"); setMenuMobileOpen(false); } }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
+              h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setMenuMobileOpen(false); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
+              h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => { setScreen("relatorios"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
+              h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => { setScreen("conciliacao"); setMenuMobileOpen(false); } }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária"))
             )
           ),
           h('div', { className: 'sidebar-footer' }, 
@@ -2647,6 +2766,14 @@
         h('div', { className: 'main-content' },
 
           h('div', { className: 'global-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid var(--line)' } },
+            h('button', {
+              type: 'button',
+              className: 'mobile-menu-button',
+              onClick: () => setMenuMobileOpen(true),
+              'aria-label': 'Abrir menu',
+              title: 'Abrir menu',
+              style: { display: 'none' }
+            }, '☰'),
             h('h2', { style: { margin: 0, fontSize: '20px', color: 'var(--ink)' } }, 
               screen === 'cadastros' ? 'Cadastros e Configurações' :
               screen === 'lancamentos' ? 'Gestão de Lançamentos' :
