@@ -2558,11 +2558,13 @@
             }
 
             .main-content {
-              margin-left: 52px;
-              width: calc(100% - 52px);
-              max-width: calc(100% - 52px);
+              /* No celular, o menu fica sobreposto e recolhido; o conteúdo usa a tela inteira. */
+              margin-left: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
               min-width: 0;
-              padding: calc(36px + env(safe-area-inset-top, 0px)) 10px 20px;
+              box-sizing: border-box;
+              padding: calc(36px + env(safe-area-inset-top, 0px)) 12px 20px;
             }
 
             .main-content > *,
