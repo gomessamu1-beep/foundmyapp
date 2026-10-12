@@ -3167,11 +3167,11 @@
               )
             ),
             isAndroidApp
-              ? concilTab !== "" && h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr auto', gap: 10, alignItems: 'end', marginBottom: 20 } },
-                  h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })),
-                  h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })),
-                  h('div', { className: 'field' }, h('label', null, "Conta"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
-                  h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")
+              ? concilTab !== "" && h('div', { className: 'concil-filter-grid', style: { display: 'flex', flexDirection: 'column', gap: 12, width: '100%', marginBottom: 20, alignItems: 'stretch' } },
+                  h('div', { className: 'field', style: { width: '100%' } }, h('label', null, "Selecionar a conta"), h('select', { style: { width: '100%', boxSizing: 'border-box' }, value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+                  h('div', { className: 'field', style: { width: '100%' } }, h('label', null, "Data Inicial"), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })),
+                  h('div', { className: 'field', style: { width: '100%' } }, h('label', null, "Data Final"), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })),
+                  h('button', { type: 'button', className: 'primary', style: { width: '100%', boxSizing: 'border-box', minHeight: 46 }, onClick: () => setConcilExibido(true) }, "Exibir")
                 )
               : h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } },
                   h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
