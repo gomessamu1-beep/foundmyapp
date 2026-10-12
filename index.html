@@ -96,6 +96,8 @@
     const CARD_COLORS = ["#3C5A73", "#6B4226", "#7A6C46", "#4B4453", "#2F5233", "#8C3B2E"];
 
     function FaturaApp() {
+      // O APK abre o mesmo site com origem=android; o navegador mantém o layout web original.
+      const isAndroidApp = new URLSearchParams(window.location.search).get("origem") === "android";
       const [session, setSession] = useState(null);
       const [authLoading, setAuthLoading] = useState(true);
       const [dataLoading, setDataLoading] = useState(false);
@@ -3141,7 +3143,7 @@
           ),
 
           screen === "conciliacao" && h('div', { className: 'form-card' },
-            h('div', { style: { marginBottom: 16 } },
+            isAndroidApp ? h('div', { style: { marginBottom: 16 } },
               h('div', { style: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 } }, "Conciliação Bancária"),
               concilTab === "" ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 440 } },
                 h('button', { type: 'button', className: 'primary', style: { width: '100%', justifyContent: 'flex-start', padding: '13px 14px' }, onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
@@ -3156,17 +3158,36 @@
                   h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
                 )
               )
+            ) : h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Conciliação Bancária"),
+              h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } },
+                h('button', { type: 'button', className: 'primary', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
+                concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
+                concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
+              )
             ),
-            concilTab !== "" && h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr auto', gap: 10, alignItems: 'end', marginBottom: 20 } }, h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })), h('div', { className: 'field' }, h('label', null, "Conta"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))), h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")),
+            isAndroidApp
+              ? concilTab !== "" && h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr auto', gap: 10, alignItems: 'end', marginBottom: 20 } },
+                  h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })),
+                  h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })),
+                  h('div', { className: 'field' }, h('label', null, "Conta"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+                  h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")
+                )
+              : h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, flexWrap: 'wrap' } },
+                  h('div', { className: 'field' }, h('label', null, "Conta Bancária *"), h('select', { value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: "" }, "Selecione a conta..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+                  h('div', { className: 'field' }, h('label', null, "Data Inicial"), h('input', { type: 'date', value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })),
+                  h('div', { className: 'field' }, h('label', null, "Data Final"), h('input', { type: 'date', value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })),
+                  h('button', { type: 'button', className: 'primary', style: { height: 38 }, onClick: () => setConcilExibido(true) }, "Exibir")
+                ),
 
             concilExibido && h(React.Fragment, null,
-              concilTab === 'resumo' && h('div', { style: { display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap' } },
+              (!isAndroidApp || concilTab === 'resumo') && h('div', { style: { display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap' } },
                 h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Débitos (Pagamentos)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--red)' } }, showMoney(totalDebitosConcil))),
                 h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Créditos (Recebimentos)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--green)' } }, showMoney(totalCreditosConcil))),
                 h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo Final da Conta"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoFinalConcil)))
               ),
 
-              concilTab === 'calendario' && h(React.Fragment, null,
+              (!isAndroidApp || concilTab === 'calendario') && h(React.Fragment, null,
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: '#F2EFE9', borderRadius: 6, border: '1px solid var(--line)' } }, 
                 h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }, onClick: () => setCalendarioExpandido(!calendarioExpandido) }, 
                   h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Calendário de Saldos do Mês"),
@@ -3185,7 +3206,7 @@
               })),
               ),
 
-              concilTab === 'movimentacoes' && h(React.Fragment, null,
+              (!isAndroidApp || concilTab === 'movimentacoes') && h(React.Fragment, null,
               h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottom: '2px solid var(--line)', paddingBottom: 8 } }, "Movimentação Detalhada do Período Filtrado"),
 
               resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e) }, isDiaFechado(grupo.data) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { style: { marginTop: 0 } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('a', { href: '#', style: { color: 'var(--green)', fontWeight: 'bold', textDecoration: 'underline', fontSize: '12px' }, onClick: (e) => { e.preventDefault(); setConcilEditModal({ open: true, item }); } }, "🔗 Abrir / Alterar")), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))),
