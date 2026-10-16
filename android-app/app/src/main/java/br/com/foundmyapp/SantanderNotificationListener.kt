@@ -58,12 +58,8 @@ class SantanderNotificationListener : NotificationListenerService() {
             val prefs = getSharedPreferences("foundmyapp_santander_notifications", MODE_PRIVATE)
             val list = try { JSONArray(prefs.getString("pending", "[]")) } catch (_: Exception) { JSONArray() }
             val uniqueId = sha256("$packageName|\${sbn.key}|\${sbn.postTime}|$combined")
-            for (i in 0 until list.length()) {
-                if (list.optJSONObject(i)?.optString("id") == uniqueId) return
-            }
-
             // Guarda somente os campos úteis para o lançamento; a mensagem completa não é exibida.
-            list.put(JSONObject()
+            val record = JSONObject()
                 .put("id", uniqueId)
                 .put("title", merchant)
                 .put("text", compactText)
@@ -71,7 +67,18 @@ class SantanderNotificationListener : NotificationListenerService() {
                 .put("amount", amount)
                 .put("date", date)
                 .put("postedAt", sbn.postTime)
-                .put("packageName", packageName))
+                .put("packageName", packageName)
+
+            // Atualiza também registros pendentes criados pela versão anterior, sem duplicá-los.
+            for (i in 0 until list.length()) {
+                if (list.optJSONObject(i)?.optString("id") == uniqueId) {
+                    list.put(i, record)
+                    prefs.edit().putString("pending", list.toString()).apply()
+                    return
+                }
+            }
+
+            list.put(record)
             val bounded = JSONArray()
             val start = (list.length() - 100).coerceAtLeast(0)
             for (i in start until list.length()) bounded.put(list.getJSONObject(i))
