@@ -211,11 +211,16 @@
 
           const textoCompleto = [item.title, item.text].filter(Boolean).join(" — ");
           const valorMatch = textoCompleto.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/);
-          const valor = valorMatch ? valorMatch[1].replace(/\./g, "") : "";
-          const dataNotificacao = item.postedAt ? new Date(Number(item.postedAt)) : new Date();
+          const valor = item.amount
+            ? String(item.amount).replace(/\./g, "")
+            : (valorMatch ? valorMatch[1].replace(/\./g, "") : "");
+          const dataTexto = String(item.date || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+          const dataNotificacao = dataTexto
+            ? new Date(Number(dataTexto[3]), Number(dataTexto[2]) - 1, Number(dataTexto[1]))
+            : (item.postedAt ? new Date(Number(item.postedAt)) : new Date());
           const dataISO = dataNotificacao.getFullYear() + "-" + String(dataNotificacao.getMonth() + 1).padStart(2, "0") + "-" + String(dataNotificacao.getDate()).padStart(2, "0");
           const cartaoSantander = cartoes.find(x => /santander/i.test(x.nome || ""));
-          const descricaoSugerida = (item.text || item.title || "Compra Santander").replace(/\s+/g, " ").trim().slice(0, 120);
+          const descricaoSugerida = String(item.merchant || item.title || "Compra Santander").replace(/\s+/g, " ").trim().slice(0, 70);
 
           setScreen("faturas");
           setMonth(dataISO.slice(0, 7));
