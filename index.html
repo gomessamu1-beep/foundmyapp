@@ -3456,6 +3456,7 @@
                 h('button', { type: 'button', className: 'primary', onClick: confirmarImportacaoPDF, disabled: pdfImportando || pdfPreview.some(r => r.selecionado && !r.duplicado && isFaturaFechada(String(r.competencia || '').slice(0, 7))) }, 'Importar lançamentos novos')
               )
             )
+            )
           ),
           document.body
         ),
