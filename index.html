@@ -2889,6 +2889,18 @@
             background: rgba(0, 0, 0, 0.48);
           }
           .pdf-modal-content {
+            /* O modal é renderizado no body via portal; redefinir as variáveis
+               aqui garante contraste dos textos e botões fora do container do app. */
+            --paper: #ECE8DD;
+            --card: #FAF8F2;
+            --ink: #262117;
+            --ink-soft: #6B6355;
+            --line: #D8D0BC;
+            --green: #2F5233;
+            --red: #8C3B2E;
+            --red-soft: #F1E4DF;
+            --amber: #D97706;
+            --amber-soft: #FEF3C7;
             position: relative;
             flex: 0 1 1050px;
             width: 100%;
