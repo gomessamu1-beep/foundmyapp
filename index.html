@@ -1387,6 +1387,92 @@
         }
       }
 
+      function atualizarItemPDF(id, campo, valor) {
+        setPdfPreview(prev => prev.map(item => {
+          if (String(item.id) !== String(id)) return item;
+          if (campo === "cartao") {
+            const cartao = (cartoes || []).find(c => String(c.id) === String(valor)) || null;
+            return { ...item, cartao };
+          }
+          if (campo === "categoria") {
+            const categoria = (categorias || []).find(c => String(c.id) === String(valor)) || null;
+            return { ...item, categoria, subcategoria: null };
+          }
+          if (campo === "subcategoria") {
+            const subcategoria = (item.categoria?.subcategorias || []).find(s => String(s.id) === String(valor)) || null;
+            return { ...item, subcategoria };
+          }
+          if (campo === "numeroParcela" || campo === "totalParcelas") {
+            const numero = Math.max(1, Math.min(60, parseInt(valor, 10) || 1));
+            if (campo === "numeroParcela") {
+              return { ...item, numeroParcela: Math.min(numero, Number(item.totalParcelas || 1)) };
+            }
+            return { ...item, totalParcelas: numero, numeroParcela: Math.min(Number(item.numeroParcela || 1), numero) };
+          }
+          if (campo === "selecionado") return { ...item, selecionado: !!valor };
+          return { ...item, [campo]: valor };
+        }));
+        setPdfError("");
+      }
+
+      function ignorarItemPDF(id) {
+        setPdfPreview(prev => prev.filter(item => String(item.id) !== String(id)));
+        setPdfError("");
+      }
+
+      function importarUmLancamentoPDF(id) {
+        if (pdfImportando) return;
+        const item = (pdfPreview || []).find(r => String(r.id) === String(id));
+        if (!item) return setPdfError("Não encontrei esse lançamento na prévia. Selecione o PDF novamente.");
+        if (item.duplicado || encontrarDuplicadoPDF(item)) {
+          setPdfPreview(prev => prev.map(r => String(r.id) === String(id) ? { ...r, duplicado: true, selecionado: false } : r));
+          return setPdfError("Esse lançamento já está cadastrado e não será importado novamente.");
+        }
+
+        const competencia = String(item.competencia || "").slice(0, 7);
+        if (competencia && isFaturaFechada(competencia)) {
+          return setPdfError(`Não é possível importar: a fatura ${formatMonthLabel(competencia)} está fechada. Reabra a fatura antes de importar.`);
+        }
+        if (!item.cartao?.id) return setPdfError("Selecione o cartão deste lançamento antes de importar.");
+        if (!item.categoria?.id) return setPdfError("Selecione a categoria deste lançamento antes de importar.");
+        if (!item.subcategoria?.id && !item.categoria?.isTransferencia) {
+          return setPdfError("Selecione a subcategoria deste lançamento antes de importar.");
+        }
+
+        const novoLancamento = {
+          id: uid(),
+          descricao: item.descricao,
+          observacao: `Importado da fatura PDF ${pdfArquivo}`,
+          total: Number(item.valor) * Number(item.totalParcelas || 1),
+          valorParcelaImportacao: Number(item.valor),
+          dataCompra: item.data,
+          parcelas: Number(item.totalParcelas || 1),
+          parcelaInicial: Number(item.numeroParcela || 1),
+          inicio: item.competencia,
+          recorrente: false,
+          cartaoId: item.cartao.id,
+          categoriaId: item.categoria.id,
+          subcategoriaId: item.subcategoria?.id || null,
+          status: "Em aberto",
+          bancoBaixaId: null,
+          dataBaixa: null,
+          criadoEm: Date.now(),
+          isImportacaoPDF: true,
+          tipoImportacao: "FATURA",
+          competenciaImportacao: item.competencia,
+          parcelaImportacao: `${item.numeroParcela || 1}/${item.totalParcelas || 1}`,
+          numeroParcelaImportacao: Number(item.numeroParcela || 1),
+          totalParcelasImportacao: Number(item.totalParcelas || 1)
+        };
+
+        const nextPurchases = [...(purchases || []), novoLancamento];
+        setPurchases(nextPurchases);
+        saveDataToSupabase(nextPurchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
+        setPdfPreview(prev => prev.filter(r => String(r.id) !== String(id)));
+        setPdfError("");
+        alert("1 lançamento importado com sucesso.");
+      }
+
           function confirmarImportacaoPDF() {
         if (pdfImportando) return;
         const novos = (pdfPreview || []).filter(r => r.selecionado && !r.duplicado);
