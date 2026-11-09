@@ -1315,6 +1315,69 @@
         selecionado: true
       };
     }
+          for (const linhas of paginas) {
+            for (const linhaOriginal of linhas) {
+              const linha = linhaOriginal.replace(/\s+/g, " ").trim();
+              const normal = normalizarTextoImportacao(linha);
+              const cab = linha.match(regexCabecalhoCartao);
+
+              if (cab) {
+                cartaoUltimos4 = cab[1];
+                cartaoAtual = localizarCartaoPDF(cartaoUltimos4);
+              }
+
+              if (normal.includes("parcelamentos")) secao = "parcelamentos";
+              else if (normal.includes("despesas")) secao = "despesas";
+              else if (normal.includes("pagamento e demais creditos")) secao = "creditos";
+            }
+
+            const registros = separarRegistrosPDF(linhas);
+
+            for (const registro of registros) {
+              const normalRegistro = normalizarTextoImportacao(registro);
+
+              if (
+                normalRegistro.includes("parcelamentos") ||
+                normalRegistro.includes("despesas") ||
+                normalRegistro.includes("pagamento e demais creditos") ||
+                normalRegistro.startsWith("vencimento") ||
+                normalRegistro.startsWith("valor total") ||
+                normalRegistro.startsWith("resumo da fatura") ||
+                normalRegistro.startsWith("total da fatura")
+              ) continue;
+
+              const item = extrairLancamentoPDF(
+                registro, ano, cartaoAtual, cartaoUltimos4, competencia
+              );
+
+              if (!item) continue;
+              if (!item.cartao && cartoes.length === 1) item.cartao = cartoes[0];
+
+              const dup = encontrarDuplicadoPDF(item);
+              if (dup) {
+                item.duplicado = true;
+                item.duplicadoId = dup.id;
+                item.selecionado = false;
+              }
+
+              resultado.push(item);
+            }
+          }
+
+          const unicos = [];
+          const chaves = new Set();
+          for (const item of resultado) {
+            const chave = [item.data, normalizarDescricaoPDF(item.descricao), item.valor.toFixed(2), item.cartao?.id || item.cartaoUltimos4 || "", item.numeroParcela, item.totalParcelas].join("|");
+            if (chaves.has(chave)) continue;
+            chaves.add(chave);
+            unicos.push(item);
+          }
+
+          if (!unicos.length) {
+            throw new Error("Não encontrei lançamentos nas seções Parcelamentos/Despesas deste PDF. Verifique se a fatura está em formato de texto.");
+          }
+
+          setPdfPreview(unicos);
       } catch (err) {
           console.error("[FoundMyApp] Erro ao ler fatura PDF:", err);
           setPdfError(err?.message || "Não foi possível processar a fatura PDF.");
