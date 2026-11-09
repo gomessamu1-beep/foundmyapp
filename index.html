@@ -1192,7 +1192,7 @@
           let cartaoAtual = null;
           let cartaoUltimos4 = "";
 
-          const regexCabecalhoCartao = /(?:^|\\s)(?:[A-ZÀ-Ú][A-ZÀ-Ú0-9 .'-]{2,})\\s+-\\s+\\d{4}\\s+XXXX\\s+XXXX\\s+(\\d{4})/i;
+          const regexCabecalhoCartao = /(?:^|\s)(?:[A-ZÀ-Ú][A-ZÀ-Ú0-9 .'-]{2,})\s+-\s+\d{4}\s+XXXX\s+XXXX\s+(\d{4})/i;
 
           // Parser robusto: cada DD/MM inicia um lançamento, mesmo quando
           // o PDF quebra o parcelamento em linhas diferentes.
