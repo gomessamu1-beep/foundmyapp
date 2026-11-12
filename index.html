@@ -3158,7 +3158,7 @@
               h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setMenuMobileOpen(false); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
               h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => { setScreen("relatorios"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
               h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => { setScreen("conciliacao"); setMenuMobileOpen(false); } }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária")),
-              h('button', { className: screen === "conferencia-faturas" ? "active" : "", onClick: () => { setScreen("conferencia-faturas"); setMenuMobileOpen(false); setConferenciaSelecionada(null); carregarConferenciaFaturas(); } }, h(CheckCircle, { size: 18 }), h('span', { className: 'nav-text' }, "Conferência de Faturas"))
+              h('button', { className: screen === "conferencia-faturas" ? "active" : "", onClick: () => { setScreen("conferencia-faturas"); setMenuMobileOpen(false); setConferenciaSelecionada(null); carregarConferenciaFaturas(); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Conferência de Faturas"))
             )
           ),
           h('div', { className: 'sidebar-footer' }, 
