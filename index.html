@@ -2430,31 +2430,6 @@
             }
           }
 
-        screen === 'lancamentos' && lancamentoTab === 'cartao' && h('button', {
-          type: 'button',
-          className: 'floating-new-launch',
-          title: 'Novo Lançamento',
-          'aria-label': 'Novo Lançamento',
-          disabled: fechadaAtual,
-          onClick: () => {
-            setEditingId(null);
-            setDescricao('');
-            setObservacao('');
-            setValorTotal('');
-            setValorParcelaInput('');
-            setDataLancamento(currentDate());
-            setFaturaMes(month);
-            setParcelas('1');
-            setParcelaAtual('1');
-            setCartaoId('');
-            setCategoriaId('');
-            setSubcategoriaId('');
-            setIsRecorrente(false);
-            setLancamentoTab('cartao');
-            setModalOpen(true);
-          }
-        }, h(Plus, { size: 19 }), ' Novo Lançamento'),
-
           .fatura-app-layout { --paper: #ECE8DD; --card: #FAF8F2; --ink: #262117; --ink-soft: #6B6355; --line: #D8D0BC; --green: #2F5233; --red: #8C3B2E; --red-soft: #F1E4DF; --amber: #D97706; --amber-soft: #FEF3C7; font-family: sans-serif; color: var(--ink); display: flex; min-height: 100vh; background-color: var(--paper); }
           
           .sidebar { width: 260px; background: var(--card); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 24px 16px; flex-shrink: 0; justify-content: space-between; transition: all 0.3s ease; overflow-x: hidden; white-space: nowrap; z-index: 100; }
@@ -3089,6 +3064,31 @@
             .pdf-modal-content > div:first-child { top: -14px; }
           }
         `),
+
+        screen === 'lancamentos' && lancamentoTab === 'cartao' && h('button', {
+          type: 'button',
+          className: 'floating-new-launch',
+          title: 'Novo Lançamento',
+          'aria-label': 'Novo Lançamento',
+          disabled: fechadaAtual,
+          onClick: () => {
+            setEditingId(null);
+            setDescricao('');
+            setObservacao('');
+            setValorTotal('');
+            setValorParcelaInput('');
+            setDataLancamento(currentDate());
+            setFaturaMes(month);
+            setParcelas('1');
+            setParcelaAtual('1');
+            setCartaoId('');
+            setCategoriaId('');
+            setSubcategoriaId('');
+            setIsRecorrente(false);
+            setLancamentoTab('cartao');
+            setModalOpen(true);
+          }
+        }, h(Plus, { size: 19 }), ' Novo Lançamento'),
 
         menuMobileOpen && h('div', { className: 'mobile-menu-backdrop', onClick: () => setMenuMobileOpen(false), 'aria-hidden': 'true' }),
         h('div', { className: 'sidebar' + (menuMobileOpen ? ' mobile-open' : '') },
