@@ -423,15 +423,26 @@
       function updateMesesFechados(updater) { setMesesFechados(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, next); return next; }); }
 
       async function carregarConferenciaFaturas() {
-        if (!session?.user?.id || !supabaseClient) return;
+        if (!supabaseClient) { setConferenciaErro("Conexão com o Supabase indisponível."); return; }
         setConferenciaCarregando(true); setConferenciaErro("");
-        const { data, error } = await supabaseClient.from("conferencia_faturas_pdf").select("*").eq("user_id", session.user.id).order("criado_em", { ascending: false });
-        if (error) setConferenciaErro("Não foi possível carregar as faturas: " + error.message);
-        else {
+        try {
+          // Confirma o usuário ativo e busca somente os campos usados na tela.
+          // Não baixa pdf_base64 (que pode ter vários MB) para listar as faturas.
+          const { data: usuarioAtual, error: erroUsuario } = await supabaseClient.auth.getUser();
+          const usuarioId = usuarioAtual?.user?.id || session?.user?.id;
+          if (erroUsuario || !usuarioId) throw erroUsuario || new Error("Sessão não identificada. Saia e entre novamente no aplicativo.");
+          const { data, error } = await supabaseClient.from("conferencia_faturas_pdf")
+            .select("id,user_id,hash_pdf,nome_arquivo,competencia,cartao_nome,itens,criado_em,atualizado_em")
+            .eq("user_id", usuarioId).order("criado_em", { ascending: false });
+          if (error) throw error;
           setConferenciaFaturas(data || []);
           if (conferenciaSelecionada) setConferenciaSelecionada((data || []).find(x => x.id === conferenciaSelecionada.id) || null);
+        } catch (error) {
+          console.error("[FoundMyApp] Erro ao carregar conferência de faturas:", error);
+          setConferenciaErro("Não foi possível carregar as faturas: " + (error?.message || "erro desconhecido"));
+        } finally {
+          setConferenciaCarregando(false);
         }
-        setConferenciaCarregando(false);
       }
 
       async function atualizarConferenciaItem(fatura, itemId, patch) {
