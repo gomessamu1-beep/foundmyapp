@@ -120,6 +120,7 @@
       const [mesesFechados, setMesesFechados] = useState({});
       
       const [screen, setScreen] = useState(() => sessionStorage.getItem('fatura-screen-v1') || "cadastros");
+      const [faturaViewTab, setFaturaViewTab] = useState("lancamentos");
       const [conferenciaFaturas, setConferenciaFaturas] = useState([]);
       const [conferenciaSelecionada, setConferenciaSelecionada] = useState(null);
       const [conferenciaCarregando, setConferenciaCarregando] = useState(false);
@@ -3179,10 +3180,9 @@
             h('div', { className: 'sidebar-nav' },
               h('button', { className: screen === "cadastros" ? "active" : "", onClick: () => { setScreen("cadastros"); setMenuMobileOpen(false); } }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
               h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => { setScreen("lancamentos"); setLancamentoTab(""); setMenuMobileOpen(false); } }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
-              h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setMenuMobileOpen(false); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
+              h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setFaturaViewTab("lancamentos"); setMenuMobileOpen(false); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
               h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => { setScreen("relatorios"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
               h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => { setScreen("conciliacao"); setMenuMobileOpen(false); } }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária")),
-              h('button', { className: screen === "conferencia-faturas" ? "active" : "", onClick: () => { setScreen("conferencia-faturas"); setMenuMobileOpen(false); setConferenciaSelecionada(null); carregarConferenciaFaturas(); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Conferência de Faturas"))
             )
           ),
           h('div', { className: 'sidebar-footer' }, 
@@ -3226,7 +3226,7 @@
             )
           ),
 
-          screen === "conferencia-faturas" && h('div', { className: 'form-card' },
+          screen === "faturas" && faturaViewTab === "conferencia" && h('div', { className: 'form-card' },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 } },
               h('div', null, h('h3', { style: { margin: 0 } }, 'Conferência de Faturas'), h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, marginTop: 5 } }, 'Compare cada compra do PDF com um lançamento já cadastrado. Esta tela não cria nem altera lançamentos.')),
               h('button', { type: 'button', className: 'action-btn', onClick: carregarConferenciaFaturas, disabled: conferenciaCarregando }, h(RefreshCw, { size: 15 }), ' Atualizar')
@@ -3523,7 +3523,14 @@
             )
           ),
 
-          screen === "faturas" && h('div', { className: 'form-card' },
+          screen === "faturas" && h('div', { className: 'form-card', style: { paddingBottom: 8 } },
+            h('div', { className: 'sub-nav', style: { marginBottom: 0 } },
+              h('button', { className: faturaViewTab === "lancamentos" ? "active" : "", onClick: () => setFaturaViewTab("lancamentos") }, "Lançamentos"),
+              h('button', { className: faturaViewTab === "conferencia" ? "active" : "", onClick: () => { setFaturaViewTab("conferencia"); setConferenciaSelecionada(null); carregarConferenciaFaturas(); } }, "Conferência da Fatura")
+            )
+          ),
+
+          screen === "faturas" && faturaViewTab === "lancamentos" && h('div', { className: 'form-card' },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } }, h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Resumo de Faturas por Ano"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")),
             h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 20 } }, "Navegue pelos anos e clique em um mês para visualizar e gerenciar seus lançamentos logo abaixo."),
             h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 } }, h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) - 1).toString()) }, h(ChevronLeft)), h('div', { style: { fontSize: 22, fontWeight: 'bold' } }, faturaAno), h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) + 1).toString()) }, h(ChevronRight))),
