@@ -450,12 +450,15 @@
             console.warn("[FoundMyApp] PDF maior que 6 MB: não foi arquivado na conferência para evitar exceder o limite do banco.");
             return;
           }
-          const digest = await crypto.subtle.digest("SHA-256", buffer);
+          // O PDF.js pode transferir/desanexar o ArrayBuffer usado na leitura.
+          // Lemos novamente o arquivo original para obter um buffer independente e válido.
+          const bufferArmazenamento = await file.arrayBuffer();
+          const digest = await crypto.subtle.digest("SHA-256", bufferArmazenamento);
           const hash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
           const { data: existente, error: erroBusca } = await supabaseClient.from("conferencia_faturas_pdf").select("id").eq("user_id", session.user.id).eq("hash_pdf", hash).maybeSingle();
           if (erroBusca) throw erroBusca;
           if (existente) return;
-          const bytes = new Uint8Array(buffer); let binario = "";
+          const bytes = new Uint8Array(bufferArmazenamento); let binario = "";
           for (let i = 0; i < bytes.length; i += 0x8000) binario += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
           const pdfBase64 = btoa(binario);
           const itensConferencia = itens.map((item, i) => ({
