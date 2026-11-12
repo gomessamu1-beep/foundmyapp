@@ -120,6 +120,10 @@
       const [mesesFechados, setMesesFechados] = useState({});
       
       const [screen, setScreen] = useState(() => sessionStorage.getItem('fatura-screen-v1') || "cadastros");
+      const [conferenciaFaturas, setConferenciaFaturas] = useState([]);
+      const [conferenciaSelecionada, setConferenciaSelecionada] = useState(null);
+      const [conferenciaCarregando, setConferenciaCarregando] = useState(false);
+      const [conferenciaErro, setConferenciaErro] = useState("");
       const [menuMobileOpen, setMenuMobileOpen] = useState(false);
       const [cadastroTab, setCadastroTab] = useState(() => sessionStorage.getItem('fatura-cadtab-v1') || "cartoes");
       const [categoriaTipoTab, setCategoriaTipoTab] = useState("despesa");
@@ -417,6 +421,56 @@
       function updateFaturasBaixadas(updater) { setFaturasBaixadas(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, next, diasFechados, mesesFechados); return next; }); }
       function updateDiasFechados(updater) { setDiasFechados(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, next, mesesFechados); return next; }); }
       function updateMesesFechados(updater) { setMesesFechados(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, next); return next; }); }
+
+      async function carregarConferenciaFaturas() {
+        if (!session?.user?.id || !supabaseClient) return;
+        setConferenciaCarregando(true); setConferenciaErro("");
+        const { data, error } = await supabaseClient.from("conferencia_faturas_pdf").select("*").eq("user_id", session.user.id).order("criado_em", { ascending: false });
+        if (error) setConferenciaErro("Não foi possível carregar as faturas: " + error.message);
+        else {
+          setConferenciaFaturas(data || []);
+          if (conferenciaSelecionada) setConferenciaSelecionada((data || []).find(x => x.id === conferenciaSelecionada.id) || null);
+        }
+        setConferenciaCarregando(false);
+      }
+
+      async function atualizarConferenciaItem(fatura, itemId, patch) {
+        const itens = (fatura.itens || []).map(item => String(item.id) === String(itemId) ? { ...item, ...patch } : item);
+        const { error } = await supabaseClient.from("conferencia_faturas_pdf").update({ itens, atualizado_em: new Date().toISOString() }).eq("id", fatura.id).eq("user_id", session.user.id);
+        if (error) { setConferenciaErro("Não foi possível salvar a conferência: " + error.message); return; }
+        const atualizada = { ...fatura, itens };
+        setConferenciaFaturas(prev => prev.map(x => x.id === fatura.id ? atualizada : x));
+        setConferenciaSelecionada(atualizada);
+      }
+
+      async function salvarPDFNaConferencia(file, buffer, itens, competencia) {
+        try {
+          if (!session?.user?.id || !supabaseClient) return;
+          if (file.size > 6 * 1024 * 1024) {
+            console.warn("[FoundMyApp] PDF maior que 6 MB: não foi arquivado na conferência para evitar exceder o limite do banco.");
+            return;
+          }
+          const digest = await crypto.subtle.digest("SHA-256", buffer);
+          const hash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+          const { data: existente, error: erroBusca } = await supabaseClient.from("conferencia_faturas_pdf").select("id").eq("user_id", session.user.id).eq("hash_pdf", hash).maybeSingle();
+          if (erroBusca) throw erroBusca;
+          if (existente) return;
+          const bytes = new Uint8Array(buffer); let binario = "";
+          for (let i = 0; i < bytes.length; i += 0x8000) binario += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+          const pdfBase64 = btoa(binario);
+          const itensConferencia = itens.map((item, i) => ({
+            id: String(item.id || (i + 1)), data: item.data || "", descricao: item.descricao || "",
+            valor: Number(item.valor || 0), parcela: item.parcela || "", numeroParcela: item.numeroParcela || 1,
+            totalParcelas: item.totalParcelas || 1, cartao: item.cartao?.nome || item.cartaoUltimos4 || "",
+            conferido: false, lancamentoId: ""
+          }));
+          const { error } = await supabaseClient.from("conferencia_faturas_pdf").insert({
+            user_id: session.user.id, hash_pdf: hash, nome_arquivo: file.name, competencia,
+            cartao_nome: itensConferencia.find(x => x.cartao)?.cartao || "", pdf_base64: pdfBase64, itens: itensConferencia
+          });
+          if (error && error.code !== "23505") throw error;
+        } catch (e) { console.warn("[FoundMyApp] Não foi possível arquivar o PDF para conferência:", e); }
+      }
 
       function getCartao(id) { return cartoes.find(c => c.id === id) || null; }
       function getConta(id) { return contasBancarias.find(c => c.id === id) || null; }
@@ -1378,6 +1432,8 @@
           }
 
           setPdfPreview(unicos);
+          // Arquiva uma única cópia do PDF para a nova tela de conferência, sem interferir na importação atual.
+          await salvarPDFNaConferencia(file, buffer, unicos, competencia);
       } catch (err) {
           console.error("[FoundMyApp] Erro ao ler fatura PDF:", err);
           setPdfError(err?.message || "Não foi possível processar a fatura PDF.");
@@ -3101,7 +3157,8 @@
               h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => { setScreen("lancamentos"); setLancamentoTab(""); setMenuMobileOpen(false); } }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
               h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setMenuMobileOpen(false); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
               h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => { setScreen("relatorios"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
-              h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => { setScreen("conciliacao"); setMenuMobileOpen(false); } }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária"))
+              h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => { setScreen("conciliacao"); setMenuMobileOpen(false); } }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária")),
+              h('button', { className: screen === "conferencia-faturas" ? "active" : "", onClick: () => { setScreen("conferencia-faturas"); setMenuMobileOpen(false); setConferenciaSelecionada(null); carregarConferenciaFaturas(); } }, h(CheckCircle, { size: 18 }), h('span', { className: 'nav-text' }, "Conferência de Faturas"))
             )
           ),
           h('div', { className: 'sidebar-footer' }, 
@@ -3127,7 +3184,8 @@
               screen === 'cadastros' ? 'Cadastros e Configurações' :
               screen === 'lancamentos' ? 'Gestão de Lançamentos' :
               screen === 'faturas' ? 'Faturas de Cartão' :
-              screen === 'relatorios' ? 'Relatórios Financeiros' : 'Conciliação Bancária'
+              screen === 'relatorios' ? 'Relatórios Financeiros' :
+              screen === 'conferencia-faturas' ? 'Conferência de Faturas' : 'Conciliação Bancária'
             ),
             h('button', {
               className: 'action-btn',
@@ -3141,6 +3199,53 @@
             },
               valoresOcultos ? h(EyeOff, { size: 18 }) : h(Eye, { size: 18 }),
               valoresOcultos ? "Exibir Valores" : "Ocultar Valores"
+            )
+          ),
+
+          screen === "conferencia-faturas" && h('div', { className: 'form-card' },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 } },
+              h('div', null, h('h3', { style: { margin: 0 } }, 'Conferência de Faturas'), h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, marginTop: 5 } }, 'Compare cada compra do PDF com um lançamento já cadastrado. Esta tela não cria nem altera lançamentos.')),
+              h('button', { type: 'button', className: 'action-btn', onClick: carregarConferenciaFaturas, disabled: conferenciaCarregando }, h(RefreshCw, { size: 15 }), ' Atualizar')
+            ),
+            conferenciaErro && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, conferenciaErro),
+            conferenciaCarregando && h('div', { style: { padding: 18, color: 'var(--ink-soft)' } }, 'Carregando faturas...'),
+            !conferenciaCarregando && !conferenciaSelecionada && h(React.Fragment, null,
+              conferenciaFaturas.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, 'Nenhuma fatura arquivada ainda. Ao importar um PDF pela tela habitual, uma cópia será guardada aqui automaticamente.') :
+              h('div', { className: 'list-vertical' }, conferenciaFaturas.map(f => {
+                const total = (f.itens || []).length, feitos = (f.itens || []).filter(x => x.conferido).length;
+                return h('div', { className: 'list-item', key: f.id, style: { alignItems: 'center', gap: 12 } },
+                  h('div', { className: 'list-item-main' }, h('div', { style: { fontWeight: 700 } }, f.nome_arquivo || 'Fatura PDF'),
+                    h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (f.competencia || 'Competência não identificada') + (f.cartao_nome ? ' • ' + f.cartao_nome : '')),
+                    h('div', { style: { fontSize: 12, marginTop: 4 } }, feitos + ' de ' + total + ' lançamentos conferidos')),
+                  h('button', { type: 'button', className: 'primary', onClick: () => setConferenciaSelecionada(f) }, 'Abrir conferência')
+                );
+              })
+            ),
+            conferenciaSelecionada && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
+                h('div', null, h('strong', null, conferenciaSelecionada.nome_arquivo), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Selecione o lançamento correspondente e marque como conferido.')),
+                h('button', { type: 'button', className: 'action-btn', onClick: () => setConferenciaSelecionada(null) }, 'Voltar às faturas')
+              ),
+              h('div', { style: { overflowX: 'auto' } }, h('table', { style: { width: '100%', borderCollapse: 'collapse', minWidth: 650 } },
+                h('thead', null, h('tr', null, h('th', { style: { textAlign: 'left', padding: 8 } }, 'Compra no PDF'), h('th', { style: { textAlign: 'left', padding: 8 } }, 'Lançamento existente'), h('th', { style: { textAlign: 'center', padding: 8 } }, 'Status'))),
+                h('tbody', null, (conferenciaSelecionada.itens || []).map(item => {
+                  const candidatos = purchases.filter(p => {
+                    const dataOk = !item.data || p.dataCompra === item.data;
+                    const valor = Number(p.valorParcela ?? p.total ?? 0);
+                    return dataOk && Math.abs(valor - Number(item.valor || 0)) < 0.011;
+                  });
+                  return h('tr', { key: item.id, style: { borderTop: '1px solid var(--line)' } },
+                    h('td', { style: { padding: 8, verticalAlign: 'top' } }, h('div', { style: { fontWeight: 600 } }, item.descricao), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, (item.data ? formatDateBR(item.data) : '') + ' • ' + formatBRL(Number(item.valor || 0)) + (item.parcela ? ' • ' + item.parcela : ''))),
+                    h('td', { style: { padding: 8, minWidth: 250 } }, h('select', { value: item.lancamentoId || '', disabled: !!item.conferido, style: { width: '100%', padding: 8 }, onChange: e => atualizarConferenciaItem(conferenciaSelecionada, item.id, { lancamentoId: e.target.value }) },
+                      h('option', { value: '' }, 'Selecione um lançamento'),
+                      purchases.map(p => h('option', { key: p.id, value: p.id }, (p.dataCompra ? formatDateBR(p.dataCompra) : 'Sem data') + ' • ' + p.descricao + ' • ' + formatBRL(Number(p.valorParcela ?? p.total ?? 0))))
+                    )),
+                    h('td', { style: { padding: 8, textAlign: 'center', whiteSpace: 'nowrap' } }, item.conferido
+                      ? h('span', { style: { color: 'var(--green)', fontWeight: 700 } }, '✓ Conferido')
+                      : h('button', { type: 'button', className: 'action-btn', disabled: !item.lancamentoId, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, item.id, { conferido: true }) }, 'Marcar conferido'))
+                  );
+                }))
+              ))
             )
           ),
 
