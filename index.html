@@ -443,24 +443,34 @@
         setConferenciaSelecionada(atualizada);
       }
 
-      async function salvarPDFNaConferencia(file, buffer, itens, competencia) {
+      async function salvarPDFNaConferencia(file, itens, competencia) {
         try {
           if (!session?.user?.id || !supabaseClient) return;
           if (file.size > 6 * 1024 * 1024) {
             console.warn("[FoundMyApp] PDF maior que 6 MB: não foi arquivado na conferência para evitar exceder o limite do banco.");
             return;
           }
-          // O PDF.js pode transferir/desanexar o ArrayBuffer usado na leitura.
-          // Lemos novamente o arquivo original para obter um buffer independente e válido.
-          const bufferArmazenamento = await file.arrayBuffer();
-          const digest = await crypto.subtle.digest("SHA-256", bufferArmazenamento);
-          const hash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+          // Não reutiliza nenhum ArrayBuffer entregue ao PDF.js. O hash é calculado
+          // sobre uma leitura nova e os bytes do arquivo são convertidos via FileReader.
+          const bufferHash = await file.arrayBuffer();
+          const digest = await crypto.subtle.digest("SHA-256", bufferHash);
+          const vistaDigest = new DataView(digest);
+          let hash = "";
+          for (let i = 0; i < vistaDigest.byteLength; i++) hash += vistaDigest.getUint8(i).toString(16).padStart(2, "0");
           const { data: existente, error: erroBusca } = await supabaseClient.from("conferencia_faturas_pdf").select("id").eq("user_id", session.user.id).eq("hash_pdf", hash).maybeSingle();
           if (erroBusca) throw erroBusca;
           if (existente) return;
-          const bytes = new Uint8Array(bufferArmazenamento); let binario = "";
-          for (let i = 0; i < bytes.length; i += 0x8000) binario += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-          const pdfBase64 = btoa(binario);
+          const pdfBase64 = await new Promise((resolve, reject) => {
+            const leitor = new FileReader();
+            leitor.onload = () => {
+              const resultado = String(leitor.result || "");
+              const separador = resultado.indexOf(",");
+              if (separador < 0) return reject(new Error("Não foi possível converter o PDF para armazenamento."));
+              resolve(resultado.slice(separador + 1));
+            };
+            leitor.onerror = () => reject(leitor.error || new Error("Falha ao ler o arquivo PDF."));
+            leitor.readAsDataURL(file);
+          });
           const itensConferencia = itens.map((item, i) => ({
             id: String(item.id || (i + 1)), data: item.data || "", descricao: item.descricao || "",
             valor: Number(item.valor || 0), parcela: item.parcela || "", numeroParcela: item.numeroParcela || 1,
@@ -1436,7 +1446,7 @@
 
           setPdfPreview(unicos);
           // Arquiva uma única cópia do PDF para a nova tela de conferência, sem interferir na importação atual.
-          await salvarPDFNaConferencia(file, buffer, unicos, competencia);
+          await salvarPDFNaConferencia(file, unicos, competencia);
       } catch (err) {
           console.error("[FoundMyApp] Erro ao ler fatura PDF:", err);
           setPdfError(err?.message || "Não foi possível processar a fatura PDF.");
