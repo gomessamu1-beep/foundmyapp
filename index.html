@@ -360,6 +360,7 @@
       const [novaCategoriaCor, setNovaCategoriaCor] = useState(CARD_COLORS[0]);
       const [novaCategoriaIsTransferencia, setNovaCategoriaIsTransferencia] = useState(false);
       const [subInputs, setSubInputs] = useState({});
+      const [subContaInputs, setSubContaInputs] = useState({});
 
       const showMoney = (val) => valoresOcultos ? "*" : formatBRL(val);
 
@@ -872,7 +873,7 @@
         setNovaCategoriaIsTransferencia(false);
       }
       
-      function handleAddSubcategoria(catId) { const nome = (subInputs[catId] || "").trim(); if (!nome) return; updateCategorias(prev => prev.map(c => c.id !== catId ? c : { ...c, subcategorias: [...c.subcategorias, { id: uid(), nome }] })); setSubInputs(prev => ({ ...prev, [catId]: "" })); }
+      function handleAddSubcategoria(catId) { const nome = (subInputs[catId] || "").trim(); if (!nome) return; updateCategorias(prev => prev.map(c => c.id !== catId ? c : { ...c, subcategorias: [...c.subcategorias, { id: uid(), nome, contaContabilId: subContaInputs[catId] || null }] })); setSubInputs(prev => ({ ...prev, [catId]: "" })); setSubContaInputs(prev => ({ ...prev, [catId]: "" })); }
 
       function handleProcessarTxtCategorias(e) {
         e.preventDefault();
@@ -3298,6 +3299,46 @@
             },
               valoresOcultos ? h(EyeOff, { size: 18 }) : h(Eye, { size: 18 }),
               valoresOcultos ? "Exibir Valores" : "Ocultar Valores"
+            )
+          ),
+
+          screen === "contabilidade" && h('div', { className: 'form-card' },
+            h('div', { className: 'sub-nav', style: { marginBottom: 16 } },
+              h('button', { className: contabTab === "plano" ? "active" : "", onClick: () => setContabTab("plano") }, "Plano de Contas"),
+              h('button', { className: contabTab === "lancamentos" ? "active" : "", onClick: () => setContabTab("lancamentos") }, "Lançamentos"),
+              h('button', { className: contabTab === "relatorios" ? "active" : "", onClick: () => { setContabTab("relatorios"); carregarContabilidade(); } }, "Relatórios")
+            ),
+            contabErro && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, contabErro),
+            contabLoading && h('div', { style: { padding: 12, color: 'var(--ink-soft)' } }, "Carregando dados contábeis..."),
+            contabTab === "plano" && h(React.Fragment, null,
+              h('h3', null, "Cadastro do Plano de Contas"),
+              h('form', { onSubmit: salvarContaContabil, style: { display: 'grid', gridTemplateColumns: 'minmax(110px, .7fr) minmax(180px, 1.5fr) minmax(150px, 1fr) minmax(150px, 1fr) auto', gap: 8, alignItems: 'end', marginBottom: 18 } },
+                h('div', { className: 'field' }, h('label', null, "Código *"), h('input', { value: contabCodigo, onChange: e => setContabCodigo(e.target.value), placeholder: "1.1.01", required: true })),
+                h('div', { className: 'field' }, h('label', null, "Descrição *"), h('input', { value: contabDescricao, onChange: e => setContabDescricao(e.target.value), placeholder: "Caixa Geral", required: true })),
+                h('div', { className: 'field' }, h('label', null, "Natureza"), h('select', { value: contabNatureza, onChange: e => setContabNatureza(e.target.value) }, ["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO","RECEITA","DESPESA","RESULTADO"].map(x => h('option', { value:x, key:x }, x.replaceAll("_"," "))))),
+                h('div', { className: 'field' }, h('label', null, "Tipo"), h('select', { value: contabTipo, onChange: e => setContabTipo(e.target.value) }, h('option',{value:"SINTETICA"},"Sintética"),h('option',{value:"ANALITICA"},"Analítica"))),
+                h('button', { type: 'submit', className: 'primary' }, h(Plus), " Incluir"),
+                contabTipo === "ANALITICA" && h('div', { className: 'field', style: { gridColumn: '1 / -1' } }, h('label', null, "Conta sintética superior (opcional)"), h('select', { value: contabContaPai, onChange: e => setContabContaPai(e.target.value) }, h('option',{value:""},"Sem conta superior"), contabPlano.filter(c => c.tipo === "SINTETICA").map(c => h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao))))
+              ),
+              h('div', { className: 'list-vertical' }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contabPlano.map(c => h('div', { className: 'list-item', key:c.id }, h('div',{className:'list-item-main'},h('div',{style:{fontWeight:650}},c.codigo+" - "+c.descricao),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica"))))))
+            ),
+            contabTab === "lancamentos" && h(React.Fragment, null,
+              h('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' } }, h('h3', null, "Lançamentos Contábeis"), h('button',{type:'button',className:'action-btn',onClick:sincronizarBaixasFinanceiras},h(RefreshCw,{size:14})," Sincronizar baixas do financeiro")),
+              h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},"A sincronização considera somente contas a pagar/receber baixadas que tenham conta contábil vinculada na subcategoria e na conta bancária. Ela não duplica lançamentos já integrados."),
+              h('form',{onSubmit:salvarLancamentoContabil,style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:8,alignItems:'end',padding:12,background:'var(--paper)',border:'1px solid var(--line)',borderRadius:8,marginBottom:16}},
+                h('div',{className:'field'},h('label',null,"Data"),h('input',{type:'date',value:contabData,onChange:e=>setContabData(e.target.value),required:true})),
+                h('div',{className:'field'},h('label',null,"Histórico"),h('input',{value:contabHistorico,onChange:e=>setContabHistorico(e.target.value),placeholder:"Histórico do lançamento",required:true})),
+                h('div',{className:'field'},h('label',null,"Conta Débito"),h('select',{value:contabDebitoId,onChange:e=>setContabDebitoId(e.target.value),required:true},h('option',{value:""},"Selecione"),contabPlano.filter(c=>c.tipo==="ANALITICA"&&c.ativa).map(c=>h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))),
+                h('div',{className:'field'},h('label',null,"Conta Crédito"),h('select',{value:contabCreditoId,onChange:e=>setContabCreditoId(e.target.value),required:true},h('option',{value:""},"Selecione"),contabPlano.filter(c=>c.tipo==="ANALITICA"&&c.ativa).map(c=>h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))),
+                h('div',{className:'field'},h('label',null,"Valor"),h('input',{value:contabValor,onChange:e=>setContabValor(e.target.value),placeholder:"0,00",required:true})),
+                h('button',{type:'submit',className:'primary'},h(Plus)," Registrar")
+              ),
+              h('div',{className:'list-vertical'},contabLancamentos.length===0?h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Nenhum lançamento contábil registrado.") : contabLancamentos.map(l=>h('div',{className:'list-item',key:l.id},h('div',{className:'list-item-main'},h('div',{style:{fontWeight:650}},formatDateBR(l.data_lancamento)+" • "+l.historico),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},l.origem+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0)))))))
+            ),
+            contabTab === "relatorios" && h(React.Fragment, null,
+              h('h3',null,"Balancete de Verificação"),
+              h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},"Valores calculados a partir das partidas dos lançamentos contábeis registrados."),
+              h('div',{style:{overflowX:'auto'}},h('table',null,h('thead',null,h('tr',null,h('th',null,"Código"),h('th',null,"Conta"),h('th',{className:'right'},"Débitos"),h('th',{className:'right'},"Créditos"),h('th',{className:'right'},"Saldo Devedor"),h('th',{className:'right'},"Saldo Credor"))),h('tbody',null,contabPlano.map(c=>{const partidas=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=partidas.reduce((a,i)=>a+Number(i.debito||0),0),cr=partidas.reduce((a,i)=>a+Number(i.credito||0),0),sd=Math.max(0,d-cr),sc=Math.max(0,cr-d);return h('tr',{key:c.id},h('td',null,c.codigo),h('td',null,c.descricao),h('td',{className:'right num'},formatBRL(d)),h('td',{className:'right num'},formatBRL(cr)),h('td',{className:'right num'},formatBRL(sd)),h('td',{className:'right num'},formatBRL(sc)));})),h('tfoot',null,h('tr',{style:{fontWeight:700}},h('td',{colSpan:2},"Totais"),...["debito","credito"].map(k=>h('td',{className:'right num',key:k},formatBRL(contabLancamentos.reduce((a,l)=>a+Number(l["total_"+k]||0),0)))),h('td',{colSpan:2})))) )
             )
           ),
 
