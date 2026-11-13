@@ -899,7 +899,6 @@
         if (!contabCodigo.trim() || !contabDescricao.trim()) return alert("Informe código e descrição da conta.");
         const codigoFormatado = formatarCodigoContabil(contabCodigo);
         if (contabContaPai && !contabPlano.some(c => c.id === contabContaPai && c.tipo === "SINTETICA")) return alert("A conta mãe precisa ser uma conta sintética válida.");
-        if (contabTipo === "SINTETICA" && contabContaPai) return alert("Uma conta sintética não pode ser cadastrada abaixo de outra conta neste modelo.");
         const payload = { user_id: session.user.id, codigo: codigoFormatado, descricao: contabDescricao.trim(), natureza: contabNatureza, tipo: contabTipo, conta_pai_id: contabContaPai || null, aceita_lancamento: contabTipo === "ANALITICA", ativa: true };
         const query = contabEditandoId
           ? supabaseClient.from("contabilidade_plano_contas").update(payload).eq("id", contabEditandoId).eq("user_id", session.user.id)
@@ -3466,8 +3465,8 @@
                 h('div', { className: 'field' }, h('label', null, "Código *"), h('input', { value: contabCodigo, onChange: e => setContabCodigo(formatarCodigoContabil(e.target.value)), placeholder: contabMascara, required: true })),
                 h('div', { className: 'field' }, h('label', null, "Descrição *"), h('input', { value: contabDescricao, onChange: e => setContabDescricao(e.target.value), placeholder: "Caixa Geral", required: true })),
                 h('div', { className: 'field' }, h('label', null, "Natureza"), h('select', { value: contabNatureza, onChange: e => setContabNatureza(e.target.value) }, ["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO","RECEITA","DESPESA","RESULTADO"].map(x => h('option', { value:x, key:x }, x.replaceAll("_"," "))))),
-                h('div', { className: 'field' }, h('label', null, "Tipo"), h('select', { value: contabTipo, onChange: e => { setContabTipo(e.target.value); if (e.target.value === "SINTETICA") setContabContaPai(""); } }, h('option',{value:"SINTETICA"},"Sintética"),h('option',{value:"ANALITICA"},"Analítica"))),
-                h('div', { className: 'field' }, h('label', null, "Conta mãe (opcional)"), h('select', { value: contabContaPai, onChange: e => setContabContaPai(e.target.value), disabled: contabTipo === "SINTETICA" }, h('option',{value:""},"Sem conta mãe"), contabPlano.filter(c => c.tipo === "SINTETICA" && c.id !== contabEditandoId).map(c => h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))),
+                h('div', { className: 'field' }, h('label', null, "Tipo"), h('select', { value: contabTipo, onChange: e => setContabTipo(e.target.value) }, h('option',{value:"SINTETICA"},"Sintética"),h('option',{value:"ANALITICA"},"Analítica"))),
+                h('div', { className: 'field' }, h('label', null, "Conta mãe (opcional)"), h('select', { value: contabContaPai, onChange: e => setContabContaPai(e.target.value) }, h('option',{value:""},"Sem conta mãe"), contabPlano.filter(c => c.tipo === "SINTETICA" && c.id !== contabEditandoId).map(c => h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))),
                 h('div', { style: { display:'flex', gap:8, alignItems:'center' } },
                   h('button', { type: 'submit', className: 'primary' }, h(Plus), contabEditandoId ? " Salvar alterações" : " Incluir"),
                   contabEditandoId && h('button', { type:'button', className:'action-btn', onClick:limparFormularioContaContabil }, "Cancelar")
