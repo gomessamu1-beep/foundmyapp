@@ -878,20 +878,16 @@
       }
 
       function formatarCodigoContabil(valor, mascara = contabMascara) {
-        const grupos = String(mascara || "").split(".").map(g => (g.match(/#/g) || []).length).filter(n => n > 0);
-        if (!grupos.length) return String(valor || "").replace(/[^0-9]/g, "");
-        const digitos = String(valor || "").replace(/[^0-9]/g, "").slice(0, grupos.reduce((a,b)=>a+b,0));
-        let pos = 0; const partes = [];
-        for (const tamanho of grupos) {
-          if (pos >= digitos.length) break;
-          partes.push(digitos.slice(pos, pos + tamanho)); pos += tamanho;
-        }
-        return partes.join(".");
+        const grupos = String(mascara || "").split(".").map(g => g.length).filter(n => n > 0);
+        const maximo = grupos.reduce((a,b)=>a+b,0);
+        const digitos = String(valor || "").replace(/[^0-9]/g, "").slice(0, maximo);
+        let pos = 0;
+        return grupos.map(tamanho => { const parte = digitos.slice(pos, pos + tamanho); pos += tamanho; return parte; }).filter(Boolean).join(".");
       }
 
       function salvarMascaraContabil() {
         const grupos = contabMascaraEdit.split(".");
-        if (!contabMascaraEdit.trim() || grupos.some(g => !g || !/^#+$/.test(g))) return alert("Use somente # separados por pontos. Exemplo: #.#.##.##.####");
+        if (!contabMascaraEdit.trim() || grupos.some(g => !/^#+$/.test(g))) return alert("Use somente # separados por pontos. Exemplo: #.#.##.##.####");
         localStorage.setItem("foundmyapp-contab-mascara", contabMascaraEdit);
         setContabMascara(contabMascaraEdit);
         setContabCodigo(c => formatarCodigoContabil(c, contabMascaraEdit));
@@ -3449,21 +3445,21 @@
             contabErro && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, contabErro),
             contabLoading && h('div', { style: { padding: 12, color: 'var(--ink-soft)' } }, "Carregando dados contábeis..."),
             contabTab === "plano" && h(React.Fragment, null,
-              h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
-                h('h3',{style:{margin:0}},"Cadastro do Plano de Contas"),
-                h('button',{type:'button',className:'action-btn',onClick:()=>{setContabMascaraEdit(contabMascara);setContabMascaraAberta(v=>!v);}},h(FolderTree,{size:15})," Máscara contábil")
+              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
+                h('h3', { style: { margin: 0 } }, "Cadastro do Plano de Contas"),
+                h('button', { type: 'button', className: 'action-btn', onClick: () => { setContabMascaraEdit(contabMascara); setContabMascaraAberta(v => !v); } }, h(FolderTree, { size: 15 }), " Máscara contábil")
               ),
-              contabMascaraAberta && h('div',{className:'form-card',style:{marginBottom:14,padding:14,border:'1px solid var(--line)'}},
-                h('div',{style:{fontWeight:700,marginBottom:6}},"Configurar máscara do código contábil"),
-                h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:8}},"Use # para cada dígito e ponto para separar os níveis. Exemplo: #.#.##.##.####"),
-                h('div',{className:'field'},
-                  h('label',null,"Máscara"),
-                  h('input',{value:contabMascaraEdit,onChange:e=>setContabMascaraEdit(e.target.value.replace(/[^#\.]/g,'')),placeholder:'#.#.##.##.####'}),
-                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:5}},"Prévia: ",formatarCodigoContabil("1101010001",contabMascaraEdit)||"—")
+              contabMascaraAberta && h('div', { className: 'form-card', style: { marginBottom: 14, padding: 14, border: '1px solid var(--line)' } },
+                h('div', { style: { fontWeight: 700, marginBottom: 6 } }, "Configurar máscara do código contábil"),
+                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginBottom: 8 } }, "Use # para cada dígito e ponto para separar os níveis. Exemplo: #.#.##.##.####"),
+                h('div', { className: 'field' },
+                  h('label', null, "Máscara"),
+                  h('input', { value: contabMascaraEdit, onChange: e => setContabMascaraEdit(e.target.value.replace(/[^#\.]/g, '')), placeholder: '#.#.##.##.####' }),
+                  h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 5 } }, "Prévia: ", formatarCodigoContabil("1101010001", contabMascaraEdit) || "—")
                 ),
-                h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:10}},
-                  h('button',{type:'button',className:'action-btn',onClick:()=>setContabMascaraAberta(false)},"Cancelar"),
-                  h('button',{type:'button',className:'primary',onClick:salvarMascaraContabil},"Salvar máscara")
+                h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } },
+                  h('button', { type: 'button', className: 'action-btn', onClick: () => setContabMascaraAberta(false) }, "Cancelar"),
+                  h('button', { type: 'button', className: 'primary', onClick: salvarMascaraContabil }, "Salvar máscara")
                 )
               ),
               h('form', { onSubmit: salvarContaContabil, style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 8, alignItems: 'end', marginBottom: 18 } },
@@ -3477,19 +3473,206 @@
                   contabEditandoId && h('button', { type:'button', className:'action-btn', onClick:limparFormularioContaContabil }, "Cancelar")
                 )
               ),
-              h('div', { className: 'list-vertical' }, contabPlano.length === 0
-                ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.")
-                : contabPlano.map(c => h('div', { className: 'list-item', key: c.id, style: { paddingLeft: c.conta_pai_id ? 30 : 14 } },
-                    h('div', { className: 'list-item-main' },
-                      h('div', { style: { fontWeight: c.tipo === "SINTETICA" ? 800 : 500 } }, c.codigo + " - " + c.descricao),
-                      h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, c.natureza.replaceAll("_", " ") + " • " + (c.tipo === "SINTETICA" ? "Sintética" : "Analítica") + (contabPlano.find(p => p.id === c.conta_pai_id) ? " • Conta mãe: " + contabPlano.find(p => p.id === c.conta_pai_id).codigo : ""))
-                    ),
-                    h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, flexWrap: 'nowrap', marginLeft: 'auto', paddingLeft: 10, flexShrink: 0 } },
-                      h('button', { type: 'button', className: 'action-btn', style: { padding: 4 }, title: 'Editar conta', onClick: () => editarContaContabil(c) }, h(Pencil, { size: 14 })),
-                      h('button', { type: 'button', className: 'action-btn delete', style: { padding: 4 }, title: 'Excluir conta', onClick: () => excluirContaContabil(c) }, h(Trash2, { size: 14 }))
-                    )
-                  ))
+              h('div', { className: 'list-vertical' }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contabPlano.map(c => {
+                const mae = contabPlano.find(p => p.id === c.conta_pai_id);
+                return h('div', { className: 'list-item', key:c.id, style:{ paddingLeft: c.conta_pai_id ? 30 : 14 } },
+                  h('div',{className:'list-item-main'},
+                    h('div',{style:{fontWeight:c.tipo==="SINTETICA"?800:500}},c.codigo+" - "+c.descricao),
+                    h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica")+(mae?" • Conta mãe: "+mae.codigo:""))
+                  ),
+                  h('div',{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:4,flexWrap:'nowrap',marginLeft:'auto',paddingLeft:10,flexShrink:0}},
+                    h('button',{type:'button',className:'action-btn',style:{padding:4},title:'Editar conta',onClick:()=>editarContaContabil(c)},h(Pencil,{size:14})),
+                    h('button',{type:'button',className:'action-btn delete',style:{padding:4},title:'Excluir conta',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:14}))
+                  )
+                );
+              }))
+            ),
+            contabTab === "lancamentos" && h(React.Fragment, null,
+              h('h3',null,"Lançamentos Contábeis"),
+              h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:8,alignItems:'end',marginBottom:14}},
+                h('div',{className:'field'},h('label',null,"Data inicial"),h('input',{type:'date',value:contabConsultaIni,onChange:e=>setContabConsultaIni(e.target.value)})),
+                h('div',{className:'field'},h('label',null,"Data final"),h('input',{type:'date',value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})),
+                h('button',{type:'button',className:'primary',onClick:consultarLancamentosContabeis},h(Search,{size:15})," Consultar"),
+                contabConsultaExecutada && h('button',{type:'button',className:'action-btn',onClick:()=>exportarContabilidadeExcel("lancamentos")},h(Download,{size:15})," Exportar Excel")
               ),
+              !contabConsultaExecutada ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Informe o período e clique em Consultar para visualizar os lançamentos.") :
+              h('div',{className:'list-vertical'},contabLancamentos.length===0?h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Nenhum lançamento encontrado no período consultado.") : contabLancamentos.map(l=>h('div',{className:'list-item',key:l.id},h('div',{className:'list-item-main'},h('div',{style:{fontWeight:650}},formatDateBR(l.data_lancamento)+" • "+l.historico),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},l.origem+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0))),h('div',{style:{fontSize:12,marginTop:5}},(l.contabilidade_lancamento_itens||[]).map(it=>{const cc=contabPlano.find(c=>c.id===it.conta_id);return (cc?.codigo||"")+" "+(cc?.descricao||"")+" — D "+formatBRL(Number(it.debito||0))+" / C "+formatBRL(Number(it.credito||0));}).join(" | ")))) )
+            ),
+            contabTab === "relatorios" && h(React.Fragment, null,
+              h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8,alignItems:'end',marginBottom:14}},
+                h('div',{className:'field'},h('label',null,"Data inicial"),h('input',{type:'date',value:contabConsultaIni,onChange:e=>setContabConsultaIni(e.target.value)})),
+                h('div',{className:'field'},h('label',null,"Data final"),h('input',{type:'date',value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})),
+                h('button',{type:'button',className:'primary',onClick:consultarRelatorioContabil},h(Search,{size:15})," Consultar relatório"),
+                contabRelatorioExecutado && h('button',{type:'button',className:'action-btn',onClick:()=>exportarContabilidadeExcel("relatorio")},h(Download,{size:15})," Exportar Excel")
+              ),
+              h('div',{className:'sub-nav',style:{marginBottom:12}},
+                h('button',{className:contabRelatorioTipo==="balancete"?"active":"",onClick:()=>setContabRelatorioTipo("balancete")},"Balancete"),
+                h('button',{className:contabRelatorioTipo==="dre"?"active":"",onClick:()=>setContabRelatorioTipo("dre")},"DRE"),
+                h('button',{className:contabRelatorioTipo==="balanco"?"active":"",onClick:()=>setContabRelatorioTipo("balanco")},"Balanço Patrimonial"),
+                h('button',{className:contabRelatorioTipo==="razao"?"active":"",onClick:()=>setContabRelatorioTipo("razao")},"Razão")
+              ),
+              !contabRelatorioExecutado ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Selecione o período e clique em Consultar relatório.") :
+              contabRelatorioTipo==="razao" ? h(React.Fragment,null,
+                h('div',{className:'field',style:{maxWidth:420,marginBottom:12}},h('label',null,"Conta analítica"),h('select',{value:contabRazaoContaId,onChange:e=>setContabRazaoContaId(e.target.value)},h('option',{value:""},"Selecione uma conta"),contabPlano.filter(c=>c.tipo==="ANALITICA").map(c=>h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))),
+                !contabRazaoContaId ? h('div',{style:{padding:16,color:'var(--ink-soft)'}},"Selecione a conta para consultar o Razão.") : h('div',{style:{overflowX:'auto'}},h('table',null,h('thead',null,h('tr',null,h('th',null,"Data"),h('th',null,"Histórico"),h('th',{className:'right'},"Débito"),h('th',{className:'right'},"Crédito"),h('th',{className:'right'},"Saldo"))),h('tbody',null,(()=>{let saldo=0;return contabLancamentos.flatMap(l=>(l.contabilidade_lancamento_itens||[]).filter(it=>it.conta_id===contabRazaoContaId).map(it=>({l,it}))).sort((a,b)=>String(a.l.data_lancamento).localeCompare(String(b.l.data_lancamento))).map(({l,it})=>{saldo+=Number(it.debito||0)-Number(it.credito||0);return h('tr',{key:it.id},h('td',null,formatDateBR(l.data_lancamento)),h('td',null,l.historico),h('td',{className:'right num'},formatBRL(Number(it.debito||0))),h('td',{className:'right num'},formatBRL(Number(it.credito||0))),h('td',{className:'right num'},formatBRL(saldo)));});})()))))
+              ) : h('div',{style:{overflowX:'auto'}},h('h3',null,contabRelatorioTipo==="dre"?"Demonstração do Resultado (DRE)":contabRelatorioTipo==="balanco"?"Balanço Patrimonial":"Balancete de Verificação"),h('table',null,h('thead',null,h('tr',null,h('th',null,"Código"),h('th',null,"Conta"),h('th',{className:'right'},"Débitos"),h('th',{className:'right'},"Créditos"),h('th',{className:'right'},"Saldo Devedor"),h('th',{className:'right'},"Saldo Credor"))),h('tbody',null,contabPlano.filter(c=>c.tipo==="ANALITICA"&&(contabRelatorioTipo==="dre"?["RECEITA","DESPESA","RESULTADO"].includes(c.natureza):contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"].includes(c.natureza):true)).map(c=>{const partidas=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=partidas.reduce((a,i)=>a+Number(i.debito||0),0),cr=partidas.reduce((a,i)=>a+Number(i.credito||0),0),sd=Math.max(0,d-cr),sc=Math.max(0,cr-d);return h('tr',{key:c.id},h('td',null,c.codigo),h('td',null,c.descricao),h('td',{className:'right num'},formatBRL(d)),h('td',{className:'right num'},formatBRL(cr)),h('td',{className:'right num'},formatBRL(sd)),h('td',{className:'right num'},formatBRL(sc)));})),h('tfoot',null,h('tr',{style:{fontWeight:700}},h('td',{colSpan:2},"Totais"),...["debito","credito"].map(k=>h('td',{className:'right num',key:k},formatBRL(contabLancamentos.reduce((a,l)=>a+Number(l["total_"+k]||0),0)))),h('td',{colSpan:2})))) )
+            )
+          ),
+
+          screen === "cadastros" && h('div', { className: 'form-card' },
+            h('div', { className: 'sub-nav' },
+              h('button', { className: cadastroTab === "cartoes" ? "active" : "", onClick: () => setCadastroTab("cartoes") }, "Cartões"),
+              h('button', { className: cadastroTab === "contas" ? "active" : "", onClick: () => setCadastroTab("contas") }, "🏦 Contas"),
+              h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => setCadastroTab("categorias") }, "Categorias"),
+              h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => setCadastroTab("depara") }, "De-Para (Regras)"),
+              h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => setCadastroTab("importar-txt") }, "📥 Importar TXT")
+            ),
+            cadastroTab === "cartoes" && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, h('div', { style: { fontSize: 14, color: 'var(--ink-soft)' } }, "Meus Cartões"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingCartaoId(null); setNovoCartaoNome(""); setNovoCartaoBanco("033"); setNovoCartaoCor(CARD_COLORS[0]); setNovoCartaoFechamento("01"); setNovoCartaoVencimento("10"); setCartaoModalOpen(true); } }, h(Plus), " Novo Cartão")),
+              h('div', { className: 'list-vertical', style: { marginTop: 12 } }, cartoes.map((c) => h('div', { className: 'list-item', key: c.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', { className: 'dot', style: { background: c.cor } }), h('div', null, h('div', null, c.nome), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `Fecha dia ${c.fechamento || '01'} • Vence dia ${c.vencimento || '10'}`))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingCartaoId(c.id); setNovoCartaoNome(c.nome); setNovoCartaoBanco(c.bancoCode || "033"); setNovoCartaoCor(c.cor || CARD_COLORS[0]); setNovoCartaoFechamento(c.fechamento || "01"); setNovoCartaoVencimento(c.vencimento || "10"); setCartaoModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'cartao', id: c.id, title: 'Excluir Cartão', message: `Excluir ${c.nome}?`, option: "all" }) }, h(Trash2, { size: 14 })))))))
+            ),
+            cadastroTab === "contas" && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, h('div', { style: { fontSize: 14, color: 'var(--ink-soft)' } }, "Minhas Contas Bancárias e Caixas"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingContaId(null); setNovaContaNome(""); setNovaContaBanco("033"); setNovaContaTipo("corrente"); setNovaContaAgencia(""); setNovaContaNumero(""); setNovaContaContaContabilId(""); setContaModalOpen(true); } }, h(Plus), " Nova Conta")),
+              h('div', { className: 'list-vertical', style: { marginTop: 12 } }, contasBancarias.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, "Nenhuma conta cadastrada.") : contasBancarias.map((conta) => { const bancoObj = BANCOS_FEBRABAN.find(b => b.code === conta.bancoCode); const tipoLabel = conta.tipo === 'corrente' ? 'Conta Corrente' : conta.tipo === 'investimento' ? 'Investimento' : conta.tipo === 'dinheiro' ? 'Dinheiro / Caixa' : 'Outros'; return h('div', { className: 'list-item', key: conta.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h(Landmark, { size: 20 }), h('div', null, h('div', { style: { fontWeight: '600' } }, conta.nome), h('div', { style: { fontSize: '12px', color: 'var(--ink-soft)', marginTop: '2px' } }, `${bancoObj ? bancoObj.name : conta.bancoCode} • ${tipoLabel}` + (conta.agencia || conta.numero ? ` • Ag: ${conta.agencia || '-'} | Conta: ${conta.numero || '-'}` : '')))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingContaId(conta.id); setNovaContaNome(conta.nome); setNovaContaBanco(conta.bancoCode || "033"); setNovaContaTipo(conta.tipo || "corrente"); setNovaContaAgencia(conta.agencia || ""); setNovaContaNumero(conta.numero || ""); setNovaContaContaContabilId(conta.contaContabilId || ""); setContaModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'conta', id: conta.id, title: 'Excluir Conta', message: `Excluir a conta ${conta.nome}?`, option: "all" }) }, h(Trash2, { size: 14 }))))); }))
+            ),
+            cadastroTab === "categorias" && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', gap: 10, marginBottom: 16 } }, h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'despesa' ? 'active' : ''}`, style: { padding: '6px 14px', fontWeight: categoriaTipoTab === 'despesa' ? 'bold' : 'normal', background: categoriaTipoTab === 'despesa' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'despesa' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('despesa') }, "🔴 Categorias de Despesa"), h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'receita' ? 'active' : ''}`, style: { padding: '6px 14px', fontWeight: categoriaTipoTab === 'receita' ? 'bold' : 'normal', background: categoriaTipoTab === 'receita' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'receita' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('receita') }, "🟢 Categorias de Receita")),
+              h('form', { onSubmit: handleAddCategoria, style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, 
+                h('input', { type: 'text', placeholder: `Nova categoria de ${categoriaTipoTab === 'despesa' ? 'despesa' : 'receita'}`, value: novaCategoriaNome, onChange: (e) => setNovaCategoriaNome(e.target.value), style: { flex: 1, minWidth: 160 }, required: true }), 
+                h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', background: '#fff', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, 
+                  h('input', { type: 'checkbox', checked: novaCategoriaIsTransferencia, onChange: e => setNovaCategoriaIsTransferencia(e.target.checked), style: { width: 'auto', margin: 0 } }), 
+                  "🔄 Transferência"
+                ),
+                h('button', { type: 'submit', className: 'primary' }, h(Plus), " Cadastrar")
+              ),
+              h('div', { className: 'list-vertical' }, categorias.filter(cat => (cat.tipo || 'despesa') === categoriaTipoTab).map((cat) => h('div', { className: 'list-item', key: cat.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', { className: 'dot', style: { background: cat.cor } }), h('span', null, cat.nome), cat.isTransferencia && h('span', { className: 'badge', style: { background: '#DBEAFE', color: '#1E40AF' } }, "🔄 Transferência")), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setEditCategoriaModal({ open: true, id: cat.id, nome: cat.nome, cor: cat.cor || CARD_COLORS[0], isTransferencia: !!cat.isTransferencia }) }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'categoria', id: cat.id, title: 'Excluir Categoria', message: `Excluir ${cat.nome}?`, option: "all" }) }, h(Trash2, { size: 14 })))), cat.subcategorias && cat.subcategorias.map((sub) => h('div', { className: 'subcategory-item-row', key: sub.id }, h('span', null, "↳ ", sub.nome), h('div', { style: { display: 'flex', gap: 4 } }, h('button', { type: 'button', className: 'action-btn', style: { padding: 3 }, onClick: () => setEditSubcategoriaModal({ open: true, catId: cat.id, subId: sub.id, nome: sub.nome, contaContabilId: sub.contaContabilId || "" }) }, h(Pencil, { size: 12 })), h('button', { type: 'button', className: 'action-btn delete', style: { padding: 3 }, onClick: () => setDeleteModal({ open: true, type: 'subcategoria', id: cat.id, subId: sub.id, title: 'Excluir Subcategoria', message: `Excluir ${sub.nome}?`, option: "all" }) }, h(Trash2, { size: 12 }))))), !cat.isTransferencia && h('div', { className: 'add-subcat-form' }, h('input', { type: 'text', placeholder: '+ Adicionar subcategoria', style: { padding: '4px 8px', fontSize: 12, flex: 1 }, value: subInputs[cat.id] || "", onChange: (e) => setSubInputs({ ...subInputs, [cat.id]: e.target.value }), onKeyDown: (e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubcategoria(cat.id); } } }), h('select', { value: subContaInputs[cat.id] || "", onChange: e => setSubContaInputs({ ...subContaInputs, [cat.id]: e.target.value }), style: { maxWidth: 170, padding: 4, fontSize: 11 } }, h('option',{value:""},"Conta contábil"),contabPlano.filter(c=>c.tipo==="ANALITICA"&&c.ativa).map(c=>h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao))), h('button', { type: 'button', className: 'primary', style: { padding: '4px 8px', fontSize: 12 }, onClick: () => handleAddSubcategoria(cat.id) }, "Incluir")))))
+            ),
+            cadastroTab === "depara" && h(React.Fragment, null,
+              h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, "Regras de De-Para obrigatórias para importação de PDF do Santander."),
+              h('form', { onSubmit: handleAddDepara, style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end', flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Descrição Fatura *"), h('input', { type: 'text', placeholder: 'Ex: UBER *TRIP', value: novoDeparaFatura, onChange: (e) => setNovoDeparaFatura(e.target.value), required: true })), h('div', { className: 'field' }, h('label', null, "Categoria *"), h('select', { value: novoDeparaCategoriaId, onChange: (e) => { setNovoDeparaCategoriaId(e.target.value); setNovoDeparaSubcategoriaId(""); }, required: true }, h('option', { value: "" }, "Selecione..."), categorias.map(c => h('option', { key: c.id, value: c.id }, `${c.nome} (${c.tipo === 'receita' ? 'Receita' : 'Despesa'})`)))), h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: novoDeparaSubcategoriaId, onChange: (e) => setNovoDeparaSubcategoriaId(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), subcategoriasDeparaDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome)))), h('button', { type: 'submit', className: 'primary', style: { height: 38 } }, h(Plus), " Adicionar")),
+              h('div', { className: 'list-vertical' }, deparaList.map((d) => { const cat = getCategoria(d.categoriaId); const sub = getSubcategoria(d.categoriaId, d.subcategoriaId); return h('div', { className: 'list-item', key: d.id }, h('div', { className: 'list-item-main', style: { fontSize: 13 } }, h('span', null, h('b', null, d.fatura), " ➔ ", cat?.nome, " > ", sub?.nome), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'depara', id: d.id, title: 'Excluir Regra', message: 'Excluir regra De-Para?', option: "all" }) }, h(Trash2, { size: 14 })))) }))
+            ),
+            cadastroTab === "importar-txt" && h(React.Fragment, null,
+              h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 } }, "Selecione se deseja importar para Despesas ou Receitas, e cole abaixo ou carregue um arquivo .txt."),
+              h('div', { style: { display: 'flex', gap: 10, marginBottom: 12 } }, h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'despesa' ? 'active' : ''}`, style: { background: categoriaTipoTab === 'despesa' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'despesa' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('despesa') }, "🔴 Importar para Despesas"), h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'receita' ? 'active' : ''}`, style: { background: categoriaTipoTab === 'receita' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'receita' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('receita') }, "🟢 Importar para Receitas")),
+              h('div', { style: { display: 'flex', gap: 10, marginBottom: 10 } }, h('input', { type: 'file', accept: '.txt', ref: txtInputRef, style: { display: 'none' }, onChange: handleUploadTxtFile }), h('button', { type: 'button', className: 'action-btn', onClick: () => txtInputRef.current && txtInputRef.current.click() }, "📁 Carregar arquivo .txt")),
+              h('form', { onSubmit: handleProcessarTxtCategorias, style: { display: 'flex', flexDirection: 'column', gap: 10 } }, h('textarea', { rows: 10, placeholder: 'Exemplo:\nAlimentação\n\t- Supermercado\n\t- Restaurante', value: txtCategoriasContent, onChange: (e) => setTxtCategoriasContent(e.target.value), required: true }), h('button', { type: 'submit', className: 'primary', style: { alignSelf: 'flex-start' } }, h(Plus), ` Importar para ${categoriaTipoTab === 'despesa' ? 'Despesas' : 'Receitas'}`))
+            )
+          ),
+
+          screen === "lancamentos" && h('div', { className: 'form-card' },
+            lancamentoTab === "" ? h('div', {
+              className: 'sub-nav launch-choice-nav',
+              style: { display: 'flex', flexDirection: 'column', gap: isAndroidApp ? 10 : 12, width: '100%', maxWidth: isAndroidApp ? '100%' : 420, margin: '18px auto 8px', alignItems: 'stretch' }
+            },
+              h('button', {
+                type: 'button',
+                onClick: () => setLancamentoTab("cartao"),
+                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: isAndroidApp ? 10 : 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--green)' : '1px solid var(--green)' }
+              }, h(CreditCard, { size: isAndroidApp ? 40 : 20 }), " Cartão de Crédito"),
+              h('button', {
+                type: 'button',
+                onClick: () => setLancamentoTab("pagar"),
+                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--red)' : '1px solid var(--red)' }
+              }, h(ArrowDownCircle, { size: isAndroidApp ? 40 : 20 }), " Contas a Pagar"),
+              h('button', {
+                type: 'button',
+                onClick: () => setLancamentoTab("receber"),
+                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--green)' : '1px solid var(--green)' }
+              }, h(ArrowUpCircle, { size: isAndroidApp ? 40 : 20 }), " Contas a Receber")
+            ) : h('div', {
+              className: 'sub-nav launch-selected-nav',
+              style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, marginBottom: 16 }
+            },
+              h('button', {
+                type: 'button',
+                className: 'action-btn',
+                onClick: () => setLancamentoTab(""),
+                style: { marginBottom: 4 }
+              }, "← Voltar às opções"),
+              lancamentoTab === "cartao" && h('button', {
+                type: 'button',
+                className: 'active',
+                style: { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
+              }, h(CreditCard, { size: 20 }), " Cartão de Crédito"),
+              lancamentoTab === "pagar" && h('button', {
+                type: 'button',
+                className: 'active',
+                style: { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
+              }, h(ArrowDownCircle, { size: 20 }), " Contas a Pagar"),
+              lancamentoTab === "receber" && h('button', {
+                type: 'button',
+                className: 'active',
+                style: { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
+              }, h(ArrowUpCircle, { size: 20 }), " Contas a Receber")
+            ),
+
+            lancamentoTab === "cartao" && h(React.Fragment, null,
+              h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
+                h('div', { className: 'brand' },
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(CreditCard), " Lançamentos do cartão"),
+                  h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, 
+                    h('button', { className: `lock-btn ${fechadaAtual ? 'closed' : ''}`, onClick: (e) => toggleFaturaFechada(month, e) }, fechadaAtual ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14 }), fechadaAtual ? ' Fatura Fechada' : ' Fatura Aberta'),
+                    h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
+                  )
+                ),
+                h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos:"), h('select', { value: faturaOrdem, onChange: e => setFaturaOrdem(e.target.value), style: { width: '220px', padding: '6px' } }, h('option', { value: "atual" }, "Mais atual primeiro"), h('option', { value: "compra" }, "Ordem cronológica"))),
+                h('div', { className: 'total-mes num' }, showMoney(totalMes)),
+                h('div', { className: 'total-sub', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h('span', null, installmentsForMonth.length === 0 ? "Nenhum lançamento nesta fatura" : `${installmentsForMonth.length} lançamento(s)`), selectedCartaoIds.length > 0 && h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, h(Trash2, { size: 14 }), ` Excluir selecionados (${selectedCartaoIds.length})`)),
+                  h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, h('input', { type: 'file', accept: '.pdf', ref: fileInputRef, style: { display: 'none' } }), h('input', { type: 'file', accept: '.csv,.txt', ref: planilhaInputRef, style: { display: 'none' } }), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirImportacaoPlanilha, title: 'Importar lançamentos por planilha' }, h(ArrowDownCircle, { size: 14 }), " Importar Lançamentos"),
+                    h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirAlteracaoCompetenciaLote, title: 'Alterar competência dos lançamentos selecionados' }, h(FileText, { size: 14 }), " Alterar Competência"),
+                    h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: abrirImportacaoPDF, title: 'Importar fatura em PDF' }, h(FileText, { size: 14 }), " Importar Fatura PDF"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"), h('button', { type: 'button', className: 'action-btn', style: { fontSize: 12, padding: '4px 8px' }, onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir"))
+                ),
+                
+                terminandoCartao.length > 0 && h('div', { className: 'warning-box' }, 
+                  h('div', { className: 'warning-box-title' }, h(Bell, { size: 16 }), `Atenção: ${terminandoCartao.length} lançamento(s) terminando`), 
+                  h('ul', null, terminandoCartao.map(p => h('li', { key: `term-cartao-${p.id}` }, `${p.descricao} - Parcela ${p.index}/${p.parcelas} (${showMoney(p.valorParcela)})`))), 
+                  h('div', { style: { marginTop: '12px', padding: '8px 12px', background: '#FDE68A', borderRadius: '5px', fontWeight: 'bold', color: '#92400E', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid #D97706' } },
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between' } }, h('span', null, "Total destes lançamentos:"), h('span', null, showMoney(totalTerminandoCartao))),
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid rgba(146,64,14,0.25)' } }, h('span', null, "Total das próximas faturas:"), h('span', null, showMoney(totalProximasFaturas)))
+                  )
+                ),
+
+                h('table', { className: 'cartao-installments-table' },
+                  h('thead', null, h('tr', null, h('th', { className: 'cartao-select-cell', style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonth.length > 0 && selectedCartaoIds.length === installmentsForMonth.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', { className: 'cartao-date-cell' }, "Data"), h('th', { className: 'cartao-description-cell' }, "Descrição"), h('th', { className: 'cartao-category-cell' }, "Categoria"), h('th', { className: 'cartao-subcategory-cell' }, "Subcategoria"), h('th', { className: 'center cartao-installment-cell' }, "Parcela"), h('th', { className: 'right cartao-value-cell' }, "Valor Parcela"), h('th', { className: 'right cartao-total-cell' }, "Valor Total"), h('th', { className: 'center cartao-actions-cell' }, "Ações"))),
+                  h('tbody', null, installmentsForMonth.length === 0 ? h('tr', null, h('td', { colSpan: 9, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum lançamento no cartão nesta fatura.")) : installmentsForMonth.map((p) => {
+                    const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const cartao = getCartao(p.cartaoId); const isSelected = selectedCartaoIds.includes(p.id);
+                    return h('tr', { key: `${p.id}-${p.index}`, style: { background: isSelected ? 'var(--paper)' : 'transparent' } },
+                      h('td', { className: 'cartao-select-cell', style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual })),
+                      h('td', { className: 'cartao-date-cell' }, formatDateBR(p.dataCompra)),
+                      h('td', { className: 'cartao-description-cell' }, h('div', { style: { fontWeight: '500', overflowWrap: 'anywhere' } }, p.descricao),
+                        p.observacao && h('div', { className: 'cartao-observacao-desktop', style: { fontSize: 11, color: 'var(--ink-soft)', fontStyle: 'italic' } }, `📝 ${p.observacao}`),
+                        cartao ? h('div', { className: 'cartao-name-desktop', style: { fontSize: 11, color: '#6B6355' } }, cartao.nome) : h('div', { className: 'cartao-name-desktop', style: { fontSize: 11, color: 'var(--red)', fontWeight: 'bold' } }, '⚠️ SEM CARTÃO VINCULADO'),
+                        h('button', { type: 'button', className: 'action-btn cartao-details-toggle', style: { display: 'none', marginTop: 6, padding: '5px 8px', fontSize: 12 }, onClick: () => setExpandedCartaoDetailsIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]) }, expandedCartaoDetailsIds.includes(p.id) ? 'Ocultar detalhes' : 'Exibir detalhes'),
+                        expandedCartaoDetailsIds.includes(p.id) && h('div', { className: 'cartao-details-row', style: { marginTop: 10, padding: 10, background: 'var(--paper)', borderRadius: 6, border: '1px solid var(--line)', whiteSpace: 'normal' } },
+                          h('div', { className: 'cartao-details-content', style: { display: 'flex', flexDirection: 'column', gap: 9, fontSize: 13, overflowWrap: 'anywhere' } },
+                            h('div', null, h('strong', null, 'Cartão: '), cartao?.nome || 'Sem cartão vinculado'),
+                            p.observacao && h('div', null, h('strong', null, 'Observação: '), p.observacao),
+                            h('div', null, h('strong', null, 'Categoria: '), cat?.nome || '-'),
+                            h('div', null, h('strong', null, 'Subcategoria: '), sub?.nome || '-'),
+                            h('div', null, h('strong', null, 'Parcela: '), p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`),
+                            h('div', null, h('strong', null, 'Valor total: '), showMoney(p.recorrente ? p.valorParcela : p.total)),
+                            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } },
+                              h('label', { style: { display: 'flex', alignItems: 'center', gap: 6 } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual, style: { width: 16 } }), 'Selecionar'),
+                              h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput(p.valorParcela.toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Pencil, { size: 14 }), ' Editar'),
+                              h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao + ' (Cópia)'); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput((p.recorrente ? p.valorParcela : p.total).toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual('1'); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Copy, { size: 14 }), ' Duplicar'),
+                              h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: '', option: 'current' }), disabled: fechadaAtual }, h(Trash2, { size: 14 }), ' Excluir')
+                            )
+                          )
+                        )
+                      ),
+                      h('td', { className: 'cartao-category-cell' }, cat?.nome || '-'), h('td', { className: 'cartao-subcategory-cell' }, sub?.nome || '-'), h('td', { className: 'center cartao-installment-cell' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)),
+                      h('td', { className: 'right num cartao-value-cell' }, showMoney(p.valorParcela)), h('td', { className: 'right num cartao-total-cell' }, showMoney(p.recorrente ? p.valorParcela : p.total)),
+                      h('td', { className: 'center cartao-actions-cell' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } },
+                        h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput(p.valorParcela.toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })),
+                        h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao + ' (Cópia)'); setObservacao(p.observacao || ''); setValorTotal(p.total.toFixed(2).replace('.', ',')); setValorParcelaInput((p.recorrente ? p.valorParcela : p.total).toFixed(2).replace('.', ',')); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual('1'); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Duplicar' }, h(Copy, { size: 14 })),
+                        h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: '', option: 'current' }), disabled: fechadaAtual, title: 'Excluir' }, h(Trash2, { size: 14 }))
+                      )),
+
+                    );
+                  })),
                   h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '6', style: { textAlign: 'right', padding: '10px 6px' } }, "Total da Fatura:"), h('td', { className: 'right num' }, showMoney(totalValorParcelaTabela)), h('td', { className: 'right num' }, showMoney(totalValorTotalTabela)), h('td', null)))
                 )
               )
