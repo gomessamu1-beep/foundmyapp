@@ -128,6 +128,9 @@
       const [contabLoading, setContabLoading] = useState(false);
       const [contabErro, setContabErro] = useState("");
       const [contabCodigo, setContabCodigo] = useState("");
+      const [contabMascara, setContabMascara] = useState(() => localStorage.getItem("foundmyapp-contab-mascara") || "#.#.##.##.####");
+      const [contabMascaraEdit, setContabMascaraEdit] = useState(() => localStorage.getItem("foundmyapp-contab-mascara") || "#.#.##.##.####");
+      const [contabMascaraAberta, setContabMascaraAberta] = useState(false);
       const [contabDescricao, setContabDescricao] = useState("");
       const [contabNatureza, setContabNatureza] = useState("ATIVO");
       const [contabTipo, setContabTipo] = useState("ANALITICA");
@@ -874,12 +877,34 @@
         finally { setContabLoading(false); }
       }
 
+      function formatarCodigoContabil(valor, mascara = contabMascara) {
+        const grupos = String(mascara || "").split(".").map(g => (g.match(/#/g) || []).length).filter(n => n > 0);
+        if (!grupos.length) return String(valor || "").replace(/[^0-9]/g, "");
+        const digitos = String(valor || "").replace(/[^0-9]/g, "").slice(0, grupos.reduce((a,b)=>a+b,0));
+        let pos = 0; const partes = [];
+        for (const tamanho of grupos) {
+          if (pos >= digitos.length) break;
+          partes.push(digitos.slice(pos, pos + tamanho)); pos += tamanho;
+        }
+        return partes.join(".");
+      }
+
+      function salvarMascaraContabil() {
+        const grupos = contabMascaraEdit.split(".");
+        if (!contabMascaraEdit.trim() || grupos.some(g => !g || !/^#+$/.test(g))) return alert("Use somente # separados por pontos. Exemplo: #.#.##.##.####");
+        localStorage.setItem("foundmyapp-contab-mascara", contabMascaraEdit);
+        setContabMascara(contabMascaraEdit);
+        setContabCodigo(c => formatarCodigoContabil(c, contabMascaraEdit));
+        setContabMascaraAberta(false);
+      }
+
       async function salvarContaContabil(e) {
         e.preventDefault();
         if (!contabCodigo.trim() || !contabDescricao.trim()) return alert("Informe código e descrição da conta.");
+        const codigoFormatado = formatarCodigoContabil(contabCodigo);
         if (contabContaPai && !contabPlano.some(c => c.id === contabContaPai && c.tipo === "SINTETICA")) return alert("A conta mãe precisa ser uma conta sintética válida.");
         if (contabTipo === "SINTETICA" && contabContaPai) return alert("Uma conta sintética não pode ser cadastrada abaixo de outra conta neste modelo.");
-        const payload = { user_id: session.user.id, codigo: contabCodigo.trim(), descricao: contabDescricao.trim(), natureza: contabNatureza, tipo: contabTipo, conta_pai_id: contabContaPai || null, aceita_lancamento: contabTipo === "ANALITICA", ativa: true };
+        const payload = { user_id: session.user.id, codigo: codigoFormatado, descricao: contabDescricao.trim(), natureza: contabNatureza, tipo: contabTipo, conta_pai_id: contabContaPai || null, aceita_lancamento: contabTipo === "ANALITICA", ativa: true };
         const query = contabEditandoId
           ? supabaseClient.from("contabilidade_plano_contas").update(payload).eq("id", contabEditandoId).eq("user_id", session.user.id)
           : supabaseClient.from("contabilidade_plano_contas").insert(payload);
@@ -3424,9 +3449,25 @@
             contabErro && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, contabErro),
             contabLoading && h('div', { style: { padding: 12, color: 'var(--ink-soft)' } }, "Carregando dados contábeis..."),
             contabTab === "plano" && h(React.Fragment, null,
-              h('h3', null, "Cadastro do Plano de Contas"),
+              h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
+                h('h3',{style:{margin:0}},"Cadastro do Plano de Contas"),
+                h('button',{type:'button',className:'action-btn',onClick:()=>{setContabMascaraEdit(contabMascara);setContabMascaraAberta(v=>!v);}},h(Settings,{size:15})," Máscara contábil")
+              ),
+              contabMascaraAberta && h('div',{className:'form-card',style:{marginBottom:14,padding:14,border:'1px solid var(--line)'}},
+                h('div',{style:{fontWeight:700,marginBottom:6}},"Configurar máscara do código contábil"),
+                h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:8}},"Use # para cada dígito e ponto para separar os níveis. Exemplo: #.#.##.##.####"),
+                h('div',{className:'field'},
+                  h('label',null,"Máscara"),
+                  h('input',{value:contabMascaraEdit,onChange:e=>setContabMascaraEdit(e.target.value.replace(/[^#\.]/g,'')),placeholder:'#.#.##.##.####'}),
+                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:5}},"Prévia: ",formatarCodigoContabil("1101010001",contabMascaraEdit)||"—")
+                ),
+                h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:10}},
+                  h('button',{type:'button',className:'action-btn',onClick:()=>setContabMascaraAberta(false)},"Cancelar"),
+                  h('button',{type:'button',className:'primary',onClick:salvarMascaraContabil},"Salvar máscara")
+                )
+              ),
               h('form', { onSubmit: salvarContaContabil, style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 8, alignItems: 'end', marginBottom: 18 } },
-                h('div', { className: 'field' }, h('label', null, "Código *"), h('input', { value: contabCodigo, onChange: e => setContabCodigo(e.target.value), placeholder: "1.1.01", required: true })),
+                h('div', { className: 'field' }, h('label', null, "Código *"), h('input', { value: contabCodigo, onChange: e => setContabCodigo(formatarCodigoContabil(e.target.value)), placeholder: contabMascara, required: true })),
                 h('div', { className: 'field' }, h('label', null, "Descrição *"), h('input', { value: contabDescricao, onChange: e => setContabDescricao(e.target.value), placeholder: "Caixa Geral", required: true })),
                 h('div', { className: 'field' }, h('label', null, "Natureza"), h('select', { value: contabNatureza, onChange: e => setContabNatureza(e.target.value) }, ["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO","RECEITA","DESPESA","RESULTADO"].map(x => h('option', { value:x, key:x }, x.replaceAll("_"," "))))),
                 h('div', { className: 'field' }, h('label', null, "Tipo"), h('select', { value: contabTipo, onChange: e => { setContabTipo(e.target.value); if (e.target.value === "SINTETICA") setContabContaPai(""); } }, h('option',{value:"SINTETICA"},"Sintética"),h('option',{value:"ANALITICA"},"Analítica"))),
