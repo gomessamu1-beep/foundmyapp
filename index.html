@@ -3472,16 +3472,18 @@
                   contabEditandoId && h('button', { type:'button', className:'action-btn', onClick:limparFormularioContaContabil }, "Cancelar")
                 )
               ),
-              h('div', { className: 'list-vertical' }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contabPlano.map(c => {
+              h('div', { className: 'list-vertical', style:{gap:0,marginTop:8} }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contabPlano.map(c => {
                 const mae = contabPlano.find(p => p.id === c.conta_pai_id);
-                return h('div', { className: 'list-item', key:c.id, style:{ paddingLeft: c.conta_pai_id ? 30 : 14 } },
-                  h('div',{className:'list-item-main'},
-                    h('div',{style:{fontWeight:c.tipo==="SINTETICA"?800:500}},c.codigo+" - "+c.descricao),
-                    h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica")+(mae?" • Conta mãe: "+mae.codigo:""))
-                  ),
-                  h('div',{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:4,flexWrap:'nowrap',marginLeft:'auto',paddingLeft:10,flexShrink:0}},
-                    h('button',{type:'button',className:'action-btn',style:{padding:4},title:'Editar conta',onClick:()=>editarContaContabil(c)},h(Pencil,{size:14})),
-                    h('button',{type:'button',className:'action-btn delete',style:{padding:4},title:'Excluir conta',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:14}))
+                return h('div', { className: 'list-item', key:c.id, style:{ padding: '5px 10px', paddingLeft: c.conta_pai_id ? 30 : 10, borderRadius:0, borderLeft:0, borderRight:0, borderTop:0 } },
+                  h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,minHeight:24}},
+                    h('div',{style:{display:'flex',alignItems:'center',gap:8,minWidth:0,flex:1,flexWrap:'wrap'}},
+                      h('span',{style:{fontSize:14,fontWeight:c.tipo==="SINTETICA"?800:500}},c.codigo+" - "+c.descricao),
+                      h('span',{style:{fontSize:11,color:'var(--ink-soft)',whiteSpace:'nowrap'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica")+(mae?" • Mãe: "+mae.codigo:""))
+                    ),
+                    h('div',{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:4,flexWrap:'nowrap',marginLeft:'auto',flexShrink:0}},
+                      h('button',{type:'button',className:'action-btn',style:{padding:3},title:'Editar conta',onClick:()=>editarContaContabil(c)},h(Pencil,{size:13})),
+                      h('button',{type:'button',className:'action-btn delete',style:{padding:3},title:'Excluir conta',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:13}))
+                    )
                   )
                 );
               }))
