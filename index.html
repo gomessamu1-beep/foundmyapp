@@ -817,6 +817,44 @@
         finally { setContabLoading(false); }
       }
 
+      function exportarContabilidadeExcel(tipo) {
+        if (!window.XLSX) return alert("Biblioteca Excel não carregada. Atualize a página e tente novamente.");
+        if (!contabLancamentos.length) return alert("Não há dados consultados para exportar.");
+        const linhas = [];
+        if (tipo === "lancamentos") {
+          linhas.push(["Data","Histórico","Origem","Código da conta","Conta","Débito","Crédito"]);
+          contabLancamentos.forEach(l => (l.contabilidade_lancamento_itens || []).forEach(it => {
+            const conta = contabPlano.find(c => c.id === it.conta_id);
+            linhas.push([formatDateBR(l.data_lancamento),l.historico||"",l.origem||"",conta?.codigo||"",conta?.descricao||"",Number(it.debito||0),Number(it.credito||0)]);
+          }));
+        } else if (contabRelatorioTipo === "razao") {
+          if (!contabRazaoContaId) return alert("Selecione a conta analítica do Razão antes de exportar.");
+          const conta = contabPlano.find(c => c.id === contabRazaoContaId);
+          linhas.push(["Conta",conta?.codigo||"",conta?.descricao||""],["Data","Histórico","Débito","Crédito","Saldo"]);
+          let saldo = 0;
+          contabLancamentos.flatMap(l => (l.contabilidade_lancamento_itens||[]).filter(it=>it.conta_id===contabRazaoContaId).map(it=>({l,it})))
+            .sort((a,b)=>String(a.l.data_lancamento).localeCompare(String(b.l.data_lancamento))).forEach(({l,it})=>{
+              saldo += Number(it.debito||0)-Number(it.credito||0);
+              linhas.push([formatDateBR(l.data_lancamento),l.historico||"",Number(it.debito||0),Number(it.credito||0),saldo]);
+            });
+        } else {
+          linhas.push(["Data","Histórico","Código da conta","Conta","Natureza","Débitos","Créditos","Saldo Devedor","Saldo Credor"]);
+          const natureza = contabRelatorioTipo==="dre"?["RECEITA","DESPESA","RESULTADO"]:contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"]:null;
+          contabPlano.filter(c=>c.tipo==="ANALITICA"&&(!natureza||natureza.includes(c.natureza))).forEach(c=>{
+            const itens=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>it.conta_id===c.id);
+            const d=itens.reduce((a,it)=>a+Number(it.debito||0),0), cr=itens.reduce((a,it)=>a+Number(it.credito||0),0);
+            linhas.push(["", "", c.codigo,c.descricao,c.natureza,d,cr,Math.max(0,d-cr),Math.max(0,cr-d)]);
+          });
+        }
+        if (linhas.length <= 1) return alert("Não há linhas para exportar.");
+        const ws = XLSX.utils.aoa_to_sheet(linhas);
+        ws["!cols"] = linhas[0].map((_,i)=>({wch:Math.min(38,Math.max(14,...linhas.map(r=>String(r[i]??"").length+2)))}));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb,ws,tipo==="lancamentos"?"Lancamentos":contabRelatorioTipo==="razao"?"Razao":contabRelatorioTipo.toUpperCase());
+        const sufixo = tipo==="lancamentos"?"lancamentos":contabRelatorioTipo;
+        XLSX.writeFile(wb,"contabilidade_"+sufixo+"_"+contabConsultaIni+"_a_"+contabConsultaFim+".xlsx");
+      }
+
       async function consultarLancamentosContabeis() {
         if (!contabConsultaIni || !contabConsultaFim || contabConsultaIni > contabConsultaFim) return alert("Informe um período válido.");
         setContabLoading(true); setContabErro("");
@@ -3405,9 +3443,9 @@
                     h('div',{style:{fontWeight:c.tipo==="SINTETICA"?800:500}},c.codigo+" - "+c.descricao),
                     h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica")+(mae?" • Conta mãe: "+mae.codigo:""))
                   ),
-                  h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
-                    h('button',{type:'button',className:'action-btn',onClick:()=>editarContaContabil(c)},h(Pencil,{size:14})," Editar"),
-                    h('button',{type:'button',className:'action-btn',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:14})," Excluir")
+                  h('div',{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:4,flexWrap:'nowrap',marginLeft:'auto',paddingLeft:10,flexShrink:0}},
+                    h('button',{type:'button',className:'action-btn',style:{padding:4},title:'Editar conta',onClick:()=>editarContaContabil(c)},h(Pencil,{size:14})),
+                    h('button',{type:'button',className:'action-btn delete',style:{padding:4},title:'Excluir conta',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:14}))
                   )
                 );
               }))
@@ -3417,7 +3455,8 @@
               h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:8,alignItems:'end',marginBottom:14}},
                 h('div',{className:'field'},h('label',null,"Data inicial"),h('input',{type:'date',value:contabConsultaIni,onChange:e=>setContabConsultaIni(e.target.value)})),
                 h('div',{className:'field'},h('label',null,"Data final"),h('input',{type:'date',value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})),
-                h('button',{type:'button',className:'primary',onClick:consultarLancamentosContabeis},h(Search,{size:15})," Consultar")
+                h('button',{type:'button',className:'primary',onClick:consultarLancamentosContabeis},h(Search,{size:15})," Consultar"),
+                contabConsultaExecutada && h('button',{type:'button',className:'action-btn',onClick:()=>exportarContabilidadeExcel("lancamentos")},h(Download,{size:15})," Exportar Excel")
               ),
               !contabConsultaExecutada ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Informe o período e clique em Consultar para visualizar os lançamentos.") :
               h('div',{className:'list-vertical'},contabLancamentos.length===0?h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Nenhum lançamento encontrado no período consultado.") : contabLancamentos.map(l=>h('div',{className:'list-item',key:l.id},h('div',{className:'list-item-main'},h('div',{style:{fontWeight:650}},formatDateBR(l.data_lancamento)+" • "+l.historico),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},l.origem+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0))),h('div',{style:{fontSize:12,marginTop:5}},(l.contabilidade_lancamento_itens||[]).map(it=>{const cc=contabPlano.find(c=>c.id===it.conta_id);return (cc?.codigo||"")+" "+(cc?.descricao||"")+" — D "+formatBRL(Number(it.debito||0))+" / C "+formatBRL(Number(it.credito||0));}).join(" | ")))) )
@@ -3426,7 +3465,8 @@
               h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8,alignItems:'end',marginBottom:14}},
                 h('div',{className:'field'},h('label',null,"Data inicial"),h('input',{type:'date',value:contabConsultaIni,onChange:e=>setContabConsultaIni(e.target.value)})),
                 h('div',{className:'field'},h('label',null,"Data final"),h('input',{type:'date',value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})),
-                h('button',{type:'button',className:'primary',onClick:consultarRelatorioContabil},h(Search,{size:15})," Consultar relatório")
+                h('button',{type:'button',className:'primary',onClick:consultarRelatorioContabil},h(Search,{size:15})," Consultar relatório"),
+                contabRelatorioExecutado && h('button',{type:'button',className:'action-btn',onClick:()=>exportarContabilidadeExcel("relatorio")},h(Download,{size:15})," Exportar Excel")
               ),
               h('div',{className:'sub-nav',style:{marginBottom:12}},
                 h('button',{className:contabRelatorioTipo==="balancete"?"active":"",onClick:()=>setContabRelatorioTipo("balancete")},"Balancete"),
