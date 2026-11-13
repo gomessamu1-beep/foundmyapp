@@ -122,6 +122,21 @@
       
       const [screen, setScreen] = useState(() => sessionStorage.getItem('fatura-screen-v1') || "cadastros");
       const [faturaViewTab, setFaturaViewTab] = useState("lancamentos");
+      const [contabTab, setContabTab] = useState("plano");
+      const [contabPlano, setContabPlano] = useState([]);
+      const [contabLancamentos, setContabLancamentos] = useState([]);
+      const [contabLoading, setContabLoading] = useState(false);
+      const [contabErro, setContabErro] = useState("");
+      const [contabCodigo, setContabCodigo] = useState("");
+      const [contabDescricao, setContabDescricao] = useState("");
+      const [contabNatureza, setContabNatureza] = useState("ATIVO");
+      const [contabTipo, setContabTipo] = useState("ANALITICA");
+      const [contabContaPai, setContabContaPai] = useState("");
+      const [contabData, setContabData] = useState(currentDate());
+      const [contabHistorico, setContabHistorico] = useState("");
+      const [contabDebitoId, setContabDebitoId] = useState("");
+      const [contabCreditoId, setContabCreditoId] = useState("");
+      const [contabValor, setContabValor] = useState("");
       const [conferenciaFaturas, setConferenciaFaturas] = useState([]);
       const [conferenciaSelecionada, setConferenciaSelecionada] = useState(null);
       const [conferenciaCarregando, setConferenciaCarregando] = useState(false);
@@ -182,6 +197,10 @@
       const [lrSubcategoriaId, setLrSubcategoriaId] = useState('');
       const [lrIsTransferencia, setLrIsTransferencia] = useState(false);
       const [lrError, setLrError] = useState('');
+
+      useEffect(() => {
+        if (session) carregarContabilidade();
+      }, [session]);
 
       useEffect(() => {
         sessionStorage.setItem('fatura-screen-v1', screen);
@@ -305,7 +324,7 @@
       const [deleteModal, setDeleteModal] = useState({ open: false, type: null, id: null, subId: null, purchase: null, title: "", message: "", option: "all" });
       
       const [editCategoriaModal, setEditCategoriaModal] = useState({ open: false, id: null, nome: "", cor: CARD_COLORS[0], isTransferencia: false });
-      const [editSubcategoriaModal, setEditSubcategoriaModal] = useState({ open: false, catId: null, subId: null, nome: "" });
+      const [editSubcategoriaModal, setEditSubcategoriaModal] = useState({ open: false, catId: null, subId: null, nome: "", contaContabilId: "" });
 
       const [batchDeleteModalOpen, setBatchDeleteModalOpen] = useState(false);
       const [batchConfirmText, setBatchConfirmText] = useState("");
@@ -334,6 +353,7 @@
       const [novaContaTipo, setNovaContaTipo] = useState("corrente");
       const [novaContaAgencia, setNovaContaAgencia] = useState("");
       const [novaContaNumero, setNovaContaNumero] = useState("");
+      const [novaContaContaContabilId, setNovaContaContaContabilId] = useState("");
       const [contaError, setContaError] = useState("");
 
       const [novoDeparaFatura, setNovoDeparaFatura] = useState("");
@@ -851,7 +871,7 @@
       }
 
       function handleSaveCartao(e) { e.preventDefault(); setCartaoError(""); const nome = novoCartaoNome.trim(); if (!nome) return setCartaoError("Dê um nome ao cartão."); const fech = novoCartaoFechamento || "01"; const venc = novoCartaoVencimento || "10"; if (editingCartaoId) updateCartoes(prev => prev.map(c => c.id === editingCartaoId ? { ...c, nome, bancoCode: novoCartaoBanco, cor: novoCartaoCor, fechamento: fech, vencimento: venc } : c)); else updateCartoes(prev => [...prev, { id: uid(), nome, bancoCode: novoCartaoBanco, cor: novoCartaoCor, fechamento: fech, vencimento: venc }]); setCartaoModalOpen(false); }
-      function handleSaveConta(e) { e.preventDefault(); setContaError(""); const nome = novaContaNome.trim(); if (!nome) return setContaError("Dê um nome à conta."); if (editingContaId) updateContasBancarias(prev => prev.map(c => c.id === editingContaId ? { ...c, nome, bancoCode: novaContaBanco, tipo: novaContaTipo, agencia: novaContaAgencia.trim(), numero: novaContaNumero.trim() } : c)); else updateContasBancarias(prev => [...prev, { id: uid(), nome, bancoCode: novaContaBanco, tipo: novaContaTipo, agencia: novaContaAgencia.trim(), numero: novaContaNumero.trim() }]); setContaModalOpen(false); }
+      function handleSaveConta(e) { e.preventDefault(); setContaError(""); const nome = novaContaNome.trim(); if (!nome) return setContaError("Dê um nome à conta."); if (editingContaId) updateContasBancarias(prev => prev.map(c => c.id === editingContaId ? { ...c, nome, bancoCode: novaContaBanco, tipo: novaContaTipo, agencia: novaContaAgencia.trim(), numero: novaContaNumero.trim(), contaContabilId: novaContaContaContabilId || null } : c)); else updateContasBancarias(prev => [...prev, { id: uid(), nome, bancoCode: novaContaBanco, tipo: novaContaTipo, agencia: novaContaAgencia.trim(), numero: novaContaNumero.trim(), contaContabilId: novaContaContaContabilId || null }]); setContaModalOpen(false); }
       
       function handleSaveEditCategoria(e) { 
         e.preventDefault(); 
@@ -861,7 +881,7 @@
         setEditCategoriaModal({ open: false, id: null, nome: "", cor: CARD_COLORS[0], isTransferencia: false }); 
       }
       
-      function handleSaveEditSubcategoria(e) { e.preventDefault(); const nome = editSubcategoriaModal.nome.trim(); if (!nome) return; updateCategorias(prev => prev.map(c => { if (c.id !== editSubcategoriaModal.catId) return c; return { ...c, subcategorias: c.subcategorias.map(s => s.id === editSubcategoriaModal.subId ? { ...s, nome } : s) }; })); setEditSubcategoriaModal({ open: false, catId: null, subId: null, nome: "" }); }
+      function handleSaveEditSubcategoria(e) { e.preventDefault(); const nome = editSubcategoriaModal.nome.trim(); if (!nome) return; updateCategorias(prev => prev.map(c => { if (c.id !== editSubcategoriaModal.catId) return c; return { ...c, subcategorias: c.subcategorias.map(s => s.id === editSubcategoriaModal.subId ? { ...s, nome, contaContabilId: editSubcategoriaModal.contaContabilId || null } : s) }; })); setEditSubcategoriaModal({ open: false, catId: null, subId: null, nome: "", contaContabilId: "" }); }
       function handleAddDepara(e) { e.preventDefault(); setDeparaError(""); const fatura = novoDeparaFatura.trim(); if (!fatura) return setDeparaError("Informe a descrição."); if (!novoDeparaCategoriaId || !novoDeparaSubcategoriaId) return setDeparaError("Selecione categoria/subcategoria."); updateDepara(prev => [...prev, { id: uid(), fatura, importacao: novoDeparaImportacao.trim(), categoriaId: novoDeparaCategoriaId, subcategoriaId: novoDeparaSubcategoriaId }]); setNovoDeparaFatura(""); setNovoDeparaImportacao(""); setNovoDeparaCategoriaId(""); setNovoDeparaSubcategoriaId(""); }
       
       function handleAddCategoria(e) { 
@@ -3259,6 +3279,7 @@
               h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setFaturaViewTab("lancamentos"); setMenuMobileOpen(false); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
               h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => { setScreen("relatorios"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
               h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => { setScreen("conciliacao"); setMenuMobileOpen(false); } }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária")),
+              h('button', { className: screen === "contabilidade" ? "active" : "", onClick: () => { setScreen("contabilidade"); setContabTab("plano"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Contabilidade")),
             )
           ),
           h('div', { className: 'sidebar-footer' }, 
@@ -3285,6 +3306,7 @@
               screen === 'lancamentos' ? 'Gestão de Lançamentos' :
               screen === 'faturas' ? 'Faturas de Cartão' :
               screen === 'relatorios' ? 'Relatórios Financeiros' :
+              screen === 'contabilidade' ? 'Contabilidade' :
               screen === 'conferencia-faturas' ? 'Conferência de Faturas' : 'Conciliação Bancária'
             ),
             h('button', {
