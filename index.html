@@ -3451,7 +3451,7 @@
             contabTab === "plano" && h(React.Fragment, null,
               h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
                 h('h3',{style:{margin:0}},"Cadastro do Plano de Contas"),
-                h('button',{type:'button',className:'action-btn',onClick:()=>{setContabMascaraEdit(contabMascara);setContabMascaraAberta(v=>!v);}},h(Settings,{size:15})," Máscara contábil")
+                h('button',{type:'button',className:'action-btn',onClick:()=>{setContabMascaraEdit(contabMascara);setContabMascaraAberta(v=>!v);}},h(FolderTree,{size:15})," Máscara contábil")
               ),
               contabMascaraAberta && h('div',{className:'form-card',style:{marginBottom:14,padding:14,border:'1px solid var(--line)'}},
                 h('div',{style:{fontWeight:700,marginBottom:6}},"Configurar máscara do código contábil"),
