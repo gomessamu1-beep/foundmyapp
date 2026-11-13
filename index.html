@@ -132,6 +132,7 @@
       const [contabNatureza, setContabNatureza] = useState("ATIVO");
       const [contabTipo, setContabTipo] = useState("ANALITICA");
       const [contabContaPai, setContabContaPai] = useState("");
+      const [contabEditandoId, setContabEditandoId] = useState("");
       const [contabData, setContabData] = useState(currentDate());
       const [contabHistorico, setContabHistorico] = useState("");
       const [contabDebitoId, setContabDebitoId] = useState("");
@@ -816,11 +817,40 @@
       async function salvarContaContabil(e) {
         e.preventDefault();
         if (!contabCodigo.trim() || !contabDescricao.trim()) return alert("Informe código e descrição da conta.");
-        if (contabTipo === "ANALITICA" && contabContaPai && !contabPlano.some(c => c.id === contabContaPai)) return alert("Conta sintética inválida.");
+        if (contabContaPai && !contabPlano.some(c => c.id === contabContaPai && c.tipo === "SINTETICA")) return alert("A conta mãe precisa ser uma conta sintética válida.");
+        if (contabTipo === "SINTETICA" && contabContaPai) return alert("Uma conta sintética não pode ser cadastrada abaixo de outra conta neste modelo.");
         const payload = { user_id: session.user.id, codigo: contabCodigo.trim(), descricao: contabDescricao.trim(), natureza: contabNatureza, tipo: contabTipo, conta_pai_id: contabContaPai || null, aceita_lancamento: contabTipo === "ANALITICA", ativa: true };
-        const { error } = await supabaseClient.from("contabilidade_plano_contas").insert(payload);
-        if (error) return alert("Erro ao cadastrar conta: " + error.message);
-        setContabCodigo(""); setContabDescricao(""); setContabContaPai(""); await carregarContabilidade();
+        const query = contabEditandoId
+          ? supabaseClient.from("contabilidade_plano_contas").update(payload).eq("id", contabEditandoId).eq("user_id", session.user.id)
+          : supabaseClient.from("contabilidade_plano_contas").insert(payload);
+        const { error } = await query;
+        if (error) return alert("Erro ao salvar conta: " + error.message);
+        limparFormularioContaContabil();
+        await carregarContabilidade();
+      }
+
+      function limparFormularioContaContabil() {
+        setContabCodigo(""); setContabDescricao(""); setContabNatureza("ATIVO"); setContabTipo("ANALITICA"); setContabContaPai(""); setContabEditandoId("");
+      }
+
+      function editarContaContabil(conta) {
+        setContabCodigo(conta.codigo || ""); setContabDescricao(conta.descricao || "");
+        setContabNatureza(conta.natureza || "ATIVO"); setContabTipo(conta.tipo || "ANALITICA");
+        setContabContaPai(conta.conta_pai_id || ""); setContabEditandoId(conta.id);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      async function excluirContaContabil(conta) {
+        const possuiFilhas = contabPlano.some(c => c.conta_pai_id === conta.id);
+        if (possuiFilhas) return alert("Não é possível excluir esta conta porque existem contas vinculadas abaixo dela. Reorganize ou exclua primeiro as contas-filhas.");
+        const { count, error: erroUso } = await supabaseClient.from("contabilidade_lancamento_itens").select("id", { count: "exact", head: true }).eq("conta_id", conta.id).eq("user_id", session.user.id);
+        if (erroUso) return alert("Não foi possível verificar o uso da conta: " + erroUso.message);
+        if (count > 0) return alert("Não é possível excluir esta conta porque ela já foi utilizada em lançamentos contábeis.");
+        if (!confirm("Confirma a exclusão da conta " + conta.codigo + " - " + conta.descricao + "?")) return;
+        const { error } = await supabaseClient.from("contabilidade_plano_contas").delete().eq("id", conta.id).eq("user_id", session.user.id);
+        if (error) return alert("Erro ao excluir conta: " + error.message);
+        if (contabEditandoId === conta.id) limparFormularioContaContabil();
+        await carregarContabilidade();
       }
 
       async function salvarLancamentoContabil(e) {
@@ -3335,15 +3365,30 @@
             contabLoading && h('div', { style: { padding: 12, color: 'var(--ink-soft)' } }, "Carregando dados contábeis..."),
             contabTab === "plano" && h(React.Fragment, null,
               h('h3', null, "Cadastro do Plano de Contas"),
-              h('form', { onSubmit: salvarContaContabil, style: { display: 'grid', gridTemplateColumns: 'minmax(110px, .7fr) minmax(180px, 1.5fr) minmax(150px, 1fr) minmax(150px, 1fr) auto', gap: 8, alignItems: 'end', marginBottom: 18 } },
+              h('form', { onSubmit: salvarContaContabil, style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 8, alignItems: 'end', marginBottom: 18 } },
                 h('div', { className: 'field' }, h('label', null, "Código *"), h('input', { value: contabCodigo, onChange: e => setContabCodigo(e.target.value), placeholder: "1.1.01", required: true })),
                 h('div', { className: 'field' }, h('label', null, "Descrição *"), h('input', { value: contabDescricao, onChange: e => setContabDescricao(e.target.value), placeholder: "Caixa Geral", required: true })),
                 h('div', { className: 'field' }, h('label', null, "Natureza"), h('select', { value: contabNatureza, onChange: e => setContabNatureza(e.target.value) }, ["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO","RECEITA","DESPESA","RESULTADO"].map(x => h('option', { value:x, key:x }, x.replaceAll("_"," "))))),
-                h('div', { className: 'field' }, h('label', null, "Tipo"), h('select', { value: contabTipo, onChange: e => setContabTipo(e.target.value) }, h('option',{value:"SINTETICA"},"Sintética"),h('option',{value:"ANALITICA"},"Analítica"))),
-                h('button', { type: 'submit', className: 'primary' }, h(Plus), " Incluir"),
-                contabTipo === "ANALITICA" && h('div', { className: 'field', style: { gridColumn: '1 / -1' } }, h('label', null, "Conta sintética superior (opcional)"), h('select', { value: contabContaPai, onChange: e => setContabContaPai(e.target.value) }, h('option',{value:""},"Sem conta superior"), contabPlano.filter(c => c.tipo === "SINTETICA").map(c => h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao))))
+                h('div', { className: 'field' }, h('label', null, "Tipo"), h('select', { value: contabTipo, onChange: e => { setContabTipo(e.target.value); if (e.target.value === "SINTETICA") setContabContaPai(""); } }, h('option',{value:"SINTETICA"},"Sintética"),h('option',{value:"ANALITICA"},"Analítica"))),
+                h('div', { className: 'field' }, h('label', null, "Conta mãe (opcional)"), h('select', { value: contabContaPai, onChange: e => setContabContaPai(e.target.value), disabled: contabTipo === "SINTETICA" }, h('option',{value:""},"Sem conta mãe"), contabPlano.filter(c => c.tipo === "SINTETICA" && c.id !== contabEditandoId).map(c => h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))),
+                h('div', { style: { display:'flex', gap:8, alignItems:'center' } },
+                  h('button', { type: 'submit', className: 'primary' }, h(Plus), contabEditandoId ? " Salvar alterações" : " Incluir"),
+                  contabEditandoId && h('button', { type:'button', className:'action-btn', onClick:limparFormularioContaContabil }, "Cancelar")
+                )
               ),
-              h('div', { className: 'list-vertical' }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contabPlano.map(c => h('div', { className: 'list-item', key:c.id }, h('div',{className:'list-item-main'},h('div',{style:{fontWeight:650}},c.codigo+" - "+c.descricao),h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica"))))))
+              h('div', { className: 'list-vertical' }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contabPlano.map(c => {
+                const mae = contabPlano.find(p => p.id === c.conta_pai_id);
+                return h('div', { className: 'list-item', key:c.id, style:{ paddingLeft: c.conta_pai_id ? 30 : 14 } },
+                  h('div',{className:'list-item-main'},
+                    h('div',{style:{fontWeight:c.tipo==="SINTETICA"?800:500}},c.codigo+" - "+c.descricao),
+                    h('div',{style:{fontSize:12,color:'var(--ink-soft)'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica")+(mae?" • Conta mãe: "+mae.codigo:""))
+                  ),
+                  h('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+                    h('button',{type:'button',className:'action-btn',onClick:()=>editarContaContabil(c)},h(Pencil,{size:14})," Editar"),
+                    h('button',{type:'button',className:'action-btn',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:14})," Excluir")
+                  )
+                );
+              }))
             ),
             contabTab === "lancamentos" && h(React.Fragment, null,
               h('div', { style: { display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' } }, h('h3', null, "Lançamentos Contábeis"), h('button',{type:'button',className:'action-btn',onClick:sincronizarBaixasFinanceiras},h(RefreshCw,{size:14})," Sincronizar baixas do financeiro")),
