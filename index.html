@@ -3707,12 +3707,6 @@
               ]))))
             ),
             contabTab === "relatorios" && h(React.Fragment, null,
-              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8,alignItems:"end",marginBottom:14}}, [
-                h("div",{className:"field"},[h("label",null,"Data inicial"),h("input",{type:"date",value:contabConsultaIni,onChange:e=>setContabConsultaIni(e.target.value)})]),
-                h("div",{className:"field"},[h("label",null,"Data final"),h("input",{type:"date",value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})]),
-                h("button",{type:"button",className:"primary",onClick:consultarRelatorioContabil},[h(Search,{size:15})," Consultar relatório"]),
-                contabRelatorioExecutado && h("button",{type:"button",className:"action-btn",onClick:()=>exportarContabilidadeExcel("relatorio")},[h(Download,{size:15})," Exportar Excel"])
-              ]),
               h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:12}},
                 h("div",{className:"sub-nav",style:{marginBottom:0}},["balancete","dre","balanco","razao"].map(tipo=>h("button",{key:tipo,className:contabRelatorioTipo===tipo?"active":"",onClick:()=>setContabRelatorioTipo(tipo)},tipo==="balanco"?"Balanço Patrimonial":tipo.toUpperCase()))),
                 contabRelatorioTipo==="dre" && h("button",{type:"button",className:"action-btn",onClick:abrirConfiguracaoDRE},"⚙ Configurar contas da DRE")
@@ -3758,6 +3752,12 @@
                 ),
 
               ),
+              h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8,alignItems:"end",marginBottom:14}}, [
+                h("div",{className:"field"},[h("label",null,"Data inicial"),h("input",{type:"date",value:contabConsultaIni,onChange:e=>setContabConsultaIni(e.target.value)})]),
+                h("div",{className:"field"},[h("label",null,"Data final"),h("input",{type:"date",value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})]),
+                h("button",{type:"button",className:"primary",onClick:consultarRelatorioContabil},[h(Search,{size:15})," Consultar relatório"]),
+                contabRelatorioExecutado && h("button",{type:"button",className:"action-btn",onClick:()=>exportarContabilidadeExcel("relatorio")},[h(Download,{size:15})," Exportar Excel"])
+              ]),,
               !contabRelatorioExecutado ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Selecione o período e clique em Consultar relatório.") :
               contabRelatorioTipo==="razao" ? h(React.Fragment,null,
                 !contabRazaoContaId ? h("div",null,"Selecione a conta analítica e o período acima para consultar o Razão.") : h("div",{style:{overflowX:"auto"}},h("table",null,[
