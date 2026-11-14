@@ -168,6 +168,11 @@
       const [contabContaPai, setContabContaPai] = useState("");
       const [contabEditandoId, setContabEditandoId] = useState("");
       const [contabModalAberto, setContabModalAberto] = useState(false);
+      const [contabRegerarModal, setContabRegerarModal] = useState(false);
+      const [contabRegerarIni, setContabRegerarIni] = useState(currentMonth() + "-01");
+      const [contabRegerarFim, setContabRegerarFim] = useState(currentDate());
+      const [contabRegerarTodasCategorias, setContabRegerarTodasCategorias] = useState(true);
+      const [contabRegerarCategorias, setContabRegerarCategorias] = useState([]);
       const [contabData, setContabData] = useState(currentDate());
       const [contabHistorico, setContabHistorico] = useState("");
       const [contabDebitoId, setContabDebitoId] = useState("");
@@ -1006,11 +1011,28 @@
         setContabHistorico(""); setContabValor(""); setContabDebitoId(""); setContabCreditoId(""); await carregarContabilidade();
       }
 
+      function abrirModalRegerarContabilidade() {
+        setContabRegerarIni(currentMonth() + "-01");
+        setContabRegerarFim(currentDate());
+        setContabRegerarTodasCategorias(true);
+        setContabRegerarCategorias([]);
+        setContabRegerarModal(true);
+      }
+
       async function sincronizarBaixasFinanceiras() {
-        if (!session?.user?.id || !supabaseClient) return;
-        if (!confirm("O sistema vai procurar contas a pagar e a receber já baixadas que tenham conta contábil vinculada à subcategoria e à conta bancária. Lançamentos contábeis já existentes serão preservados para evitar duplicidade. Deseja continuar?")) return;
+        if (!session?.user?.id || !supabaseClient || contabLoading) return;
+        if (!contabRegerarIni || !contabRegerarFim || contabRegerarIni > contabRegerarFim) {
+          alert("Informe um período válido, com a data inicial anterior ou igual à data final.");
+          return;
+        }
+        if (!contabRegerarTodasCategorias && contabRegerarCategorias.length === 0) {
+          alert("Selecione ao menos uma categoria ou marque Todas as categorias.");
+          return;
+        }
         const userId = session.user.id;
-        let criados = 0, jaExistentes = 0, semVinculo = 0, falhas = 0;
+        const categoriasAlvo = contabRegerarTodasCategorias ? null : contabRegerarCategorias;
+        if (!confirm("Confirma regerar a contabilidade de " + contabRegerarIni.split("-").reverse().join("/") + " até " + contabRegerarFim.split("-").reverse().join("/") + (categoriasAlvo ? ", para todas as categorias" : ", para " + categoriasAlvo.length + " categoria(s)") + "? Os lançamentos contábeis existentes serão preservados e não serão duplicados.")) return;
+        let criados = 0, jaExistentes = 0, semVinculo = 0, foraPeriodo = 0, falhas = 0;
         setContabLoading(true);
         setContabErro("");
         try {
@@ -1020,6 +1042,9 @@
           ];
           for (const f of fontes) {
             const p = f.item;
+            const dataMov = p.dataBaixa || p.dataCompra || currentDate();
+            if (dataMov < contabRegerarIni || dataMov > contabRegerarFim) { foraPeriodo++; continue; }
+            if (categoriasAlvo && !categoriasAlvo.includes(String(p.categoriaId))) { continue; }
             const banco = contasBancarias.find(x => x.id === p.bancoBaixaId);
             const sub = getSubcategoria(p.categoriaId, p.subcategoriaId);
             const contaBanco = banco?.contaContabilId;
@@ -1029,7 +1054,6 @@
             const { data: existente, error: erroBusca } = await supabaseClient.from("contabilidade_lancamentos").select("id").eq("user_id",userId).eq("origem",f.origem).eq("origem_id",String(p.id)).maybeSingle();
             if (erroBusca) { console.error("Falha ao verificar lançamento contábil existente:", erroBusca); falhas++; continue; }
             if (existente) { jaExistentes++; continue; }
-            const dataMov = p.dataBaixa || p.dataCompra || currentDate();
             const historico = (f.tipo === "despesa" ? "Pagamento: " : "Recebimento: ") + (p.descricao || "Movimento financeiro");
             const { data: cab, error } = await supabaseClient.from("contabilidade_lancamentos").insert({ user_id:userId, data_lancamento:dataMov, competencia:String(dataMov).slice(0,7)+"-01", historico, origem:f.origem, origem_id:String(p.id), status:"EFETIVADO", total_debito:valor, total_credito:valor }).select().single();
             if (error || !cab) { console.error("Falha ao criar lançamento contábil:", error); falhas++; continue; }
@@ -1043,8 +1067,9 @@
               falhas++;
             } else criados++;
           }
+          setContabRegerarModal(false);
           await carregarContabilidade();
-          alert("Regeração concluída. Novos lançamentos contábeis: " + criados + ". Já existentes e preservados: " + jaExistentes + ". Sem vínculo de conta contábil na categoria/subcategoria ou no banco: " + semVinculo + ". Falhas: " + falhas + ".");
+          alert("Regeração concluída. Novos lançamentos: " + criados + ". Já existentes e preservados: " + jaExistentes + ". Sem vínculo contábil na categoria/subcategoria ou no banco: " + semVinculo + ". Fora do período: " + foraPeriodo + ". Falhas: " + falhas + ".");
         } catch (e) {
           console.error("Erro ao regerar contabilidade:", e);
           setContabErro("Não foi possível regerar a contabilidade: " + (e.message || "erro desconhecido"));
@@ -3575,7 +3600,35 @@
             contabTab === "lancamentos" && h(React.Fragment, null,
               h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
                 h('h3',{style:{margin:0}},"Lançamentos Contábeis"),
-                h('button',{type:'button',className:'action-btn',onClick:sincronizarBaixasFinanceiras,disabled:contabLoading},contabLoading?"Processando...":"Regerar Contabilidade")
+                h('button',{type:'button',className:'action-btn',onClick:abrirModalRegerarContabilidade,disabled:contabLoading},contabLoading?"Processando...":"Regerar Contabilidade")
+              ),
+              contabRegerarModal && h('div',{className:'modal-overlay',style:{zIndex:10060},onMouseDown:e=>{if(e.target===e.currentTarget&&!contabLoading)setContabRegerarModal(false);}},
+                h('div',{className:'modal-content',style:{maxWidth:560}},
+                  h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,marginBottom:14}},
+                    h('h3',{style:{margin:0}},"Regerar Contabilidade"),
+                    h('button',{type:'button',className:'action-btn',onClick:()=>setContabRegerarModal(false),disabled:contabLoading},"✕")
+                  ),
+                  h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:10,marginBottom:14}},
+                    h('div',{className:'field'},h('label',null,"Data inicial"),h('input',{type:'date',value:contabRegerarIni,onChange:e=>setContabRegerarIni(e.target.value)})),
+                    h('div',{className:'field'},h('label',null,"Data final"),h('input',{type:'date',value:contabRegerarFim,onChange:e=>setContabRegerarFim(e.target.value)}))
+                  ),
+                  h('div',{style:{fontWeight:700,marginBottom:8}},"Categorias"),
+                  h('label',{style:{display:'flex',alignItems:'center',gap:8,padding:'8px 0',fontWeight:700}},
+                    h('input',{type:'checkbox',checked:contabRegerarTodasCategorias,onChange:e=>{setContabRegerarTodasCategorias(e.target.checked);if(e.target.checked)setContabRegerarCategorias([]);},style:{width:16}}),
+                    "Todas as categorias"
+                  ),
+                  !contabRegerarTodasCategorias && h('div',{style:{border:'1px solid var(--line)',borderRadius:6,padding:8,maxHeight:240,overflowY:'auto'}},
+                    categorias.map(cat=>h('label',{key:cat.id,style:{display:'flex',alignItems:'center',gap:8,padding:'6px 2px',borderBottom:'1px solid var(--line)',fontWeight:500}},
+                      h('input',{type:'checkbox',checked:contabRegerarCategorias.includes(String(cat.id)),onChange:e=>setContabRegerarCategorias(prev=>e.target.checked?[...prev,String(cat.id)]:prev.filter(id=>id!==String(cat.id))),style:{width:16}}),
+                      cat.nome || cat.descricao || "Categoria sem nome"
+                    ))
+                  ),
+                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:10}},"Serão considerados pagamentos e recebimentos baixados dentro do período, conforme a data da baixa. Ao escolher uma categoria, entram também suas subcategorias. Lançamentos contábeis já existentes não serão duplicados nem substituídos."),
+                  h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:16}},
+                    h('button',{type:'button',className:'action-btn',onClick:()=>setContabRegerarModal(false),disabled:contabLoading},"Cancelar"),
+                    h('button',{type:'button',className:'primary',onClick:sincronizarBaixasFinanceiras,disabled:contabLoading},contabLoading?"Processando...":"Confirmar e regerar")
+                  )
+                )
               ),
               h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},"Gera a contabilização dos pagamentos e recebimentos já baixados que tenham conta contábil vinculada à subcategoria e à conta bancária. Os lançamentos já existentes são preservados."),
               h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:8,alignItems:'end',marginBottom:14}},
