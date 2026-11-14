@@ -163,6 +163,8 @@
       const [contabMascaraEdit, setContabMascaraEdit] = useState(() => localStorage.getItem("foundmyapp-contab-mascara") || "#.#.##.##.####");
       const [contabMascaraAberta, setContabMascaraAberta] = useState(false);
       const [contabDescricao, setContabDescricao] = useState("");
+      const [contabBuscaConta, setContabBuscaConta] = useState("");
+      const [contabBuscaAberta, setContabBuscaAberta] = useState(false);
       const [contabNatureza, setContabNatureza] = useState("ATIVO");
       const [contabTipo, setContabTipo] = useState("ANALITICA");
       const [contabContaPai, setContabContaPai] = useState("");
@@ -976,6 +978,15 @@
         setContabMascara(contabMascaraEdit);
         setContabCodigo(c => formatarCodigoContabil(c, contabMascaraEdit));
         setContabMascaraAberta(false);
+      }
+
+      function contasPlanoFiltradas() {
+        const termo = String(contabBuscaConta || "").trim().toLocaleLowerCase("pt-BR");
+        if (!termo) return contabPlano || [];
+        return (contabPlano || []).filter(conta =>
+          String(conta.descricao || "").toLocaleLowerCase("pt-BR").includes(termo) ||
+          String(conta.codigo || "").toLocaleLowerCase("pt-BR").includes(termo)
+        );
       }
 
       function proximoCodigoContabil(codigoAtual) {
@@ -3732,8 +3743,19 @@
                   h('button', { type: 'button', className: 'primary', onClick: salvarMascaraContabil }, "Salvar máscara")
                 )
               ),
-              h('div',{style:{display:'flex',justifyContent:'flex-end',marginBottom:12}},
+              h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,flexWrap:'wrap',marginBottom:12}},
+                h('button',{type:'button',className:'action-btn',onClick:()=>{setContabBuscaAberta(v=>!v);if(contabBuscaAberta)setContabBuscaConta("");}},h(Search,{size:15})," Consultar contas pelo nome"),
                 h('button',{type:'button',className:'primary',onClick:abrirNovaContaContabil},h(Plus,{size:16})," Incluir nova conta")
+              ),
+              contabBuscaAberta && h('div',{className:'form-card',style:{padding:12,marginBottom:12,border:'1px solid var(--line)'}},
+                h('div',{className:'field'},
+                  h('label',null,"Pesquisar conta por nome ou código"),
+                  h('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+                    h('input',{value:contabBuscaConta,onChange:e=>setContabBuscaConta(e.target.value),placeholder:"Digite o nome ou código da conta...",autoFocus:true,style:{flex:1}}),
+                    h('button',{type:'button',className:'action-btn',onClick:()=>setContabBuscaConta("")}, "Limpar")
+                  ),
+                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:5}},contasPlanoFiltradas().length+" conta(s) encontrada(s)")
+                )
               ),
               h('div',{style:{position:'fixed',right:24,bottom:24,zIndex:10000}},
                 h('button',{type:'button',className:'primary',onClick:abrirNovaContaContabil,style:{display:'flex',alignItems:'center',gap:8,padding:'12px 18px',borderRadius:999,boxShadow:'0 6px 20px rgba(15,23,42,.28)',whiteSpace:'nowrap'}},h(Plus,{size:18})," Incluir nova conta")
@@ -3758,7 +3780,7 @@
                   !contabEditandoId && h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:10}},"Depois de incluir, os campos serão limpos e esta janela continuará aberta para o próximo cadastro.")
                 )
               ),
-              h('div', { className: 'list-vertical', style:{gap:0,marginTop:8} }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contabPlano.map(c => {
+              h('div', { className: 'list-vertical', style:{gap:0,marginTop:8} }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contasPlanoFiltradas().length === 0 ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Nenhuma conta encontrada com esse nome ou código.") : contasPlanoFiltradas().map(c => {
                 const mae = contabPlano.find(p => p.id === c.conta_pai_id);
                 return h('div', { className: 'list-item', key:c.id, style:{ padding: '5px 10px', paddingLeft: c.conta_pai_id ? 30 : 10, borderRadius:0, borderLeft:0, borderRight:0, borderTop:0 } },
                   h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,minHeight:24}},
