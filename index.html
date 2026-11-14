@@ -963,6 +963,8 @@
         e.preventDefault();
         if (!contabCodigo.trim() || !contabDescricao.trim()) return alert("Informe código e descrição da conta.");
         const codigoFormatado = formatarCodigoContabil(contabCodigo);
+        const nivelConta = codigoFormatado.split(".").filter(Boolean).length;
+        if (nivelConta >= 2 && !contabContaPai) return alert("A partir do segundo nível, é obrigatório informar a conta mãe.");
         if (contabContaPai && !contabPlano.some(c => c.id === contabContaPai && c.tipo === "SINTETICA")) return alert("A conta mãe precisa ser uma conta sintética válida.");
         const payload = { user_id: session.user.id, codigo: codigoFormatado, descricao: contabDescricao.trim(), natureza: contabNatureza, tipo: contabTipo, conta_pai_id: contabContaPai || null, aceita_lancamento: contabTipo === "ANALITICA", ativa: true };
         const query = contabEditandoId
@@ -975,7 +977,7 @@
           setContabModalAberto(false);
         } else {
           setContabCodigo(proximoCodigoContabil(codigoFormatado));
-          setContabDescricao(""); setContabNatureza("ATIVO"); setContabTipo("ANALITICA"); setContabContaPai("");
+          setContabDescricao("");
           setContabEditandoId("");
         }
         await carregarContabilidade();
