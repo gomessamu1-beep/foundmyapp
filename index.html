@@ -939,6 +939,26 @@
         setContabMascaraAberta(false);
       }
 
+      function proximoCodigoContabil(codigoAtual) {
+        const codigo = formatarCodigoContabil(codigoAtual);
+        const partes = codigo.split(".");
+        const ultimo = partes.pop() || "";
+        const prefixo = partes.join(".");
+        const largura = ultimo.length;
+        const prefixoNormalizado = prefixo ? prefixo + "." : "";
+        let maior = Number(ultimo) || 0;
+        (contabPlano || []).forEach(conta => {
+          const existente = String(conta.codigo || "");
+          if (!existente.startsWith(prefixoNormalizado)) return;
+          const restante = existente.slice(prefixoNormalizado.length);
+          if (!/^\\d+$/.test(restante)) return;
+          if (restante.length !== largura) return;
+          maior = Math.max(maior, Number(restante) || 0);
+        });
+        const proximo = String(maior + 1).padStart(largura, "0");
+        return prefixo ? prefixo + "." + proximo : proximo;
+      }
+
       async function salvarContaContabil(e) {
         e.preventDefault();
         if (!contabCodigo.trim() || !contabDescricao.trim()) return alert("Informe código e descrição da conta.");
@@ -954,7 +974,8 @@
           limparFormularioContaContabil();
           setContabModalAberto(false);
         } else {
-          setContabCodigo(""); setContabDescricao(""); setContabNatureza("ATIVO"); setContabTipo("ANALITICA"); setContabContaPai("");
+          setContabCodigo(proximoCodigoContabil(codigoFormatado));
+          setContabDescricao(""); setContabNatureza("ATIVO"); setContabTipo("ANALITICA"); setContabContaPai("");
           setContabEditandoId("");
         }
         await carregarContabilidade();
