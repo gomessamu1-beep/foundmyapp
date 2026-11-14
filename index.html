@@ -1042,6 +1042,17 @@
         setContabModalAberto(true);
       }
 
+      function abrirInclusaoContaFilha(contaPai) {
+        if (!contaPai || contaPai.tipo !== "SINTETICA") return;
+        const codigoFilho = proximoCodigoContabil(contaPai.codigo);
+        limparFormularioContaContabil();
+        setContabCodigo(codigoFilho);
+        setContabNatureza(contaPai.natureza || "ATIVO");
+        setContabTipo("ANALITICA");
+        setContabContaPai(contaPai.id);
+        setContabModalAberto(true);
+      }
+
       function fecharModalContaContabil() {
         limparFormularioContaContabil();
         setContabModalAberto(false);
@@ -3789,6 +3800,7 @@
                       h('span',{style:{fontSize:11,color:'var(--ink-soft)',whiteSpace:'nowrap'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica")+(mae?" • Mãe: "+mae.codigo:""))
                     ),
                     h('div',{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:4,flexWrap:'nowrap',marginLeft:'auto',flexShrink:0}},
+                      c.tipo==="SINTETICA" && h('button',{type:'button',className:'action-btn',style:{padding:3},title:'Incluir conta filha no final da sequência',onClick:()=>abrirInclusaoContaFilha(c)},h(Plus,{size:13})),
                       h('button',{type:'button',className:'action-btn',style:{padding:3},title:'Editar conta',onClick:()=>editarContaContabil(c)},h(Pencil,{size:13})),
                       h('button',{type:'button',className:'action-btn delete',style:{padding:3},title:'Excluir conta',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:13}))
                     )
