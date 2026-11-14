@@ -184,6 +184,9 @@
       const [contabConsultaExecutada, setContabConsultaExecutada] = useState(false);
       const [contabRelatorioExecutado, setContabRelatorioExecutado] = useState(false);
       const [contabRazaoContaId, setContabRazaoContaId] = useState("");
+      const [contabRazaoBusca, setContabRazaoBusca] = useState("");
+      const [contabRazaoSeletorAberto, setContabRazaoSeletorAberto] = useState(false);
+      const [contabRazaoBuscaModal, setContabRazaoBuscaModal] = useState("");
       const [contabDreContas, setContabDreContas] = useState(null);
       const [contabDreConfiguracaoAberta, setContabDreConfiguracaoAberta] = useState(false);
       function contasElegiveisDRE() {
@@ -919,7 +922,7 @@
           contabPlano.filter(c=>c.tipo==="ANALITICA"&&(!natureza||natureza.includes(c.natureza))&&(contabRelatorioTipo!=="dre"||contasDREPermitidas.has(String(c.id)))).forEach(c=>{
             const itens=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>it.conta_id===c.id);
             const d=itens.reduce((a,it)=>a+Number(it.debito||0),0), cr=itens.reduce((a,it)=>a+Number(it.credito||0),0);
-            linhas.push(["", "", c.codigo,c.descricao,c.natureza,d,cr,Math.max(0,d-cr),Math.max(0,cr-d)]);
+            if (d !== 0 || cr !== 0) linhas.push(["", "", c.codigo,c.descricao,c.natureza,d,cr,Math.max(0,d-cr),Math.max(0,cr-d)]);
           });
         }
         if (linhas.length <= 1) return alert("Não há linhas para exportar.");
@@ -3738,8 +3741,22 @@
               ),
               !contabRelatorioExecutado ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Selecione o período e clique em Consultar relatório.") :
               contabRelatorioTipo==="razao" ? h(React.Fragment,null,
-                h("div",{className:"field",style:{maxWidth:420,marginBottom:12}},[h("label",null,"Conta analítica"),h("select",{value:contabRazaoContaId,onChange:e=>setContabRazaoContaId(e.target.value)},[h("option",{value:""},"Selecione uma conta"),...contabPlano.filter(c=>c.tipo==="ANALITICA").map(c=>h("option",{key:c.id,value:c.id},c.codigo+" - "+c.descricao))])]),
-                !contabRazaoContaId ? h("div",null,"Selecione a conta para consultar o Razão.") : h("div",{style:{overflowX:"auto"}},h("table",null,[
+                h("div",{style:{display:"grid",gridTemplateColumns:"minmax(180px,1fr) auto",gap:8,alignItems:"end",maxWidth:620,marginBottom:12}},
+                  h("div",{className:"field"},h("label",null,"Conta contábil"),h("input",{type:"text",value:contabRazaoContaId?(contabPlano.find(c=>String(c.id)===String(contabRazaoContaId))?.codigo+" - "+(contabPlano.find(c=>String(c.id)===String(contabRazaoContaId))?.descricao||"")):contabRazaoBusca,placeholder:"Digite código ou descrição da conta",onChange:e=>{setContabRazaoBusca(e.target.value);setContabRazaoContaId("");},onFocus:()=>{if(contabRazaoBusca.trim())setContabRazaoSeletorAberto(true);}})),
+                  h("button",{type:"button",className:"action-btn",onClick:()=>{setContabRazaoBuscaModal(contabRazaoBusca);setContabRazaoSeletorAberto(true);}} ,h(Search,{size:16})," Consultar contas")
+                ),
+                contabRazaoBusca.trim() && !contabRazaoContaId && h("div",{style:{maxWidth:620,maxHeight:150,overflowY:"auto",border:"1px solid var(--line)",borderRadius:6,marginBottom:10}},contabPlano.filter(c=>c.tipo==="ANALITICA"&&(String(c.codigo||"").toLowerCase().includes(contabRazaoBusca.toLowerCase())||String(c.descricao||"").toLowerCase().includes(contabRazaoBusca.toLowerCase()))).slice(0,20).map(c=>h("button",{type:"button",key:c.id,className:"action-btn",onClick:()=>{setContabRazaoContaId(String(c.id));setContabRazaoBusca("");},style:{display:"block",width:"100%",textAlign:"left",borderRadius:0}},c.codigo+" - "+c.descricao))),
+                contabRazaoSeletorAberto && h("div",{className:"modal-overlay",style:{zIndex:10080},onMouseDown:e=>{if(e.target===e.currentTarget)setContabRazaoSeletorAberto(false);}},
+                  h("div",{className:"modal-content",style:{maxWidth:520}},
+                    h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}},h("h3",{style:{margin:0}},"Selecionar conta contábil"),h("button",{type:"button",className:"action-btn",onClick:()=>setContabRazaoSeletorAberto(false)},"✕")),
+                    h("input",{type:"search",value:contabRazaoBuscaModal,placeholder:"Pesquisar por código ou descrição",onChange:e=>setContabRazaoBuscaModal(e.target.value),style:{width:"100%",marginBottom:10}}),
+                    h("div",{style:{maxHeight:360,overflowY:"auto",border:"1px solid var(--line)",borderRadius:6}},
+                      contabPlano.filter(c=>c.tipo==="ANALITICA"&&(String(c.codigo||"").toLowerCase().includes(contabRazaoBuscaModal.toLowerCase())||String(c.descricao||"").toLowerCase().includes(contabRazaoBuscaModal.toLowerCase()))).slice(0,100).map(c=>h("button",{type:"button",key:c.id,className:"action-btn",onClick:()=>{setContabRazaoContaId(String(c.id));setContabRazaoBusca("");setContabRazaoSeletorAberto(false);},style:{display:"block",width:"100%",textAlign:"left",borderRadius:0}},h("strong",null,c.codigo+" - "),c.descricao)),
+                      contabPlano.filter(c=>c.tipo==="ANALITICA"&&(String(c.codigo||"").toLowerCase().includes(contabRazaoBuscaModal.toLowerCase())||String(c.descricao||"").toLowerCase().includes(contabRazaoBuscaModal.toLowerCase()))).length===0 && h("div",{style:{padding:12,color:"var(--ink-soft)"}},"Nenhuma conta encontrada")
+                    )
+                  )
+                ),
+                !contabRazaoContaId ? h("div",null,"Selecione a conta analítica e o período acima para consultar o Razão.") : h("div",{style:{overflowX:"auto"}},h("table",null,[
                   h("thead",null,h("tr",null,["Data","Histórico","Débito","Crédito","Saldo"].map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
                   h("tbody",null,(()=>{let saldo=0;const mov=contabLancamentos.flatMap(l=>(l.contabilidade_lancamento_itens||[]).filter(it=>it.conta_id===contabRazaoContaId).map(it=>({l,it}))).sort((a,b)=>String(a.l.data_lancamento).localeCompare(String(b.l.data_lancamento)));return mov.map(({l,it})=>{saldo+=Number(it.debito||0)-Number(it.credito||0);return h("tr",{key:it.id},[h("td",null,formatDateBR(l.data_lancamento)),h("td",null,l.historico),h("td",{className:"right num"},formatBRL(Number(it.debito||0))),h("td",{className:"right num"},formatBRL(Number(it.credito||0))),h("td",{className:"right num"},formatBRL(saldo))]);});})())
                 ]))
@@ -3747,7 +3764,7 @@
                 h("h3",null,contabRelatorioTipo==="dre"?"Demonstração do Resultado (DRE)":contabRelatorioTipo==="balanco"?"Balanço Patrimonial":"Balancete de Verificação"),
                 h("table",null,[
                   h("thead",null,h("tr",null,["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"].map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
-                  h("tbody",null,contabPlano.filter(c=>c.tipo==="ANALITICA"&&(contabRelatorioTipo==="dre"?idsContasDREAtivas().includes(String(c.id)):contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"].includes(c.natureza):true)).map(c=>{const ps=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=ps.reduce((a,i)=>a+Number(i.debito||0),0);const cr=ps.reduce((a,i)=>a+Number(i.credito||0),0);return h("tr",{key:c.id},[h("td",null,c.codigo),h("td",null,c.descricao),h("td",{className:"right num"},formatBRL(d)),h("td",{className:"right num"},formatBRL(cr)),h("td",{className:"right num"},formatBRL(Math.max(0,d-cr))),h("td",{className:"right num"},formatBRL(Math.max(0,cr-d)))]);})),
+                  h("tbody",null,contabPlano.filter(c=>c.tipo==="ANALITICA"&&(contabRelatorioTipo==="dre"?idsContasDREAtivas().includes(String(c.id)):contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"].includes(c.natureza):true)).map(c=>{const ps=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=ps.reduce((a,i)=>a+Number(i.debito||0),0);const cr=ps.reduce((a,i)=>a+Number(i.credito||0),0);return (d===0&&cr===0)?null:h("tr",{key:c.id},[h("td",null,c.codigo),h("td",null,c.descricao),h("td",{className:"right num"},formatBRL(d)),h("td",{className:"right num"},formatBRL(cr)),h("td",{className:"right num"},formatBRL(Math.max(0,d-cr))),h("td",{className:"right num"},formatBRL(Math.max(0,cr-d)))]);}).filter(Boolean)),
                   h("tfoot",null,h("tr",{style:{fontWeight:700}},[h("td",{colSpan:2},"Totais"),...["debito","credito"].map(k=>h("td",{className:"right num",key:k},formatBRL(contabLancamentos.reduce((a,l)=>a+Number(l["total_"+k]||0),0)))),h("td",{colSpan:2})]))
                 ])
               ])
