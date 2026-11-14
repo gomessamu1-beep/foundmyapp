@@ -4295,8 +4295,8 @@
           )
         ),
 
-        contaContabilPicker.open && h('div', { className: 'modal-overlay', onClick: () => setContaContabilPicker({ open: false, destino: 'nova', catId: null, busca: '' }) },
-          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 520, width: 'calc(100% - 24px)', maxHeight: '80vh', display: 'flex', flexDirection: 'column' } },
+        contaContabilPicker.open && h('div', { className: 'modal-overlay', onClick: () => setContaContabilPicker({ open: false, destino: 'nova', catId: null, busca: '' }), style: { background: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 8, zIndex: 80, pointerEvents: 'auto' } },
+          h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380, width: 'min(380px, calc(100% - 24px))', maxHeight: '58vh', display: 'flex', flexDirection: 'column', padding: 14, boxShadow: '0 8px 28px rgba(0,0,0,0.22)', border: '1px solid var(--line)' } },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 } }, h('strong', null, 'Selecionar conta contábil'), h('button', { type: 'button', className: 'action-btn', onClick: () => setContaContabilPicker({ open: false, destino: 'nova', catId: null, busca: '' }) }, h(XIcon, { size: 16 }))),
             h('input', { type: 'search', placeholder: 'Pesquisar por código ou descrição...', value: contaContabilPicker.busca, onChange: e => setContaContabilPicker(prev => ({ ...prev, busca: e.target.value })), style: { width: '100%', boxSizing: 'border-box', marginBottom: 10 } }),
             h('button', { type: 'button', className: 'action-btn', onClick: () => selecionarContaContabil(''), style: { textAlign: 'left', justifyContent: 'flex-start', marginBottom: 8 } }, 'Não vinculada'),
