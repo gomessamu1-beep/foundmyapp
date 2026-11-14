@@ -3824,7 +3824,7 @@
                 h("div",{style:{fontSize:12,color:"var(--ink-soft)"}},(l.origem||"SEM ORIGEM")+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0))),
                 h("div",{style:{fontSize:12,marginTop:5}},(l.contabilidade_lancamento_itens||[]).map(it=>{const cc=contabPlano.find(c=>c.id===it.conta_id);return (cc?.codigo||"")+" "+(cc?.descricao||"")+" — D "+formatBRL(Number(it.debito||0))+" / C "+formatBRL(Number(it.credito||0));}).join(" | "))
               ]),l.origem==="MANUAL"&&h('div',{style:{display:'flex',gap:6,flexShrink:0}},
-                h('button',{type:'button',className:'action-btn',onClick:()=>editarLancamentoManual(l),title:'Alterar lançamento'},h(Edit,{size:15})," Alterar"),
+                h('button',{type:'button',className:'action-btn',onClick:()=>editarLancamentoManual(l),title:'Alterar lançamento'},h(Pencil,{size:15})," Alterar"),
                 h('button',{type:'button',className:'action-btn',onClick:()=>excluirLancamentoManual(l.id),title:'Excluir lançamento'},h(Trash2,{size:15})," Excluir")
               ))))
             ),
