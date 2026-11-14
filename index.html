@@ -990,34 +990,50 @@
       }
 
       async function sincronizarBaixasFinanceiras() {
-        if (!session?.user?.id) return;
+        if (!session?.user?.id || !supabaseClient) return;
+        if (!confirm("O sistema vai procurar contas a pagar e a receber já baixadas que tenham conta contábil vinculada à subcategoria e à conta bancária. Lançamentos contábeis já existentes serão preservados para evitar duplicidade. Deseja continuar?")) return;
         const userId = session.user.id;
-        let criados = 0, ignorados = 0;
-        const fontes = [
-          ...(contasPagar || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:"CONTAS_PAGAR", tipo:"despesa" })),
-          ...(contasReceber || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:"CONTAS_RECEBER", tipo:"receita" }))
-        ];
-        for (const f of fontes) {
-          const p = f.item, banco = contasBancarias.find(x => x.id === p.bancoBaixaId);
-          const sub = getSubcategoria(p.categoriaId, p.subcategoriaId);
-          const contaBanco = banco?.contaContabilId, contaCategoria = sub?.contaContabilId;
-          const valor = Number(p.valorParcela || p.valor || p.total || 0);
-          if (!contaBanco || !contaCategoria || !(valor > 0)) { ignorados++; continue; }
-          const { data: existente } = await supabaseClient.from("contabilidade_lancamentos").select("id").eq("user_id",userId).eq("origem",f.origem).eq("origem_id",String(p.id)).maybeSingle();
-          if (existente) { ignorados++; continue; }
-          const dataMov = p.dataBaixa || p.dataCompra || currentDate();
-          const historico = (f.tipo === "despesa" ? "Pagamento: " : "Recebimento: ") + (p.descricao || "Movimento financeiro");
-          const { data: cab, error } = await supabaseClient.from("contabilidade_lancamentos").insert({ user_id:userId, data_lancamento:dataMov, competencia:String(dataMov).slice(0,7)+"-01", historico, origem:f.origem, origem_id:String(p.id), status:"EFETIVADO", total_debito:valor, total_credito:valor }).select().single();
-          if (error) { console.error(error); continue; }
-          const partidas = f.tipo === "despesa"
-            ? [{ user_id:userId,lancamento_id:cab.id,conta_id:contaCategoria,sequencia:1,historico,debito:valor,credito:0 },{ user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:2,historico,debito:0,credito:valor }]
-            : [{ user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:1,historico,debito:valor,credito:0 },{ user_id:userId,lancamento_id:cab.id,conta_id:contaCategoria,sequencia:2,historico,debito:0,credito:valor }];
-          const { error: erroPartidas } = await supabaseClient.from("contabilidade_lancamento_itens").insert(partidas);
-          if (erroPartidas) { await supabaseClient.from("contabilidade_lancamentos").delete().eq("id",cab.id).eq("user_id",userId); console.error(erroPartidas); }
-          else criados++;
+        let criados = 0, jaExistentes = 0, semVinculo = 0, falhas = 0;
+        setContabLoading(true);
+        setContabErro("");
+        try {
+          const fontes = [
+            ...(contasPagar || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:"CONTAS_PAGAR", tipo:"despesa" })),
+            ...(contasReceber || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:"CONTAS_RECEBER", tipo:"receita" }))
+          ];
+          for (const f of fontes) {
+            const p = f.item;
+            const banco = contasBancarias.find(x => x.id === p.bancoBaixaId);
+            const sub = getSubcategoria(p.categoriaId, p.subcategoriaId);
+            const contaBanco = banco?.contaContabilId;
+            const contaCategoria = sub?.contaContabilId;
+            const valor = Number(p.valorParcela || p.valor || p.total || 0);
+            if (!contaBanco || !contaCategoria || !(valor > 0)) { semVinculo++; continue; }
+            const { data: existente, error: erroBusca } = await supabaseClient.from("contabilidade_lancamentos").select("id").eq("user_id",userId).eq("origem",f.origem).eq("origem_id",String(p.id)).maybeSingle();
+            if (erroBusca) { console.error("Falha ao verificar lançamento contábil existente:", erroBusca); falhas++; continue; }
+            if (existente) { jaExistentes++; continue; }
+            const dataMov = p.dataBaixa || p.dataCompra || currentDate();
+            const historico = (f.tipo === "despesa" ? "Pagamento: " : "Recebimento: ") + (p.descricao || "Movimento financeiro");
+            const { data: cab, error } = await supabaseClient.from("contabilidade_lancamentos").insert({ user_id:userId, data_lancamento:dataMov, competencia:String(dataMov).slice(0,7)+"-01", historico, origem:f.origem, origem_id:String(p.id), status:"EFETIVADO", total_debito:valor, total_credito:valor }).select().single();
+            if (error || !cab) { console.error("Falha ao criar lançamento contábil:", error); falhas++; continue; }
+            const partidas = f.tipo === "despesa"
+              ? [{ user_id:userId,lancamento_id:cab.id,conta_id:contaCategoria,sequencia:1,historico,debito:valor,credito:0 },{ user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:2,historico,debito:0,credito:valor }]
+              : [{ user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:1,historico,debito:valor,credito:0 },{ user_id:userId,lancamento_id:cab.id,conta_id:contaCategoria,sequencia:2,historico,debito:0,credito:valor }];
+            const { error: erroPartidas } = await supabaseClient.from("contabilidade_lancamento_itens").insert(partidas);
+            if (erroPartidas) {
+              await supabaseClient.from("contabilidade_lancamentos").delete().eq("id",cab.id).eq("user_id",userId);
+              console.error("Falha ao criar partidas contábeis:", erroPartidas);
+              falhas++;
+            } else criados++;
+          }
+          await carregarContabilidade();
+          alert("Regeração concluída. Novos lançamentos contábeis: " + criados + ". Já existentes e preservados: " + jaExistentes + ". Sem vínculo de conta contábil na categoria/subcategoria ou no banco: " + semVinculo + ". Falhas: " + falhas + ".");
+        } catch (e) {
+          console.error("Erro ao regerar contabilidade:", e);
+          setContabErro("Não foi possível regerar a contabilidade: " + (e.message || "erro desconhecido"));
+        } finally {
+          setContabLoading(false);
         }
-        await carregarContabilidade();
-        alert("Sincronização concluída. Lançamentos gerados: " + criados + ". Ignorados (já existentes ou sem conta contábil vinculada): " + ignorados + ".");
       }
 
       function handleSaveCartao(e) { e.preventDefault(); setCartaoError(""); const nome = novoCartaoNome.trim(); if (!nome) return setCartaoError("Dê um nome ao cartão."); const fech = novoCartaoFechamento || "01"; const venc = novoCartaoVencimento || "10"; if (editingCartaoId) updateCartoes(prev => prev.map(c => c.id === editingCartaoId ? { ...c, nome, bancoCode: novoCartaoBanco, cor: novoCartaoCor, fechamento: fech, vencimento: venc } : c)); else updateCartoes(prev => [...prev, { id: uid(), nome, bancoCode: novoCartaoBanco, cor: novoCartaoCor, fechamento: fech, vencimento: venc }]); setCartaoModalOpen(false); }
@@ -3528,7 +3544,11 @@
               }))
             ),
             contabTab === "lancamentos" && h(React.Fragment, null,
-              h('h3',null,"Lançamentos Contábeis"),
+              h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
+                h('h3',{style:{margin:0}},"Lançamentos Contábeis"),
+                h('button',{type:'button',className:'action-btn',onClick:sincronizarBaixasFinanceiras,disabled:contabLoading},contabLoading?"Processando...":"Regerar Contabilidade")
+              ),
+              h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},"Gera a contabilização dos pagamentos e recebimentos já baixados que tenham conta contábil vinculada à subcategoria e à conta bancária. Os lançamentos já existentes são preservados."),
               h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:8,alignItems:'end',marginBottom:14}},
                 h('div',{className:'field'},h('label',null,"Data inicial"),h('input',{type:'date',value:contabConsultaIni,onChange:e=>setContabConsultaIni(e.target.value)})),
                 h('div',{className:'field'},h('label',null,"Data final"),h('input',{type:'date',value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})),
