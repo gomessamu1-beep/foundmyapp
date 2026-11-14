@@ -180,6 +180,9 @@
       const [contabValor, setContabValor] = useState("");
       const [contabManualModal, setContabManualModal] = useState(false);
       const [contabManualEditId, setContabManualEditId] = useState("");
+      const [contabManualTipo, setContabManualTipo] = useState("SIMPLES");
+      const [contabManualDebitos, setContabManualDebitos] = useState([{ contaId: "", valor: "" }]);
+      const [contabManualCreditos, setContabManualCreditos] = useState([{ contaId: "", valor: "" }]);
       const [contabSelecionados, setContabSelecionados] = useState([]);
       const [contabRelatorioTipo, setContabRelatorioTipo] = useState("balancete");
       const [contabConsultaIni, setContabConsultaIni] = useState(currentMonth()+"-01");
@@ -1055,41 +1058,56 @@
 
       function limparLancamentoManual() {
         setContabData(currentDate()); setContabHistorico(""); setContabDebitoId(""); setContabCreditoId(""); setContabValor(""); setContabManualEditId("");
+        setContabManualTipo("SIMPLES"); setContabManualDebitos([{contaId:"",valor:""}]); setContabManualCreditos([{contaId:"",valor:""}]);
+      }
+      function ajustarTipoLancamentoManual(tipo) {
+        setContabManualTipo(tipo);
+        setContabManualDebitos(prev => tipo==="UM_DEBITO_VARIOS_CREDITOS" ? [{...(prev[0]||{contaId:"",valor:""})}] : tipo==="SIMPLES" || tipo==="VARIOS_DEBITOS_UM_CREDITO" ? (tipo==="SIMPLES" ? [{...(prev[0]||{contaId:"",valor:""})}] : (prev.length>1?prev:[{...(prev[0]||{contaId:"",valor:""})},{contaId:"",valor:""}])) : (prev.length>1?prev:[{...(prev[0]||{contaId:"",valor:""})},{contaId:"",valor:""}]));
+        setContabManualCreditos(prev => tipo==="VARIOS_DEBITOS_UM_CREDITO" ? [{...(prev[0]||{contaId:"",valor:""})}] : tipo==="SIMPLES" || tipo==="UM_DEBITO_VARIOS_CREDITOS" ? (tipo==="SIMPLES" ? [{...(prev[0]||{contaId:"",valor:""})}] : (prev.length>1?prev:[{...(prev[0]||{contaId:"",valor:""})},{contaId:"",valor:""}])) : (prev.length>1?prev:[{...(prev[0]||{contaId:"",valor:""})},{contaId:"",valor:""}]));
       }
       function abrirNovoLancamentoManual() { limparLancamentoManual(); setContabManualModal(true); }
       async function editarLancamentoManual(l) {
         if (l.origem !== "MANUAL") return alert("Somente lançamentos de origem MANUAL podem ser alterados por aqui.");
         const itens = l.contabilidade_lancamento_itens || [];
-        const deb = itens.find(x => Number(x.debito || 0) > 0), cre = itens.find(x => Number(x.credito || 0) > 0);
-        if (!deb || !cre || Number(deb.debito) !== Number(cre.credito)) return alert("Este lançamento possui partidas diferentes do modelo simples. Não é possível alterá-lo por esta tela.");
+        const debitos = itens.filter(x => Number(x.debito || 0) > 0).map(x=>({contaId:String(x.conta_id),valor:String(Number(x.debito).toFixed(2)).replace(".",",")}));
+        const creditos = itens.filter(x => Number(x.credito || 0) > 0).map(x=>({contaId:String(x.conta_id),valor:String(Number(x.credito).toFixed(2)).replace(".",",")}));
+        if (!debitos.length || !creditos.length) return alert("Este lançamento não possui partidas completas para edição.");
+        const tipo = debitos.length===1 && creditos.length===1 ? "SIMPLES" : debitos.length===1 ? "UM_DEBITO_VARIOS_CREDITOS" : creditos.length===1 ? "VARIOS_DEBITOS_UM_CREDITO" : "VARIOS_DEBITOS_VARIOS_CREDITOS";
         setContabManualEditId(l.id); setContabData(l.data_lancamento || currentDate()); setContabHistorico(l.historico || "");
-        setContabDebitoId(String(deb.conta_id)); setContabCreditoId(String(cre.conta_id)); setContabValor(String(Number(deb.debito).toFixed(2)).replace(".", ",")); setContabManualModal(true);
+        setContabManualTipo(tipo); setContabManualDebitos(debitos); setContabManualCreditos(creditos); setContabManualModal(true);
       }
       async function salvarLancamentoContabil(e) {
         e.preventDefault();
-        const valor = parseValorInput(contabValor);
-        if (!contabData || !contabHistorico.trim() || !contabDebitoId || !contabCreditoId || !(valor > 0)) return alert("Preencha data, histórico, contas de débito/crédito e valor.");
-        if (contabDebitoId === contabCreditoId) return alert("As contas de débito e crédito devem ser diferentes.");
-        const contaD = contabPlano.find(c => String(c.id) === String(contabDebitoId)), contaC = contabPlano.find(c => String(c.id) === String(contabCreditoId));
-        if (!contaD?.aceita_lancamento || !contaC?.aceita_lancamento || contaD.ativa === false || contaC.ativa === false) return alert("Selecione contas analíticas ativas que aceitam lançamentos.");
+        const debitos=contabManualDebitos.map(x=>({contaId:String(x.contaId||""),valor:parseValorInput(x.valor)}));
+        const creditos=contabManualCreditos.map(x=>({contaId:String(x.contaId||""),valor:parseValorInput(x.valor)}));
+        const totalDebito=debitos.reduce((s,x)=>s+x.valor,0), totalCredito=creditos.reduce((s,x)=>s+x.valor,0);
+        if(!contabData || !contabHistorico.trim())return alert("Preencha a data e o histórico do lançamento.");
+        if(!debitos.length || !creditos.length || debitos.some(x=>!x.contaId || !(x.valor>0)) || creditos.some(x=>!x.contaId || !(x.valor>0)))return alert("Informe uma conta analítica e um valor maior que zero para cada partida.");
+        if(Math.abs(totalDebito-totalCredito)>0.005)return alert("Lançamento não balanceado. Total dos débitos: "+formatBRL(totalDebito)+"; total dos créditos: "+formatBRL(totalCredito)+". Os dois totais precisam ser iguais.");
+        const todasContas=[...debitos,...creditos].map(x=>x.contaId);
+        if(new Set(todasContas).size!==todasContas.length && false) return alert("Verifique as contas selecionadas.");
+        const contasInvalidas=todasContas.filter(id=>{const conta=contabPlano.find(c=>String(c.id)===id);return !conta || !conta.aceita_lancamento || conta.tipo!=="ANALITICA" || conta.ativa===false;});
+        if(contasInvalidas.length)return alert("Todas as partidas devem usar contas analíticas ativas que aceitam lançamentos.");
         const uid=session.user.id, historico=contabHistorico.trim();
         let lancamentoId=contabManualEditId;
-        if (lancamentoId) {
-          const {error}=await supabaseClient.from("contabilidade_lancamentos").update({data_lancamento:contabData,competencia:contabData.slice(0,7)+"-01",historico,total_debito:valor,total_credito:valor}).eq("id",lancamentoId).eq("user_id",uid).eq("origem","MANUAL");
+        if(lancamentoId){
+          const {error}=await supabaseClient.from("contabilidade_lancamentos").update({data_lancamento:contabData,competencia:contabData.slice(0,7)+"-01",historico,total_debito:totalDebito,total_credito:totalCredito}).eq("id",lancamentoId).eq("user_id",uid).eq("origem","MANUAL");
           if(error)return alert("Erro ao alterar lançamento: "+error.message);
           const {error:delError}=await supabaseClient.from("contabilidade_lancamento_itens").delete().eq("lancamento_id",lancamentoId).eq("user_id",uid);
           if(delError)return alert("Cabeçalho alterado, mas não foi possível substituir as partidas: "+delError.message);
-        } else {
-          const {data:cab,error}=await supabaseClient.from("contabilidade_lancamentos").insert({user_id:uid,data_lancamento:contabData,competencia:contabData.slice(0,7)+"-01",historico,origem:"MANUAL",status:"EFETIVADO",total_debito:valor,total_credito:valor}).select().single();
+        }else{
+          const {data:cab,error}=await supabaseClient.from("contabilidade_lancamentos").insert({user_id:uid,data_lancamento:contabData,competencia:contabData.slice(0,7)+"-01",historico,origem:"MANUAL",status:"EFETIVADO",total_debito:totalDebito,total_credito:totalCredito}).select().single();
           if(error)return alert("Erro ao salvar lançamento: "+error.message);
           lancamentoId=cab.id;
         }
-        const {error:erroItens}=await supabaseClient.from("contabilidade_lancamento_itens").insert([
-          {user_id:uid,lancamento_id:lancamentoId,conta_id:contabDebitoId,sequencia:1,historico,debito:valor,credito:0},
-          {user_id:uid,lancamento_id:lancamentoId,conta_id:contabCreditoId,sequencia:2,historico,debito:0,credito:valor}
-        ]);
+        const partidas=[
+          ...debitos.map((x,i)=>({user_id:uid,lancamento_id:lancamentoId,conta_id:x.contaId,sequencia:i+1,historico,debito:x.valor,credito:0})),
+          ...creditos.map((x,i)=>({user_id:uid,lancamento_id:lancamentoId,conta_id:x.contaId,sequencia:debitos.length+i+1,historico,debito:0,credito:x.valor}))
+        ];
+        const {error:erroItens}=await supabaseClient.from("contabilidade_lancamento_itens").insert(partidas);
         if(erroItens)return alert("Erro ao gravar partidas: "+erroItens.message);
-        setContabManualModal(false); limparLancamentoManual(); await consultarLancamentosContabeis(); alert(contabManualEditId?"Lançamento manual alterado.":"Lançamento manual incluído.");
+        const estavaEditando=!!contabManualEditId;
+        setContabManualModal(false); limparLancamentoManual(); await consultarLancamentosContabeis(); alert(estavaEditando?"Lançamento manual alterado.":"Lançamento manual incluído.");
       }
       async function excluirLancamentoManual(id) {
         const l=contabLancamentos.find(x=>String(x.id)===String(id));
@@ -3766,18 +3784,49 @@
                 )
               ),
               contabManualModal && h('div',{className:'modal-overlay',style:{zIndex:10090},onMouseDown:e=>{if(e.target===e.currentTarget)setContabManualModal(false);}},
-                h('div',{className:'modal-content',style:{maxWidth:620}},
+                h('div',{className:'modal-content',style:{maxWidth:760,maxHeight:'90vh',overflowY:'auto'}},
                   h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
                     h('h3',{style:{margin:0}},contabManualEditId?"Alterar lançamento manual":"Incluir lançamento manual"),
                     h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualModal(false)},"✕")
                   ),
-                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10}},"Origem: MANUAL • O lançamento será gravado com partidas iguais de débito e crédito."),
-                  h('form',{onSubmit:salvarLancamentoContabil,style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10}},
+                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10}},"Origem: MANUAL • Informe as partidas de débito e crédito. Os totais precisam ser iguais."),
+                  h('form',{onSubmit:salvarLancamentoContabil,style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:10}},
                     h('div',{className:'field'},h('label',null,"Data *"),h('input',{type:'date',value:contabData,onChange:e=>setContabData(e.target.value),required:true})),
-                    h('div',{className:'field'},h('label',null,"Valor *"),h('input',{value:contabValor,onChange:e=>setContabValor(e.target.value),placeholder:"0,00",required:true})),
+                    h('div',{className:'field'},h('label',null,"Tipo de lançamento *"),h('select',{value:contabManualTipo,onChange:e=>ajustarTipoLancamentoManual(e.target.value)},
+                      h('option',{value:"SIMPLES"},"Simples — 1 débito para 1 crédito"),
+                      h('option',{value:"UM_DEBITO_VARIOS_CREDITOS"},"1 débito para vários créditos"),
+                      h('option',{value:"VARIOS_DEBITOS_UM_CREDITO"},"Vários débitos para 1 crédito"),
+                      h('option',{value:"VARIOS_DEBITOS_VARIOS_CREDITOS"},"Vários débitos para vários créditos")
+                    )),
                     h('div',{className:'field',style:{gridColumn:'1/-1'}},h('label',null,"Histórico *"),h('input',{value:contabHistorico,onChange:e=>setContabHistorico(e.target.value),required:true,placeholder:"Descrição do lançamento"})),
-                    h('div',{className:'field'},h('label',null,"Conta de débito *"),h('select',{value:contabDebitoId,onChange:e=>setContabDebitoId(e.target.value),required:true},h('option',{value:""},"Selecione"),contabPlano.filter(x=>x.tipo==="ANALITICA"&&x.ativa!==false).map(x=>h('option',{key:x.id,value:x.id},x.codigo+" - "+x.descricao)))),
-                    h('div',{className:'field'},h('label',null,"Conta de crédito *"),h('select',{value:contabCreditoId,onChange:e=>setContabCreditoId(e.target.value),required:true},h('option',{value:""},"Selecione"),contabPlano.filter(x=>x.tipo==="ANALITICA"&&x.ativa!==false).map(x=>h('option',{key:x.id,value:x.id},x.codigo+" - "+x.descricao)))),
+                    h('div',{style:{gridColumn:'1/-1',display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:14}},
+                      h('div',{style:{border:'1px solid var(--line)',borderRadius:8,padding:10}},
+                        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+                          h('strong',null,"DÉBITOS"),
+                          (contabManualTipo==="VARIOS_DEBITOS_UM_CREDITO"||contabManualTipo==="VARIOS_DEBITOS_VARIOS_CREDITOS")&&h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualDebitos(prev=>[...prev,{contaId:"",valor:""}])},"+ Adicionar débito")
+                        ),
+                        ...contabManualDebitos.map((item,i)=>h('div',{key:"deb-"+i,style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 105px 30px',gap:6,alignItems:'end',marginBottom:8}},
+                          h('div',{className:'field'},h('label',null,"Conta de débito "+(i+1)+" *"),h('select',{value:item.contaId,onChange:e=>setContabManualDebitos(prev=>prev.map((x,j)=>j===i?{...x,contaId:e.target.value}:x)),required:true},h('option',{value:""},"Selecione"),contabPlano.filter(x=>x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento).map(x=>h('option',{key:x.id,value:x.id},x.codigo+" - "+x.descricao)))),
+                          h('div',{className:'field'},h('label',null,"Valor *"),h('input',{value:item.valor,onChange:e=>setContabManualDebitos(prev=>prev.map((x,j)=>j===i?{...x,valor:e.target.value}:x)),placeholder:"0,00",required:true})),
+                          (contabManualTipo==="VARIOS_DEBITOS_UM_CREDITO"||contabManualTipo==="VARIOS_DEBITOS_VARIOS_CREDITOS")&&contabManualDebitos.length>1&&h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualDebitos(prev=>prev.filter((x,j)=>j!==i)),title:"Remover débito"},"×")
+                        ))
+                      ),
+                      h('div',{style:{border:'1px solid var(--line)',borderRadius:8,padding:10}},
+                        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+                          h('strong',null,"CRÉDITOS"),
+                          (contabManualTipo==="UM_DEBITO_VARIOS_CREDITOS"||contabManualTipo==="VARIOS_DEBITOS_VARIOS_CREDITOS")&&h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualCreditos(prev=>[...prev,{contaId:"",valor:""}])},"+ Adicionar crédito")
+                        ),
+                        ...contabManualCreditos.map((item,i)=>h('div',{key:"cre-"+i,style:{display:'grid',gridTemplateColumns:'minmax(0,1fr) 105px 30px',gap:6,alignItems:'end',marginBottom:8}},
+                          h('div',{className:'field'},h('label',null,"Conta de crédito "+(i+1)+" *"),h('select',{value:item.contaId,onChange:e=>setContabManualCreditos(prev=>prev.map((x,j)=>j===i?{...x,contaId:e.target.value}:x)),required:true},h('option',{value:""},"Selecione"),contabPlano.filter(x=>x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento).map(x=>h('option',{key:x.id,value:x.id},x.codigo+" - "+x.descricao)))),
+                          h('div',{className:'field'},h('label',null,"Valor *"),h('input',{value:item.valor,onChange:e=>setContabManualCreditos(prev=>prev.map((x,j)=>j===i?{...x,valor:e.target.value}:x)),placeholder:"0,00",required:true})),
+                          (contabManualTipo==="UM_DEBITO_VARIOS_CREDITOS"||contabManualTipo==="VARIOS_DEBITOS_VARIOS_CREDITOS")&&contabManualCreditos.length>1&&h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualCreditos(prev=>prev.filter((x,j)=>j!==i)),title:"Remover crédito"},"×")
+                        ))
+                      )
+                    ),
+                    h('div',{style:{gridColumn:'1/-1',display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',padding:10,background:'var(--surface-2)',borderRadius:8}},
+                      h('strong',null,"Total de débitos: "+formatBRL(contabManualDebitos.reduce((s,x)=>s+parseValorInput(x.valor),0))),
+                      h('strong',null,"Total de créditos: "+formatBRL(contabManualCreditos.reduce((s,x)=>s+parseValorInput(x.valor),0)))
+                    ),
                     h('div',{style:{gridColumn:'1/-1',display:'flex',justifyContent:'flex-end',gap:8,marginTop:6}},
                       h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualModal(false)},"Cancelar"),
                       h('button',{type:'submit',className:'primary'},contabManualEditId?"Salvar alterações":"Salvar lançamento")
@@ -3785,7 +3834,7 @@
                   )
                 )
               ),
-              contabRegerarModal && h('div',{className:'modal-overlay',style:{zIndex:10060},onMouseDown:e=>{if(e.target===e.currentTarget&&!contabLoading)setContabRegerarModal(false);}},
+                            contabRegerarModal && h('div',{className:'modal-overlay',style:{zIndex:10060},onMouseDown:e=>{if(e.target===e.currentTarget&&!contabLoading)setContabRegerarModal(false);}},
                 h('div',{className:'modal-content',style:{maxWidth:560}},
                   h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,marginBottom:14}},
                     h('h3',{style:{margin:0}},"Regerar Contabilidade"),
