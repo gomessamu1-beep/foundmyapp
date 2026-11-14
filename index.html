@@ -3757,7 +3757,7 @@
                 h("div",{className:"field"},[h("label",null,"Data final"),h("input",{type:"date",value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})]),
                 h("button",{type:"button",className:"primary",onClick:consultarRelatorioContabil},[h(Search,{size:15})," Consultar relatório"]),
                 contabRelatorioExecutado && h("button",{type:"button",className:"action-btn",onClick:()=>exportarContabilidadeExcel("relatorio")},[h(Download,{size:15})," Exportar Excel"])
-              ]),,
+              ]),
               !contabRelatorioExecutado ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Selecione o período e clique em Consultar relatório.") :
               contabRelatorioTipo==="razao" ? h(React.Fragment,null,
                 !contabRazaoContaId ? h("div",null,"Selecione a conta analítica e o período acima para consultar o Razão.") : h("div",{style:{overflowX:"auto"}},h("table",null,[
