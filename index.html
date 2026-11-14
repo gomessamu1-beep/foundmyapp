@@ -184,6 +184,28 @@
       const [contabConsultaExecutada, setContabConsultaExecutada] = useState(false);
       const [contabRelatorioExecutado, setContabRelatorioExecutado] = useState(false);
       const [contabRazaoContaId, setContabRazaoContaId] = useState("");
+      const [contabDreContas, setContabDreContas] = useState(null);
+      const [contabDreConfiguracaoAberta, setContabDreConfiguracaoAberta] = useState(false);
+      function contasElegiveisDRE() {
+        return contabPlano.filter(c => c.tipo === "ANALITICA" && ["RECEITA","DESPESA","RESULTADO"].includes(String(c.natureza || "").toUpperCase()));
+      }
+      function idsContasDREAtivas() {
+        const elegiveis = contasElegiveisDRE();
+        return contabDreContas === null ? elegiveis.map(c => String(c.id)) : contabDreContas.filter(id => elegiveis.some(c => String(c.id) === String(id)));
+      }
+      function abrirConfiguracaoDRE() {
+        if (contabDreContas === null) setContabDreContas(contasElegiveisDRE().map(c => String(c.id)));
+        setContabDreConfiguracaoAberta(true);
+      }
+      function salvarConfiguracaoDRE() {
+        const elegiveis = new Set(contasElegiveisDRE().map(c => String(c.id)));
+        const ids = (contabDreContas || []).filter(id => elegiveis.has(String(id))).map(String);
+        localStorage.setItem("foundmyapp-dre-contas-" + (session?.user?.id || "default"), JSON.stringify(ids));
+        setContabDreContas(ids);
+        setContabDreConfiguracaoAberta(false);
+        setContabRelatorioExecutado(false);
+        alert("Configuração da DRE salva.");
+      }
 
       const [conferenciaFaturas, setConferenciaFaturas] = useState([]);
       const [conferenciaSelecionada, setConferenciaSelecionada] = useState(null);
@@ -861,6 +883,10 @@
           const { data: plano, error: erroPlano } = await supabaseClient.from("contabilidade_plano_contas").select("*").eq("user_id", uidAtual).order("codigo");
           if (erroPlano) throw erroPlano;
           setContabPlano(plano || []);
+          try {
+            const configDRE = localStorage.getItem("foundmyapp-dre-contas-" + uidAtual);
+            setContabDreContas(configDRE === null ? null : JSON.parse(configDRE));
+          } catch (e) { setContabDreContas(null); }
           setContabLancamentos([]); setContabConsultaExecutada(false); setContabRelatorioExecutado(false);
         } catch (e) { console.error("Contabilidade:", e); setContabErro("Não foi possível carregar a contabilidade: " + (e.message || "erro desconhecido")); }
         finally { setContabLoading(false); }
@@ -888,8 +914,9 @@
             });
         } else {
           linhas.push(["Data","Histórico","Código da conta","Conta","Natureza","Débitos","Créditos","Saldo Devedor","Saldo Credor"]);
+          const contasDREPermitidas = new Set(idsContasDREAtivas());
           const natureza = contabRelatorioTipo==="dre"?["RECEITA","DESPESA","RESULTADO"]:contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"]:null;
-          contabPlano.filter(c=>c.tipo==="ANALITICA"&&(!natureza||natureza.includes(c.natureza))).forEach(c=>{
+          contabPlano.filter(c=>c.tipo==="ANALITICA"&&(!natureza||natureza.includes(c.natureza))&&(contabRelatorioTipo!=="dre"||contasDREPermitidas.has(String(c.id)))).forEach(c=>{
             const itens=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>it.conta_id===c.id);
             const d=itens.reduce((a,it)=>a+Number(it.debito||0),0), cr=itens.reduce((a,it)=>a+Number(it.credito||0),0);
             linhas.push(["", "", c.codigo,c.descricao,c.natureza,d,cr,Math.max(0,d-cr),Math.max(0,cr-d)]);
@@ -3682,7 +3709,33 @@
                 h("button",{type:"button",className:"primary",onClick:consultarRelatorioContabil},[h(Search,{size:15})," Consultar relatório"]),
                 contabRelatorioExecutado && h("button",{type:"button",className:"action-btn",onClick:()=>exportarContabilidadeExcel("relatorio")},[h(Download,{size:15})," Exportar Excel"])
               ]),
-              h("div",{className:"sub-nav",style:{marginBottom:12}},["balancete","dre","balanco","razao"].map(tipo=>h("button",{key:tipo,className:contabRelatorioTipo===tipo?"active":"",onClick:()=>setContabRelatorioTipo(tipo)},tipo==="balanco"?"Balanço Patrimonial":tipo.toUpperCase()))),
+              h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:12}},
+                h("div",{className:"sub-nav",style:{marginBottom:0}},["balancete","dre","balanco","razao"].map(tipo=>h("button",{key:tipo,className:contabRelatorioTipo===tipo?"active":"",onClick:()=>setContabRelatorioTipo(tipo)},tipo==="balanco"?"Balanço Patrimonial":tipo.toUpperCase()))),
+                contabRelatorioTipo==="dre" && h("button",{type:"button",className:"action-btn",onClick:abrirConfiguracaoDRE},"⚙ Configurar contas da DRE")
+              ),
+              contabDreConfiguracaoAberta && h("div",{className:"modal-overlay",style:{zIndex:10070},onMouseDown:e=>{if(e.target===e.currentTarget)setContabDreConfiguracaoAberta(false);}},
+                h("div",{className:"modal-content",style:{maxWidth:560}},
+                  h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:8}},
+                    h("h3",{style:{margin:0}},"Configuração da DRE"),
+                    h("button",{type:"button",className:"action-btn",onClick:()=>setContabDreConfiguracaoAberta(false)},"✕")
+                  ),
+                  h("p",{style:{fontSize:13,color:"var(--ink-soft)",margin:"0 0 12px"}},"Marque somente as contas que devem compor a Demonstração do Resultado. Contas de Ativo, Passivo e Patrimônio Líquido não podem ser selecionadas."),
+                  h("div",{style:{border:"1px solid var(--line)",borderRadius:6,padding:8,maxHeight:360,overflowY:"auto"}},
+                    contasElegiveisDRE().length===0 ? h("div",{style:{padding:12,color:"var(--ink-soft)"}},"Cadastre contas analíticas de Receita, Despesa ou Resultado no Plano de Contas.") :
+                    contasElegiveisDRE().map(c=>h("label",{key:c.id,style:{display:"flex",alignItems:"center",gap:9,padding:"7px 3px",borderBottom:"1px solid var(--line)"}},
+                      h("input",{type:"checkbox",checked:idsContasDREAtivas().includes(String(c.id)),onChange:e=>setContabDreContas(prev=>{const atual=prev===null?contasElegiveisDRE().map(x=>String(x.id)):prev;return e.target.checked?[...atual.filter(id=>String(id)!==String(c.id)),String(c.id)]:atual.filter(id=>String(id)!==String(c.id));}),style:{width:16}}),
+                      h("span",null,h("strong",null,c.codigo+" - "),c.descricao,h("small",{style:{display:"block",color:"var(--ink-soft)",fontSize:11}},c.natureza))
+                    ))
+                  ),
+                  h("div",{style:{display:"flex",justifyContent:"space-between",gap:8,marginTop:14,flexWrap:"wrap"}},
+                    h("button",{type:"button",className:"action-btn",onClick:()=>setContabDreContas(contasElegiveisDRE().map(c=>String(c.id)))},"Selecionar todas"),
+                    h("div",{style:{display:"flex",gap:8}},
+                      h("button",{type:"button",className:"action-btn",onClick:()=>setContabDreConfiguracaoAberta(false)},"Cancelar"),
+                      h("button",{type:"button",className:"primary",onClick:salvarConfiguracaoDRE},"Salvar configuração")
+                    )
+                  )
+                )
+              ),
               !contabRelatorioExecutado ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Selecione o período e clique em Consultar relatório.") :
               contabRelatorioTipo==="razao" ? h(React.Fragment,null,
                 h("div",{className:"field",style:{maxWidth:420,marginBottom:12}},[h("label",null,"Conta analítica"),h("select",{value:contabRazaoContaId,onChange:e=>setContabRazaoContaId(e.target.value)},[h("option",{value:""},"Selecione uma conta"),...contabPlano.filter(c=>c.tipo==="ANALITICA").map(c=>h("option",{key:c.id,value:c.id},c.codigo+" - "+c.descricao))])]),
@@ -3694,7 +3747,7 @@
                 h("h3",null,contabRelatorioTipo==="dre"?"Demonstração do Resultado (DRE)":contabRelatorioTipo==="balanco"?"Balanço Patrimonial":"Balancete de Verificação"),
                 h("table",null,[
                   h("thead",null,h("tr",null,["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"].map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
-                  h("tbody",null,contabPlano.filter(c=>c.tipo==="ANALITICA"&&(contabRelatorioTipo==="dre"?["RECEITA","DESPESA","RESULTADO"].includes(c.natureza):contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"].includes(c.natureza):true)).map(c=>{const ps=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=ps.reduce((a,i)=>a+Number(i.debito||0),0);const cr=ps.reduce((a,i)=>a+Number(i.credito||0),0);return h("tr",{key:c.id},[h("td",null,c.codigo),h("td",null,c.descricao),h("td",{className:"right num"},formatBRL(d)),h("td",{className:"right num"},formatBRL(cr)),h("td",{className:"right num"},formatBRL(Math.max(0,d-cr))),h("td",{className:"right num"},formatBRL(Math.max(0,cr-d)))]);})),
+                  h("tbody",null,contabPlano.filter(c=>c.tipo==="ANALITICA"&&(contabRelatorioTipo==="dre"?idsContasDREAtivas().includes(String(c.id)):contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"].includes(c.natureza):true)).map(c=>{const ps=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=ps.reduce((a,i)=>a+Number(i.debito||0),0);const cr=ps.reduce((a,i)=>a+Number(i.credito||0),0);return h("tr",{key:c.id},[h("td",null,c.codigo),h("td",null,c.descricao),h("td",{className:"right num"},formatBRL(d)),h("td",{className:"right num"},formatBRL(cr)),h("td",{className:"right num"},formatBRL(Math.max(0,d-cr))),h("td",{className:"right num"},formatBRL(Math.max(0,cr-d)))]);})),
                   h("tfoot",null,h("tr",{style:{fontWeight:700}},[h("td",{colSpan:2},"Totais"),...["debito","credito"].map(k=>h("td",{className:"right num",key:k},formatBRL(contabLancamentos.reduce((a,l)=>a+Number(l["total_"+k]||0),0)))),h("td",{colSpan:2})]))
                 ])
               ])
