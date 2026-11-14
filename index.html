@@ -178,6 +178,9 @@
       const [contabDebitoId, setContabDebitoId] = useState("");
       const [contabCreditoId, setContabCreditoId] = useState("");
       const [contabValor, setContabValor] = useState("");
+      const [contabManualModal, setContabManualModal] = useState(false);
+      const [contabManualEditId, setContabManualEditId] = useState("");
+      const [contabSelecionados, setContabSelecionados] = useState([]);
       const [contabRelatorioTipo, setContabRelatorioTipo] = useState("balancete");
       const [contabConsultaIni, setContabConsultaIni] = useState(currentMonth()+"-01");
       const [contabConsultaFim, setContabConsultaFim] = useState(currentDate());
@@ -1050,21 +1053,65 @@
         await carregarContabilidade();
       }
 
+      function limparLancamentoManual() {
+        setContabData(currentDate()); setContabHistorico(""); setContabDebitoId(""); setContabCreditoId(""); setContabValor(""); setContabManualEditId("");
+      }
+      function abrirNovoLancamentoManual() { limparLancamentoManual(); setContabManualModal(true); }
+      async function editarLancamentoManual(l) {
+        if (l.origem !== "MANUAL") return alert("Somente lançamentos de origem MANUAL podem ser alterados por aqui.");
+        const itens = l.contabilidade_lancamento_itens || [];
+        const deb = itens.find(x => Number(x.debito || 0) > 0), cre = itens.find(x => Number(x.credito || 0) > 0);
+        if (!deb || !cre || Number(deb.debito) !== Number(cre.credito)) return alert("Este lançamento possui partidas diferentes do modelo simples. Não é possível alterá-lo por esta tela.");
+        setContabManualEditId(l.id); setContabData(l.data_lancamento || currentDate()); setContabHistorico(l.historico || "");
+        setContabDebitoId(String(deb.conta_id)); setContabCreditoId(String(cre.conta_id)); setContabValor(String(Number(deb.debito).toFixed(2)).replace(".", ",")); setContabManualModal(true);
+      }
       async function salvarLancamentoContabil(e) {
         e.preventDefault();
         const valor = parseValorInput(contabValor);
         if (!contabData || !contabHistorico.trim() || !contabDebitoId || !contabCreditoId || !(valor > 0)) return alert("Preencha data, histórico, contas de débito/crédito e valor.");
         if (contabDebitoId === contabCreditoId) return alert("As contas de débito e crédito devem ser diferentes.");
-        const contaD = contabPlano.find(c => c.id === contabDebitoId), contaC = contabPlano.find(c => c.id === contabCreditoId);
-        if (!contaD?.aceita_lancamento || !contaC?.aceita_lancamento) return alert("Selecione contas analíticas que aceitam lançamentos.");
-        const { data: cab, error } = await supabaseClient.from("contabilidade_lancamentos").insert({ user_id: session.user.id, data_lancamento: contabData, competencia: contabData.slice(0,7)+"-01", historico: contabHistorico.trim(), origem: "MANUAL", status: "EFETIVADO", total_debito: valor, total_credito: valor }).select().single();
-        if (error) return alert("Erro ao salvar lançamento: " + error.message);
-        const { error: erroItens } = await supabaseClient.from("contabilidade_lancamento_itens").insert([
-          { user_id: session.user.id, lancamento_id: cab.id, conta_id: contabDebitoId, sequencia: 1, historico: contabHistorico.trim(), debito: valor, credito: 0 },
-          { user_id: session.user.id, lancamento_id: cab.id, conta_id: contabCreditoId, sequencia: 2, historico: contabHistorico.trim(), debito: 0, credito: valor }
+        const contaD = contabPlano.find(c => String(c.id) === String(contabDebitoId)), contaC = contabPlano.find(c => String(c.id) === String(contabCreditoId));
+        if (!contaD?.aceita_lancamento || !contaC?.aceita_lancamento || contaD.ativa === false || contaC.ativa === false) return alert("Selecione contas analíticas ativas que aceitam lançamentos.");
+        const uid=session.user.id, historico=contabHistorico.trim();
+        let lancamentoId=contabManualEditId;
+        if (lancamentoId) {
+          const {error}=await supabaseClient.from("contabilidade_lancamentos").update({data_lancamento:contabData,competencia:contabData.slice(0,7)+"-01",historico,total_debito:valor,total_credito:valor}).eq("id",lancamentoId).eq("user_id",uid).eq("origem","MANUAL");
+          if(error)return alert("Erro ao alterar lançamento: "+error.message);
+          const {error:delError}=await supabaseClient.from("contabilidade_lancamento_itens").delete().eq("lancamento_id",lancamentoId).eq("user_id",uid);
+          if(delError)return alert("Cabeçalho alterado, mas não foi possível substituir as partidas: "+delError.message);
+        } else {
+          const {data:cab,error}=await supabaseClient.from("contabilidade_lancamentos").insert({user_id:uid,data_lancamento:contabData,competencia:contabData.slice(0,7)+"-01",historico,origem:"MANUAL",status:"EFETIVADO",total_debito:valor,total_credito:valor}).select().single();
+          if(error)return alert("Erro ao salvar lançamento: "+error.message);
+          lancamentoId=cab.id;
+        }
+        const {error:erroItens}=await supabaseClient.from("contabilidade_lancamento_itens").insert([
+          {user_id:uid,lancamento_id:lancamentoId,conta_id:contabDebitoId,sequencia:1,historico,debito:valor,credito:0},
+          {user_id:uid,lancamento_id:lancamentoId,conta_id:contabCreditoId,sequencia:2,historico,debito:0,credito:valor}
         ]);
-        if (erroItens) { await supabaseClient.from("contabilidade_lancamentos").delete().eq("id", cab.id).eq("user_id", session.user.id); return alert("Erro ao gravar partidas: " + erroItens.message); }
-        setContabHistorico(""); setContabValor(""); setContabDebitoId(""); setContabCreditoId(""); await carregarContabilidade();
+        if(erroItens)return alert("Erro ao gravar partidas: "+erroItens.message);
+        setContabManualModal(false); limparLancamentoManual(); await consultarLancamentosContabeis(); alert(contabManualEditId?"Lançamento manual alterado.":"Lançamento manual incluído.");
+      }
+      async function excluirLancamentoManual(id) {
+        const l=contabLancamentos.find(x=>String(x.id)===String(id));
+        if(!l || l.origem!=="MANUAL")return alert("Somente lançamentos MANUAL podem ser excluídos por aqui.");
+        if(!confirm("Confirma excluir este lançamento contábil manual e todas as suas partidas?"))return;
+        const {error:itErr}=await supabaseClient.from("contabilidade_lancamento_itens").delete().eq("lancamento_id",id).eq("user_id",session.user.id);
+        if(itErr)return alert("Erro ao excluir partidas: "+itErr.message);
+        const {error}=await supabaseClient.from("contabilidade_lancamentos").delete().eq("id",id).eq("user_id",session.user.id).eq("origem","MANUAL");
+        if(error)return alert("Erro ao excluir lançamento: "+error.message);
+        setContabSelecionados(prev=>prev.filter(x=>String(x)!==String(id))); await consultarLancamentosContabeis();
+      }
+      async function excluirSelecionadosManuais() {
+        const ids=contabSelecionados.filter(id=>contabLancamentos.some(l=>String(l.id)===String(id)&&l.origem==="MANUAL"));
+        if(!ids.length)return alert("Selecione ao menos um lançamento de origem MANUAL.");
+        if(!confirm("Confirma excluir "+ids.length+" lançamento(s) manual(is) selecionado(s)?"))return;
+        for(const id of ids){
+          const {error:ie}=await supabaseClient.from("contabilidade_lancamento_itens").delete().eq("lancamento_id",id).eq("user_id",session.user.id);
+          if(ie)return alert("Erro ao excluir partidas: "+ie.message);
+          const {error}=await supabaseClient.from("contabilidade_lancamentos").delete().eq("id",id).eq("user_id",session.user.id).eq("origem","MANUAL");
+          if(error)return alert("Erro ao excluir lançamento: "+error.message);
+        }
+        setContabSelecionados([]); await consultarLancamentosContabeis(); alert("Lançamentos manuais selecionados excluídos.");
       }
 
       function abrirModalRegerarContabilidade() {
@@ -3713,7 +3760,30 @@
             contabTab === "lancamentos" && h(React.Fragment, null,
               h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
                 h('h3',{style:{margin:0}},"Lançamentos Contábeis"),
-                h('button',{type:'button',className:'action-btn',onClick:abrirModalRegerarContabilidade,disabled:contabLoading},contabLoading?"Processando...":"Regerar Contabilidade")
+                h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+                  h('button',{type:'button',className:'primary',onClick:abrirNovoLancamentoManual},h(Plus,{size:15})," Incluir lançamento"),
+                  h('button',{type:'button',className:'action-btn',onClick:abrirModalRegerarContabilidade,disabled:contabLoading},contabLoading?"Processando...":"Regerar Contabilidade")
+                )
+              ),
+              contabManualModal && h('div',{className:'modal-overlay',style:{zIndex:10090},onMouseDown:e=>{if(e.target===e.currentTarget)setContabManualModal(false);}},
+                h('div',{className:'modal-content',style:{maxWidth:620}},
+                  h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+                    h('h3',{style:{margin:0}},contabManualEditId?"Alterar lançamento manual":"Incluir lançamento manual"),
+                    h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualModal(false)},"✕")
+                  ),
+                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10}},"Origem: MANUAL • O lançamento será gravado com partidas iguais de débito e crédito."),
+                  h('form',{onSubmit:salvarLancamentoContabil,style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:10}},
+                    h('div',{className:'field'},h('label',null,"Data *"),h('input',{type:'date',value:contabData,onChange:e=>setContabData(e.target.value),required:true})),
+                    h('div',{className:'field'},h('label',null,"Valor *"),h('input',{value:contabValor,onChange:e=>setContabValor(e.target.value),placeholder:"0,00",required:true})),
+                    h('div',{className:'field',style:{gridColumn:'1/-1'}},h('label',null,"Histórico *"),h('input',{value:contabHistorico,onChange:e=>setContabHistorico(e.target.value),required:true,placeholder:"Descrição do lançamento"})),
+                    h('div',{className:'field'},h('label',null,"Conta de débito *"),h('select',{value:contabDebitoId,onChange:e=>setContabDebitoId(e.target.value),required:true},h('option',{value:""},"Selecione"),contabPlano.filter(x=>x.tipo==="ANALITICA"&&x.ativa!==false).map(x=>h('option',{key:x.id,value:x.id},x.codigo+" - "+x.descricao)))),
+                    h('div',{className:'field'},h('label',null,"Conta de crédito *"),h('select',{value:contabCreditoId,onChange:e=>setContabCreditoId(e.target.value),required:true},h('option',{value:""},"Selecione"),contabPlano.filter(x=>x.tipo==="ANALITICA"&&x.ativa!==false).map(x=>h('option',{key:x.id,value:x.id},x.codigo+" - "+x.descricao)))),
+                    h('div',{style:{gridColumn:'1/-1',display:'flex',justifyContent:'flex-end',gap:8,marginTop:6}},
+                      h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualModal(false)},"Cancelar"),
+                      h('button',{type:'submit',className:'primary'},contabManualEditId?"Salvar alterações":"Salvar lançamento")
+                    )
+                  )
+                )
               ),
               contabRegerarModal && h('div',{className:'modal-overlay',style:{zIndex:10060},onMouseDown:e=>{if(e.target===e.currentTarget&&!contabLoading)setContabRegerarModal(false);}},
                 h('div',{className:'modal-content',style:{maxWidth:560}},
@@ -3727,35 +3797,36 @@
                   ),
                   h('div',{style:{fontWeight:700,marginBottom:8}},"Categorias"),
                   h('label',{style:{display:'flex',alignItems:'center',gap:8,padding:'8px 0',fontWeight:700}},
-                    h('input',{type:'checkbox',checked:contabRegerarTodasCategorias,onChange:e=>{setContabRegerarTodasCategorias(e.target.checked);if(e.target.checked)setContabRegerarCategorias([]);},style:{width:16}}),
-                    "Todas as categorias"
-                  ),
-                  !contabRegerarTodasCategorias && h('div',{style:{border:'1px solid var(--line)',borderRadius:6,padding:8,maxHeight:240,overflowY:'auto'}},
-                    categorias.map(cat=>h('label',{key:cat.id,style:{display:'flex',alignItems:'center',gap:8,padding:'6px 2px',borderBottom:'1px solid var(--line)',fontWeight:500}},
-                      h('input',{type:'checkbox',checked:contabRegerarCategorias.includes(String(cat.id)),onChange:e=>setContabRegerarCategorias(prev=>e.target.checked?[...prev,String(cat.id)]:prev.filter(id=>id!==String(cat.id))),style:{width:16}}),
-                      cat.nome || cat.descricao || "Categoria sem nome"
-                    ))
-                  ),
-                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:10}},"Serão considerados pagamentos e recebimentos baixados dentro do período, conforme a data da baixa. Ao escolher uma categoria, entram também suas subcategorias. Lançamentos contábeis já existentes não serão duplicados nem substituídos."),
+                    h('input',{type:'checkbox',checked:contabRegerarTodasCategorias,onChange:e=>{setContabRegerarTodasCategorias(e.target.checked);if(e.target.checked)setContabRegerarCategorias([]);},style:{width:16}}),"Todas as categorias"),
+                  !contabRegerarTodasCategorias && h('div',{style:{border:'1px solid var(--line)',borderRadius:6,padding:8,maxHeight:240,overflowY:'auto'}},categorias.map(cat=>h('label',{key:cat.id,style:{display:'flex',alignItems:'center',gap:8,padding:'6px 2px',borderBottom:'1px solid var(--line)',fontWeight:500}},h('input',{type:'checkbox',checked:contabRegerarCategorias.includes(String(cat.id)),onChange:e=>setContabRegerarCategorias(prev=>e.target.checked?[...prev,String(cat.id)]:prev.filter(id=>id!==String(cat.id)),style:{width:16}}),cat.nome||cat.descricao||"Categoria sem nome"))),
+                  h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:10}},"Serão considerados pagamentos e recebimentos baixados dentro do período. Lançamentos já existentes não serão duplicados nem substituídos."),
                   h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:16}},
                     h('button',{type:'button',className:'action-btn',onClick:()=>setContabRegerarModal(false),disabled:contabLoading},"Cancelar"),
                     h('button',{type:'button',className:'primary',onClick:sincronizarBaixasFinanceiras,disabled:contabLoading},contabLoading?"Processando...":"Confirmar e regerar")
                   )
                 )
               ),
-              h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},"Gera a contabilização dos pagamentos e recebimentos já baixados que tenham conta contábil vinculada à subcategoria e à conta bancária. Os lançamentos já existentes são preservados."),
-              h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:8,alignItems:'end',marginBottom:14}},
+              h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},"Lançamentos de origem MANUAL podem ser incluídos, alterados ou excluídos. Os demais são gerados pelos módulos de origem e ficam protegidos contra alteração manual."),
+              h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:8,alignItems:'end',marginBottom:10}},
                 h('div',{className:'field'},h('label',null,"Data inicial"),h('input',{type:'date',value:contabConsultaIni,onChange:e=>setContabConsultaIni(e.target.value)})),
                 h('div',{className:'field'},h('label',null,"Data final"),h('input',{type:'date',value:contabConsultaFim,onChange:e=>setContabConsultaFim(e.target.value)})),
                 h('button',{type:'button',className:'primary',onClick:consultarLancamentosContabeis},h(Search,{size:15})," Consultar"),
                 contabConsultaExecutada && h('button',{type:'button',className:'action-btn',onClick:()=>exportarContabilidadeExcel("lancamentos")},h(Download,{size:15})," Exportar Excel")
               ),
+              contabConsultaExecutada && contabLancamentos.some(l=>l.origem==="MANUAL") && h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}},
+                h('label',{style:{display:'flex',alignItems:'center',gap:7}},h('input',{type:'checkbox',checked:contabLancamentos.filter(l=>l.origem==="MANUAL").length>0&&contabLancamentos.filter(l=>l.origem==="MANUAL").every(l=>contabSelecionados.includes(String(l.id))),onChange:e=>setContabSelecionados(e.target.checked?contabLancamentos.filter(l=>l.origem==="MANUAL").map(l=>String(l.id)):[])})," Selecionar todos os manuais"),
+                h('button',{type:'button',className:'action-btn',onClick:excluirSelecionadosManuais,disabled:!contabSelecionados.length},"Excluir selecionados ("+contabSelecionados.length+")")
+              ),
               !contabConsultaExecutada ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Informe o período e clique em Consultar para visualizar os lançamentos.") :
-              h("div",{className:"list-vertical"},contabLancamentos.length===0 ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum lançamento encontrado no período consultado.") : contabLancamentos.map(l=>h("div",{className:"list-item",key:l.id},h("div",{className:"list-item-main"},[
+              h("div",{className:"list-vertical"},contabLancamentos.length===0 ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum lançamento encontrado no período consultado.") : contabLancamentos.map(l=>h("div",{className:"list-item",key:l.id,style:{alignItems:'flex-start'}},h("div",{className:"list-item-main"},[
+                l.origem==="MANUAL"&&h('label',{style:{display:'inline-flex',alignItems:'center',gap:6,marginRight:8,fontSize:12}},h('input',{type:'checkbox',checked:contabSelecionados.includes(String(l.id)),onChange:e=>setContabSelecionados(prev=>e.target.checked?[...prev,String(l.id)]:prev.filter(id=>String(id)!==String(l.id)))}),"Selecionar"),
                 h("div",{style:{fontWeight:650}},formatDateBR(l.data_lancamento)+" • "+l.historico),
-                h("div",{style:{fontSize:12,color:"var(--ink-soft)"}},(l.origem || "SEM ORIGEM")+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0))),
+                h("div",{style:{fontSize:12,color:"var(--ink-soft)"}},(l.origem||"SEM ORIGEM")+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0))),
                 h("div",{style:{fontSize:12,marginTop:5}},(l.contabilidade_lancamento_itens||[]).map(it=>{const cc=contabPlano.find(c=>c.id===it.conta_id);return (cc?.codigo||"")+" "+(cc?.descricao||"")+" — D "+formatBRL(Number(it.debito||0))+" / C "+formatBRL(Number(it.credito||0));}).join(" | "))
-              ]))))
+              ]),l.origem==="MANUAL"&&h('div',{style:{display:'flex',gap:6,flexShrink:0}},
+                h('button',{type:'button',className:'action-btn',onClick:()=>editarLancamentoManual(l),title:'Alterar lançamento'},h(Edit,{size:15})," Alterar"),
+                h('button',{type:'button',className:'action-btn',onClick:()=>excluirLancamentoManual(l.id),title:'Excluir lançamento'},h(Trash2,{size:15})," Excluir")
+              ))))
             ),
             contabTab === "relatorios" && h(React.Fragment, null,
               h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:12}},
