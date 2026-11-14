@@ -1085,7 +1085,6 @@
         if(!debitos.length || !creditos.length || debitos.some(x=>!x.contaId || !(x.valor>0)) || creditos.some(x=>!x.contaId || !(x.valor>0)))return alert("Informe uma conta analítica e um valor maior que zero para cada partida.");
         if(Math.abs(totalDebito-totalCredito)>0.005)return alert("Lançamento não balanceado. Total dos débitos: "+formatBRL(totalDebito)+"; total dos créditos: "+formatBRL(totalCredito)+". Os dois totais precisam ser iguais.");
         const todasContas=[...debitos,...creditos].map(x=>x.contaId);
-        if(new Set(todasContas).size!==todasContas.length && false) return alert("Verifique as contas selecionadas.");
         const contasInvalidas=todasContas.filter(id=>{const conta=contabPlano.find(c=>String(c.id)===id);return !conta || !conta.aceita_lancamento || conta.tipo!=="ANALITICA" || conta.ativa===false;});
         if(contasInvalidas.length)return alert("Todas as partidas devem usar contas analíticas ativas que aceitam lançamentos.");
         const uid=session.user.id, historico=contabHistorico.trim();
