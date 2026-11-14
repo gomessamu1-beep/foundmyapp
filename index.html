@@ -1075,10 +1075,11 @@
         setContabRegerarModal(true);
       }
 
-      async function sincronizarCompraFaturaContabil(compra, avisar = true) {
+      async function sincronizarCompraFaturaContabil(compra, avisar = true, categoriasFonte = categorias) {
         if (!compra || !session?.user?.id || !supabaseClient) return false;
         const cartao = (cartoes || []).find(c => String(c.id) === String(compra.cartaoId));
-        const sub = getSubcategoria(compra.categoriaId, compra.subcategoriaId);
+        const categoria = (categoriasFonte || []).find(c => String(c.id) === String(compra.categoriaId));
+        const sub = (categoria?.subcategorias || []).find(x => String(x.id) === String(compra.subcategoriaId));
         const contaDebito = (contabPlano || []).find(c => String(c.id) === String(sub?.contaContabilId) && c.tipo === "ANALITICA" && c.ativa !== false);
         const contaCredito = (contabPlano || []).find(c => String(c.id) === String(cartao?.contaContabilId) && c.tipo === "ANALITICA" && c.ativa !== false);
         const valor = Number(compra.total || 0);
@@ -2572,6 +2573,10 @@
             diasFechados,
             mesesFechados
           );
+          novasFaturas.forEach(compra => {
+            sincronizarCompraFaturaContabil(compra, false, categoriasImportadas)
+              .catch(e => console.error("Contabilidade da fatura importada por planilha:", e));
+          });
 
           const totalImportado = planilhaPreview.length;
           const totalFaturas = novasFaturas.length;
