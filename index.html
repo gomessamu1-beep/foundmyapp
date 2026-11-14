@@ -3581,6 +3581,9 @@
                   h('button', { type: 'button', className: 'primary', onClick: salvarMascaraContabil }, "Salvar máscara")
                 )
               ),
+              h('div',{style:{display:'flex',justifyContent:'flex-end',marginBottom:12}},
+                h('button',{type:'button',className:'primary',onClick:abrirNovaContaContabil},h(Plus,{size:16})," Incluir nova conta")
+              ),
               h('div',{style:{position:'fixed',right:24,bottom:24,zIndex:10000}},
                 h('button',{type:'button',className:'primary',onClick:abrirNovaContaContabil,style:{display:'flex',alignItems:'center',gap:8,padding:'12px 18px',borderRadius:999,boxShadow:'0 6px 20px rgba(15,23,42,.28)',whiteSpace:'nowrap'}},h(Plus,{size:18})," Incluir nova conta")
               ),
