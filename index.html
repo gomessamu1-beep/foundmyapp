@@ -4006,7 +4006,7 @@
               ) : h("div",{style:{overflowX:"auto"}},[
                 h("h3",null,contabRelatorioTipo==="dre"?"Demonstração do Resultado (DRE)":contabRelatorioTipo==="balanco"?"Balanço Patrimonial":"Balancete de Verificação"),
                 h("table",null,[
-                  h("thead",null,h("tr",null,(contabRelatorioTipo==="balancete"?["Código","Conta","Saldo Inicial","Débito","Créditos","Saldo Final"]:["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"]).map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
+                  h("thead",null,h("tr",null,(contabRelatorioTipo==="balancete"?["Código","Conta","Saldo Inicial","Débito","Crédito","Saldo Final"]:["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"]).map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
                   h("tbody",null,contabRelatorioTipo==="balancete" ? (()=>{
                     const lancamentosDaConta = (lista, contaId) => (lista||[]).flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>String(it.conta_id)===String(contaId));
                     const descendentes = (conta) => {
