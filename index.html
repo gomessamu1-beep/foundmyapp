@@ -186,8 +186,7 @@
       const contabManualSalvandoRef = useRef(false);
       const [contabManualEditId, setContabManualEditId] = useState("");
       const [contabManualTipo, setContabManualTipo] = useState("SIMPLES");
-      const [contabManualDebitos, setContabManualDebitos] = useState([{ contaId: "", valor: "" }]);
-      const [contabManualCreditos, setContabManualCreditos] = useState([{ contaId: "", valor: "" }]);
+      const [contabManualLinhas, setContabManualLinhas] = useState([{ contaId: "", debito: "", credito: "", historico: "" }]);
       const [contabManualBuscaContas, setContabManualBuscaContas] = useState({});
       const [contabSelecionados, setContabSelecionados] = useState([]);
       const [contabRelatorioTipo, setContabRelatorioTipo] = useState("balancete");
@@ -482,14 +481,10 @@
         if (contaContabilPicker.destino === "edicao") {
           setEditSubcategoriaModal(prev => ({ ...prev, contaContabilId: contaId || "" }));
           setEditSubcategoriaContaBusca("");
-        } else if (contaContabilPicker.destino === "manual-debito") {
+        } else if (contaContabilPicker.destino === "manual-debito" || contaContabilPicker.destino === "manual-credito") {
           const i = Number(contaContabilPicker.catId);
-          setContabManualDebitos(prev => prev.map((x,j) => j === i ? { ...x, contaId: String(contaId || "") } : x));
+          setContabManualLinhas(prev => prev.map((x,j) => j === i ? { ...x, contaId: String(contaId || "") } : x));
           setContabManualBuscaContas(prev => ({ ...prev, ["deb-" + i]: "" }));
-        } else if (contaContabilPicker.destino === "manual-credito") {
-          const i = Number(contaContabilPicker.catId);
-          setContabManualCreditos(prev => prev.map((x,j) => j === i ? { ...x, contaId: String(contaId || "") } : x));
-          setContabManualBuscaContas(prev => ({ ...prev, ["cre-" + i]: "" }));
         } else setSubContaInputs(prev => ({ ...prev, [contaContabilPicker.catId]: contaId || "" }));
         setContaContabilPicker({ open: false, destino: "nova", catId: null, busca: "" });
       }
@@ -1110,30 +1105,35 @@
 
       function limparLancamentoManual() {
         setContabData(currentDate()); setContabHistorico(""); setContabDebitoId(""); setContabCreditoId(""); setContabValor(""); setContabManualEditId("");
-        setContabManualTipo("SIMPLES"); setContabManualDebitos([{contaId:"",valor:"",historico:""}]); setContabManualCreditos([{contaId:"",valor:"",historico:""}]);
+        setContabManualTipo("SIMPLES"); setContabManualLinhas([{contaId:"",debito:"",credito:"",historico:""}]);
       }
-      function ajustarTipoLancamentoManual(tipo) {
-        setContabManualTipo(tipo);
-        setContabManualDebitos(prev => tipo==="UM_DEBITO_VARIOS_CREDITOS" ? [{...(prev[0]||{contaId:"",valor:""})}] : tipo==="SIMPLES" || tipo==="VARIOS_DEBITOS_UM_CREDITO" ? (tipo==="SIMPLES" ? [{...(prev[0]||{contaId:"",valor:""})}] : (prev.length>1?prev:[{...(prev[0]||{contaId:"",valor:""})},{contaId:"",valor:""}])) : (prev.length>1?prev:[{...(prev[0]||{contaId:"",valor:""})},{contaId:"",valor:""}]));
-        setContabManualCreditos(prev => tipo==="VARIOS_DEBITOS_UM_CREDITO" ? [{...(prev[0]||{contaId:"",valor:""})}] : tipo==="SIMPLES" || tipo==="UM_DEBITO_VARIOS_CREDITOS" ? (tipo==="SIMPLES" ? [{...(prev[0]||{contaId:"",valor:""})}] : (prev.length>1?prev:[{...(prev[0]||{contaId:"",valor:""})},{contaId:"",valor:""}])) : (prev.length>1?prev:[{...(prev[0]||{contaId:"",valor:""})},{contaId:"",valor:""}]));
-      }
-      function renderLinhaPartidaManual(lado,item,i) {
-        const debito=lado==="deb", rows=debito?contabManualDebitos:contabManualCreditos, setRows=debito?setContabManualDebitos:setContabManualCreditos;
-        const chave=(debito?"deb-":"cre-")+i, busca=contabManualBuscaContas[chave]||"", termo=busca.trim().toLocaleLowerCase("pt-BR");
+      function ajustarTipoLancamentoManual(tipo) { setContabManualTipo(tipo); }
+      function renderLinhaPartidaManual(item,i) {
+        const chave="deb-"+i, busca=contabManualBuscaContas[chave]||"", termo=busca.trim().toLocaleLowerCase("pt-BR");
         const contas=contabPlano.filter(x=>x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false&&(String(x.codigo||"").toLocaleLowerCase("pt-BR").includes(termo)||String(x.descricao||"").toLocaleLowerCase("pt-BR").includes(termo)));
-        return h("tr",{key:chave},
+        const atualizarValor=(campo,valor)=>{
+          setContabManualLinhas(prev=>{
+            const atual=prev[i]||{contaId:"",debito:"",credito:"",historico:""};
+            const oposto=campo==="debito"?"credito":"debito";
+            if(parseValorInput(valor)>0&&parseValorInput(atual[oposto])>0)return prev;
+            const novo=prev.map((x,j)=>j===i?{...x,[campo]:valor}:x);
+            if(i===prev.length-1 && (parseValorInput(novo[i].debito)>0||parseValorInput(novo[i].credito)>0))novo.push({contaId:"",debito:"",credito:"",historico:""});
+            return novo;
+          });
+        };
+        return h("tr",{key:"partida-"+i},
           h("td",{style:{minWidth:250}},h("div",{style:{position:"relative",display:"flex",gap:5}},
-            h("input",{type:"search",value:busca?busca:(item.contaId?nomeContaContabilSelecionada(item.contaId):""),placeholder:"Código ou nome da conta...",onChange:e=>{const v=e.target.value;setContabManualBuscaContas(prev=>({...prev,[chave]:v}));setRows(prev=>prev.map((x,j)=>j===i?{...x,contaId:""}:x));},required:true,style:{minWidth:0,width:"100%",flex:1}}),
-            h("button",{type:"button",className:"action-btn",title:"Consultar contas",onClick:()=>abrirSeletorContaContabil(debito?"manual-debito":"manual-credito",i,busca),style:{height:36}},h(Search,{size:16})),
+            h("input",{type:"search",value:busca?busca:(item.contaId?nomeContaContabilSelecionada(item.contaId):""),placeholder:"Código ou nome da conta...",onChange:e=>{const v=e.target.value;setContabManualBuscaContas(prev=>({...prev,[chave]:v}));setContabManualLinhas(prev=>prev.map((x,j)=>j===i?{...x,contaId:""}:x));},required:true,style:{minWidth:0,width:"100%",flex:1}}),
+            h("button",{type:"button",className:"action-btn",title:"Consultar contas",onClick:()=>abrirSeletorContaContabil("manual-debito",i,busca),style:{height:36}},h(Search,{size:16})),
             busca.trim()&&h("div",{style:{position:"absolute",top:"calc(100% + 3px)",left:0,right:38,zIndex:10120,maxHeight:180,overflowY:"auto",background:"var(--card)",border:"1px solid var(--line)",borderRadius:7,boxShadow:"0 6px 18px rgba(0,0,0,.18)",padding:4}},
-              contas.slice(0,30).map(x=>h("button",{key:x.id,type:"button",className:"action-btn",onMouseDown:e=>e.preventDefault(),onClick:()=>{setRows(prev=>prev.map((z,j)=>j===i?{...z,contaId:String(x.id)}:z));setContabManualBuscaContas(prev=>({...prev,[chave]:""}));},style:{display:"block",width:"100%",textAlign:"left",padding:8,fontSize:12}},h("strong",null,x.codigo)," - ",x.descricao)),
+              contas.slice(0,30).map(x=>h("button",{key:x.id,type:"button",className:"action-btn",onMouseDown:e=>e.preventDefault(),onClick:()=>{setContabManualLinhas(prev=>prev.map((z,j)=>j===i?{...z,contaId:String(x.id)}:z));setContabManualBuscaContas(prev=>({...prev,[chave]:""}));},style:{display:"block",width:"100%",textAlign:"left",padding:8,fontSize:12}},h("strong",null,x.codigo)," - ",x.descricao)),
               contas.length===0&&h("div",{style:{padding:9,fontSize:12}},"Nenhuma conta analítica encontrada.")
             )
           )),
-          h("td",null,h("input",{value:debito?item.valor:"",onChange:e=>{if(!debito)return;setRows(prev=>prev.map((x,j)=>j===i?{...x,valor:e.target.value}:x));},placeholder:"0,00",disabled:!debito,required:debito,style:{width:"100%",background:debito?undefined:"var(--surface-2)",cursor:debito?"text":"not-allowed"}})),
-          h("td",null,h("input",{value:!debito?item.valor:"",onChange:e=>{if(debito)return;setRows(prev=>prev.map((x,j)=>j===i?{...x,valor:e.target.value}:x));},placeholder:"0,00",disabled:debito,required:!debito,style:{width:"100%",background:debito?"var(--surface-2)":undefined,cursor:debito?"not-allowed":"text"}})),
-          h("td",null,h("input",{value:item.historico||"",onChange:e=>setRows(prev=>prev.map((x,j)=>j===i?{...x,historico:e.target.value}:x)),placeholder:"Histórico da partida",style:{width:"100%",minWidth:150}})),
-          h("td",null,h("button",{type:"button",className:"action-btn",title:"Remover partida",onClick:()=>setRows(prev=>prev.filter((x,j)=>j!==i)),disabled:rows.length<=1},"×"))
+          h("td",null,h("input",{value:item.debito||"",onChange:e=>atualizarValor("debito",e.target.value),placeholder:"0,00",style:{width:"100%"}})),
+          h("td",null,h("input",{value:item.credito||"",onChange:e=>atualizarValor("credito",e.target.value),placeholder:"0,00",style:{width:"100%"}})),
+          h("td",null,h("input",{value:item.historico||"",onChange:e=>setContabManualLinhas(prev=>prev.map((x,j)=>j===i?{...x,historico:e.target.value}:x)),placeholder:"Histórico da partida",style:{width:"100%",minWidth:150}})),
+          h("td",null,h("button",{type:"button",className:"action-btn",title:"Remover partida",onClick:()=>setContabManualLinhas(prev=>prev.length>1?prev.filter((x,j)=>j!==i):[{contaId:"",debito:"",credito:"",historico:""}]),disabled:contabManualLinhas.length<=1},"×"))
         );
       }
       function abrirNovoLancamentoManual() { contabManualSalvandoRef.current = false; setContabManualSalvando(false); limparLancamentoManual(); setContabManualModal(true); }
@@ -1151,8 +1151,8 @@
           setContabData(l.data_lancamento || currentDate());
           setContabHistorico(l.historico || "");
           setContabManualTipo(tipo);
-          setContabManualDebitos(debitos);
-          setContabManualCreditos(creditos);
+          const linhasEditadas=[...debitos.map(x=>({contaId:x.contaId,debito:x.valor,credito:"",historico:x.historico||""})),...creditos.map(x=>({contaId:x.contaId,debito:"",credito:x.valor,historico:x.historico||""}))];
+          setContabManualLinhas([...linhasEditadas,{contaId:"",debito:"",credito:"",historico:""}]);
           setContabManualBuscaContas({});
           setContabManualModal(true);
         } catch(e) {
@@ -1166,8 +1166,8 @@
         setContabManualSalvando(true);
         let gravouComSucesso = false;
         try {
-        const debitos=contabManualDebitos.map(x=>({contaId:String(x.contaId||""),valor:parseValorInput(x.valor)}));
-        const creditos=contabManualCreditos.map(x=>({contaId:String(x.contaId||""),valor:parseValorInput(x.valor)}));
+        const debitos=contabManualLinhas.filter(x=>parseValorInput(x.debito)>0).map(x=>({contaId:String(x.contaId||""),valor:parseValorInput(x.debito),historico:x.historico||""}));
+        const creditos=contabManualLinhas.filter(x=>parseValorInput(x.credito)>0).map(x=>({contaId:String(x.contaId||""),valor:parseValorInput(x.credito),historico:x.historico||""}));
         const totalDebito=debitos.reduce((s,x)=>s+x.valor,0), totalCredito=creditos.reduce((s,x)=>s+x.valor,0);
         if(!contabData || !contabHistorico.trim())return alert("Preencha a data e o histórico do lançamento.");
         if(!debitos.length || !creditos.length || debitos.some(x=>!x.contaId || !(x.valor>0)) || creditos.some(x=>!x.contaId || !(x.valor>0)))return alert("Informe uma conta analítica e um valor maior que zero para cada partida.");
@@ -3906,19 +3906,14 @@
                           h('th',{style:{width:38}})
                         )),
                         h('tbody',null,
-                          ...contabManualDebitos.map((item,i)=>renderLinhaPartidaManual("deb",item,i)),
-                          ...contabManualCreditos.map((item,i)=>renderLinhaPartidaManual("cre",item,i))
+                          ...contabManualLinhas.map((item,i)=>renderLinhaPartidaManual(item,i))
                         )
                       )
                     ),
-                    h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-                      h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualDebitos(prev=>[...prev,{contaId:"",valor:"",historico:""}])},"+ Adicionar débito"),
-                      h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualCreditos(prev=>[...prev,{contaId:"",valor:"",historico:""}])},"+ Adicionar crédito")
-                    ),
                     h('div',{className:'field',style:{width:'100%'}},h('label',null,"Histórico geral *"),h('textarea',{value:contabHistorico,onChange:e=>setContabHistorico(e.target.value),required:true,rows:2,placeholder:"Histórico geral do lançamento",style:{width:'100%',resize:'vertical'}})),
                     h('div',{style:{gridColumn:'1/-1',display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',padding:10,background:'var(--surface-2)',borderRadius:8}},
-                      h('strong',null,"Total de débitos: "+formatBRL(contabManualDebitos.reduce((s,x)=>s+parseValorInput(x.valor),0))),
-                      h('strong',null,"Total de créditos: "+formatBRL(contabManualCreditos.reduce((s,x)=>s+parseValorInput(x.valor),0)))
+                      h('strong',null,"Total de débitos: "+formatBRL(contabManualLinhas.reduce((s,x)=>s+parseValorInput(x.debito),0))),
+                      h('strong',null,"Total de créditos: "+formatBRL(contabManualLinhas.reduce((s,x)=>s+parseValorInput(x.credito),0)))
                     ),
                     h('div',{style:{gridColumn:'1/-1',display:'flex',justifyContent:'flex-end',gap:8,marginTop:6}},
                       h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualModal(false)},"Cancelar"),
