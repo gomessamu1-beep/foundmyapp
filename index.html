@@ -152,8 +152,8 @@
       const [mesesFechados, setMesesFechados] = useState({});
       
       const [screen, setScreen] = useState(() => sessionStorage.getItem('fatura-screen-v1') || "cadastros");
-      const [faturaViewTab, setFaturaViewTab] = useState("lancamentos");
-      const [contabTab, setContabTab] = useState("plano");
+      const [faturaViewTab, setFaturaViewTab] = useState(() => sessionStorage.getItem("fatura-viewtab-v1") || "lancamentos");
+      const [contabTab, setContabTab] = useState(() => sessionStorage.getItem("fatura-contabtab-v1") || "plano");
       const [contabPlano, setContabPlano] = useState([]);
       const [contabLancamentos, setContabLancamentos] = useState([]);
       const [contabLancamentosAnteriores, setContabLancamentosAnteriores] = useState([]);
@@ -227,9 +227,9 @@
       const [conferenciaErro, setConferenciaErro] = useState("");
       const [menuMobileOpen, setMenuMobileOpen] = useState(false);
       const [cadastroTab, setCadastroTab] = useState(() => sessionStorage.getItem('fatura-cadtab-v1') || "cartoes");
-      const [categoriaTipoTab, setCategoriaTipoTab] = useState("despesa");
-      const [lancamentoTab, setLancamentoTab] = useState("cartao");
-      const [relatorioTab, setRelatorioTab] = useState("pagar");
+      const [categoriaTipoTab, setCategoriaTipoTab] = useState(() => sessionStorage.getItem("fatura-categoriatipo-v1") || "despesa");
+      const [lancamentoTab, setLancamentoTab] = useState(() => sessionStorage.getItem("fatura-lancamentotab-v1") || "cartao");
+      const [relatorioTab, setRelatorioTab] = useState(() => sessionStorage.getItem("fatura-relatoriotab-v1") || "pagar");
       
       const [month, setMonth] = useState(() => sessionStorage.getItem('fatura-month-v1') || currentMonth());
       const [faturaAno, setFaturaAno] = useState(() => new Date().getFullYear().toString());
@@ -252,7 +252,7 @@
       const [concilDataIni, setConcilDataIni] = useState(`${currentMonth()}-01`);
       const [concilDataFim, setConcilDataFim] = useState(currentDate());
       const [concilExibido, setConcilExibido] = useState(false);
-      const [concilTab, setConcilTab] = useState("");
+      const [concilTab, setConcilTab] = useState(() => sessionStorage.getItem("fatura-conciltab-v1") || "");
       const [concilCalMes, setConcilCalMes] = useState(currentMonth());
       const [calendarioExpandido, setCalendarioExpandido] = useState(false);
 
@@ -290,7 +290,13 @@
         sessionStorage.setItem('fatura-screen-v1', screen);
         sessionStorage.setItem('fatura-cadtab-v1', cadastroTab);
         sessionStorage.setItem('fatura-month-v1', month);
-      }, [screen, cadastroTab, month]);
+        sessionStorage.setItem('fatura-viewtab-v1', faturaViewTab);
+        sessionStorage.setItem('fatura-contabtab-v1', contabTab);
+        sessionStorage.setItem('fatura-categoriatipo-v1', categoriaTipoTab);
+        sessionStorage.setItem('fatura-lancamentotab-v1', lancamentoTab);
+        sessionStorage.setItem('fatura-relatoriotab-v1', relatorioTab);
+        sessionStorage.setItem('fatura-conciltab-v1', concilTab);
+      }, [screen, cadastroTab, month, faturaViewTab, contabTab, categoriaTipoTab, lancamentoTab, relatorioTab, concilTab]);
 
       useEffect(() => {
         localStorage.setItem('fatura-oculto-v1', valoresOcultos);
