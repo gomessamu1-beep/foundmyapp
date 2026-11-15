@@ -4838,7 +4838,7 @@
             h('button', { type: 'button', className: 'action-btn', onClick: () => selecionarContaContabil(''), style: { textAlign: 'left', justifyContent: 'flex-start', marginBottom: 8 } }, 'Não vinculada'),
             h('div', { style: { overflowY: 'auto', minHeight: 80 } }, contabPlano.filter(c => c.tipo === 'ANALITICA' && c.ativa && (String(c.codigo || '').toLowerCase().includes(contaContabilPicker.busca.toLowerCase()) || String(c.descricao || '').toLowerCase().includes(contaContabilPicker.busca.toLowerCase()))).map(c => h('button', { key: c.id, type: 'button', className: 'action-btn', onClick: () => selecionarContaContabil(c.id), style: { display: 'flex', width: '100%', justifyContent: 'flex-start', textAlign: 'left', marginBottom: 5, padding: 10 } }, h('span', null, h('strong', null, c.codigo), ' - ', c.descricao)))),
             contabPlano.filter(c => c.tipo === 'ANALITICA' && c.ativa && (String(c.codigo || '').toLowerCase().includes(contaContabilPicker.busca.toLowerCase()) || String(c.descricao || '').toLowerCase().includes(contaContabilPicker.busca.toLowerCase()))).length === 0 && h('div', { style: { padding: 12, color: 'var(--ink-soft)', fontSize: 13 } }, 'Nenhuma conta analítica ativa encontrada.')
-          ), document.body),
+          )), document.body),
         editSubcategoriaModal.open && h('div', { className: 'modal-overlay' },
           h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380, overflow: 'visible', maxHeight: 'none', position: 'relative' } },
             h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, "Editar Subcategoria"),
