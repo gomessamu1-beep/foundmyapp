@@ -3944,7 +3944,7 @@
               !contabConsultaExecutada ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Informe o período e clique em Consultar para visualizar os lançamentos.") :
               h("div",{className:"list-vertical"},contabLancamentos.length===0 ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum lançamento encontrado no período consultado.") : contabLancamentos.map(l=>h("div",{className:"list-item",key:l.id,style:{alignItems:'flex-start'}},h("div",{className:"list-item-main"},[
                 l.origem==="MANUAL"&&h('label',{style:{display:'inline-flex',alignItems:'center',gap:6,marginRight:8,fontSize:12}},h('input',{type:'checkbox',checked:contabSelecionados.includes(String(l.id)),onChange:e=>setContabSelecionados(prev=>e.target.checked?[...prev,String(l.id)]:prev.filter(id=>String(id)!==String(l.id)))}),"Selecionar"),
-                h("div",{style:{fontWeight:650}},formatDateBR(l.data_lancamento)+" • "+l.historico),
+                h("div",{style:{fontWeight:650}},"Nº "+String(l.numero||"—")+" • "+formatDateBR(l.data_lancamento)+" • "+l.historico),
                 h("div",{style:{fontSize:12,color:"var(--ink-soft)"}},(l.origem||"SEM ORIGEM")+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0))),
                 h("div",{style:{fontSize:12,marginTop:5}},(l.contabilidade_lancamento_itens||[]).map(it=>{const cc=contabPlano.find(c=>c.id===it.conta_id);return (cc?.codigo||"")+" "+(cc?.descricao||"")+" — D "+formatBRL(Number(it.debito||0))+" / C "+formatBRL(Number(it.credito||0));}).join(" | "))
               ]),l.origem==="MANUAL"&&h('div',{style:{display:'flex',gap:6,flexShrink:0}},
