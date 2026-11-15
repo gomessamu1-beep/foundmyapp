@@ -1130,8 +1130,8 @@
               contas.length===0&&h("div",{style:{padding:9,fontSize:12}},"Nenhuma conta analítica encontrada.")
             )
           )),
-          h("td",null,debito?h("input",{value:item.valor,onChange:e=>setRows(prev=>prev.map((x,j)=>j===i?{...x,valor:e.target.value}:x)),placeholder:"0,00",required:true,style:{width:"100%"}}):"—"),
-          h("td",null,!debito?h("input",{value:item.valor,onChange:e=>setRows(prev=>prev.map((x,j)=>j===i?{...x,valor:e.target.value}:x)),placeholder:"0,00",required:true,style:{width:"100%"}}):"—"),
+          h("td",null,h("input",{value:debito?item.valor:"",onChange:e=>{if(!debito)return;setRows(prev=>prev.map((x,j)=>j===i?{...x,valor:e.target.value}:x));},placeholder:"0,00",disabled:!debito,required:debito,style:{width:"100%",background:debito?undefined:"var(--surface-2)",cursor:debito?"text":"not-allowed"}})),
+          h("td",null,h("input",{value:!debito?item.valor:"",onChange:e=>{if(debito)return;setRows(prev=>prev.map((x,j)=>j===i?{...x,valor:e.target.value}:x));},placeholder:"0,00",disabled:debito,required:!debito,style:{width:"100%",background:debito?"var(--surface-2)":undefined,cursor:debito?"not-allowed":"text"}})),
           h("td",null,h("input",{value:item.historico||"",onChange:e=>setRows(prev=>prev.map((x,j)=>j===i?{...x,historico:e.target.value}:x)),placeholder:"Histórico da partida",style:{width:"100%",minWidth:150}})),
           h("td",null,h("button",{type:"button",className:"action-btn",title:"Remover partida",onClick:()=>setRows(prev=>prev.filter((x,j)=>j!==i)),disabled:rows.length<=1},"×"))
         );
