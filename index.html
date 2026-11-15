@@ -4014,17 +4014,19 @@
               ) : h("div",{style:{overflowX:"auto"}},[
                 h("h3",null,contabRelatorioTipo==="dre"?"Demonstração do Resultado (DRE)":contabRelatorioTipo==="balanco"?"Balanço Patrimonial":"Balancete de Verificação"),
                 h("table",null,[
-                  h("thead",null,h("tr",null,(contabRelatorioTipo==="balancete"?["Código","Conta","Saldo Inicial","Débito","Crédito","Saldo Final"]:["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"]).map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
-                  h("tbody",null,contabRelatorioTipo==="balancete" ? (()=>{
+                  h("thead",null,h("tr",null,(contabRelatorioTipo==="balancete"||contabRelatorioTipo==="balanco"?["Código","Conta","Saldo Inicial","Débito","Crédito","Saldo Final"]:["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"]).map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
+                  h("tbody",null,(contabRelatorioTipo==="balancete"||contabRelatorioTipo==="balanco") ? (()=>{
+                    const isBalanco=contabRelatorioTipo==="balanco";
+                    const naturezasBalanco=["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"];
                     const lancamentosDaConta = (lista, contaId) => (lista||[]).flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>String(it.conta_id)===String(contaId));
                     const descendentes = (conta) => {
                       const encontrados=[]; const fila=[conta]; const vistos=new Set();
                       while(fila.length){const atual=fila.shift();if(vistos.has(String(atual.id)))continue;vistos.add(String(atual.id));encontrados.push(atual);
                         if(atual.tipo==="SINTETICA") (contabPlano||[]).filter(x=>String(x.conta_pai_id)===String(atual.id)).forEach(x=>fila.push(x));
                       }
-                      return encontrados.filter(x=>x.tipo==="ANALITICA");
+                      return encontrados.filter(x=>x.tipo==="ANALITICA"&&(!isBalanco||naturezasBalanco.includes(String(x.natureza||"").toUpperCase())));
                     };
-                    const contasOrdenadas=[...(contabPlano||[])].sort((a,b)=>String(a.codigo||"").localeCompare(String(b.codigo||""),"pt-BR",{numeric:true}));
+                    const contasOrdenadas=[...(contabPlano||[])].filter(c=>!isBalanco||naturezasBalanco.includes(String(c.natureza||"").toUpperCase())).sort((a,b)=>String(a.codigo||"").localeCompare(String(b.codigo||""),"pt-BR",{numeric:true}));
                     const nivelConta = (conta) => {
                       let nivel=0, atual=conta, vistos=new Set();
                       while(atual && atual.conta_pai_id && !vistos.has(String(atual.id))){
@@ -4038,6 +4040,7 @@
                     const linhas=[];
                     const resumo={ativo:0,passivo:0,receitas:0,despesas:0};
                     contasOrdenadas.forEach(conta=>{
+                      if(nivelConta(conta)>3)return;
                       const analiticas=conta.tipo==="ANALITICA"?[conta]:descendentes(conta);
                       const ids=new Set(analiticas.map(x=>String(x.id)));
                       const itensAnteriores=(contabLancamentosAnteriores||[]).flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>ids.has(String(it.conta_id)));
@@ -4063,7 +4066,7 @@
                         h("td",{className:"right num"},formatBRL(saldoFinal))
                       ]));
                     });
-                    const analiticas=contasOrdenadas.filter(x=>x.tipo==="ANALITICA");
+                    const analiticas=contasOrdenadas.filter(x=>x.tipo==="ANALITICA"&&(!isBalanco||naturezasBalanco.includes(String(x.natureza||"").toUpperCase())));
                     const totais=analiticas.reduce((acc,conta)=>{
                       const ant=lancamentosDaConta(contabLancamentosAnteriores,conta.id), per=lancamentosDaConta(contabLancamentos,conta.id);
                       acc.inicial+=ant.reduce((s,it)=>s+Number(it.debito||0)-Number(it.credito||0),0);
@@ -4090,7 +4093,7 @@
                     }
                     return linhas;
                   })() : contabPlano.filter(c=>c.tipo==="ANALITICA"&&(contabRelatorioTipo==="dre"?idsContasDREAtivas().includes(String(c.id)):["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"].includes(c.natureza))).map(c=>{const ps=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=ps.reduce((a,i)=>a+Number(i.debito||0),0);const cr=ps.reduce((a,i)=>a+Number(i.credito||0),0);return (d===0&&cr===0)?null:h("tr",{key:c.id},[h("td",null,c.codigo),h("td",null,c.descricao),h("td",{className:"right num"},formatBRL(d)),h("td",{className:"right num"},formatBRL(cr)),h("td",{className:"right num"},formatBRL(Math.max(0,d-cr))),h("td",{className:"right num"},formatBRL(Math.max(0,cr-d)))]);}).filter(Boolean)),
-                  contabRelatorioTipo!=="balancete" && h("tfoot",null,h("tr",{style:{fontWeight:700}},[h("td",{colSpan:2},"Totais"),...["debito","credito"].map(k=>h("td",{className:"right num",key:k},formatBRL(contabLancamentos.reduce((a,l)=>a+Number(l["total_"+k]||0),0)))),h("td",{colSpan:2})]))
+                  contabRelatorioTipo!=="balancete" && contabRelatorioTipo!=="balanco" && h("tfoot",null,h("tr",{style:{fontWeight:700}},[h("td",{colSpan:2},"Totais"),...["debito","credito"].map(k=>h("td",{className:"right num",key:k},formatBRL(contabLancamentos.reduce((a,l)=>a+Number(l["total_"+k]||0),0)))),h("td",{colSpan:2})]))
                 ])
               ])
             )
