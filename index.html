@@ -4056,7 +4056,7 @@
                         else if(natureza==="DESPESA")resumo.despesas+=saldoFinal;
                       }
                       linhas.push(h("tr",{key:conta.id,style:{fontWeight:conta.tipo==="SINTETICA"?700:400,background:conta.tipo==="SINTETICA"?"var(--surface-2)":"transparent"}},[
-                        h("td",null,conta.codigo),h("td",{style:{paddingLeft:(nivelConta(conta)*24+8)+"px"}},conta.descricao),
+                        h("td",null,conta.codigo),h("td",{style:{paddingLeft:(nivelConta(conta)*8+8)+"px"}},conta.descricao),
                         h("td",{className:"right num"},formatBRL(saldoInicial)),
                         h("td",{className:"right num"},formatBRL(debito)),
                         h("td",{className:"right num"},formatBRL(credito)),
