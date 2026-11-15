@@ -3844,7 +3844,7 @@
                   h('button',{type:'button',className:'action-btn',onClick:abrirModalRegerarContabilidade,disabled:contabLoading},contabLoading?"Processando...":"Regerar Contabilidade")
                 )
               ),
-              contabManualModal && h('div',{className:'modal-overlay',style:{zIndex:10090},onMouseDown:e=>{if(e.target===e.currentTarget)setContabManualModal(false);}},
+              contabManualModal && h('div',{className:'modal-overlay',style:{zIndex:10090}},
                 h('div',{className:'modal-content',style:{maxWidth:760,maxHeight:'90vh',overflowY:'auto'}},
                   h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
                     h('h3',{style:{margin:0}},contabManualEditId?"Alterar lançamento manual":"Incluir lançamento manual"),
@@ -4026,7 +4026,7 @@
                       }
                       return encontrados.filter(x=>x.tipo==="ANALITICA"&&(!isBalanco||naturezasBalanco.includes(String(x.natureza||"").toUpperCase())));
                     };
-                    const contasOrdenadas=[...(contabPlano||[])].filter(c=>!isBalanco||naturezasBalanco.includes(String(c.natureza||"").toUpperCase())).sort((a,b)=>String(a.codigo||"").localeCompare(String(b.codigo||""),"pt-BR",{numeric:true}));
+                    const contasOrdenadas=[...(contabPlano||[])].sort((a,b)=>String(a.codigo||"").localeCompare(String(b.codigo||""),"pt-BR",{numeric:true}));
                     const nivelConta = (conta) => {
                       let nivel=0, atual=conta, vistos=new Set();
                       while(atual && atual.conta_pai_id && !vistos.has(String(atual.id))){
@@ -4041,7 +4041,9 @@
                     const resumo={ativo:0,passivo:0,receitas:0,despesas:0};
                     contasOrdenadas.forEach(conta=>{
                       if(nivelConta(conta)>3)return;
+                      if(isBalanco&&conta.tipo==="ANALITICA"&&!naturezasBalanco.includes(String(conta.natureza||"").toUpperCase()))return;
                       const analiticas=conta.tipo==="ANALITICA"?[conta]:descendentes(conta);
+                      if(isBalanco&&conta.tipo==="SINTETICA"&&analiticas.length===0)return;
                       const ids=new Set(analiticas.map(x=>String(x.id)));
                       const itensAnteriores=(contabLancamentosAnteriores||[]).flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>ids.has(String(it.conta_id)));
                       const itensPeriodo=(contabLancamentos||[]).flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>ids.has(String(it.conta_id)));
@@ -4073,12 +4075,12 @@
                       acc.debito+=per.reduce((s,it)=>s+Number(it.debito||0),0);
                       acc.credito+=per.reduce((s,it)=>s+Number(it.credito||0),0);return acc;
                     },{inicial:0,debito:0,credito:0});
-                    linhas.push(h("tr",{key:"total-balancete",style:{fontWeight:700,borderTop:"2px solid var(--line)"}},[
+                    if(!isBalanco)linhas.push(h("tr",{key:"total-balancete",style:{fontWeight:700,borderTop:"2px solid var(--line)"}},[
                       h("td",{colSpan:2},"Totais"),h("td",{className:"right num"},formatBRL(totais.inicial)),
                       h("td",{className:"right num"},formatBRL(totais.debito)),h("td",{className:"right num"},formatBRL(totais.credito)),
                       h("td",{className:"right num"},formatBRL(totais.inicial+totais.debito-totais.credito))
                     ]));
-                    if(contabImprimirTotais){
+                    if(!isBalanco&&contabImprimirTotais){
                       const legenda=[
                         ["Total do Ativo",resumo.ativo],
                         ["Total do Passivo",resumo.passivo],
