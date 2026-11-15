@@ -4831,15 +4831,14 @@
           )
         ),
 
-        contaContabilPicker.open && h('div', { className: 'modal-overlay', onKeyDown: e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } }, style: { background: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 8, zIndex: 10050, pointerEvents: 'auto' } },
+        contaContabilPicker.open && ReactDOM.createPortal(h('div', { className: 'modal-overlay', onKeyDown: e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } }, style: { position: 'fixed', inset: 0, background: 'transparent', alignItems: 'center', justifyContent: 'center', padding: 8, zIndex: 2147483000, pointerEvents: 'auto' } },
           h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380, width: 'min(380px, calc(100% - 24px))', maxHeight: '58vh', display: 'flex', flexDirection: 'column', padding: 14, boxShadow: '0 8px 28px rgba(0,0,0,0.22)', border: '1px solid var(--line)' } },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 } }, h('strong', null, 'Selecionar conta contábil'), h('button', { type: 'button', className: 'action-btn', onClick: () => setContaContabilPicker({ open: false, destino: 'nova', catId: null, busca: '' }) }, h(XIcon, { size: 16 }))),
             h('input', { type: 'search', placeholder: 'Pesquisar por código ou descrição...', value: contaContabilPicker.busca, onChange: e => setContaContabilPicker(prev => ({ ...prev, busca: e.target.value })), style: { width: '100%', boxSizing: 'border-box', marginBottom: 10 } }),
             h('button', { type: 'button', className: 'action-btn', onClick: () => selecionarContaContabil(''), style: { textAlign: 'left', justifyContent: 'flex-start', marginBottom: 8 } }, 'Não vinculada'),
             h('div', { style: { overflowY: 'auto', minHeight: 80 } }, contabPlano.filter(c => c.tipo === 'ANALITICA' && c.ativa && (String(c.codigo || '').toLowerCase().includes(contaContabilPicker.busca.toLowerCase()) || String(c.descricao || '').toLowerCase().includes(contaContabilPicker.busca.toLowerCase()))).map(c => h('button', { key: c.id, type: 'button', className: 'action-btn', onClick: () => selecionarContaContabil(c.id), style: { display: 'flex', width: '100%', justifyContent: 'flex-start', textAlign: 'left', marginBottom: 5, padding: 10 } }, h('span', null, h('strong', null, c.codigo), ' - ', c.descricao)))),
             contabPlano.filter(c => c.tipo === 'ANALITICA' && c.ativa && (String(c.codigo || '').toLowerCase().includes(contaContabilPicker.busca.toLowerCase()) || String(c.descricao || '').toLowerCase().includes(contaContabilPicker.busca.toLowerCase()))).length === 0 && h('div', { style: { padding: 12, color: 'var(--ink-soft)', fontSize: 13 } }, 'Nenhuma conta analítica ativa encontrada.')
-          )
-        ),
+          ), document.body),
         editSubcategoriaModal.open && h('div', { className: 'modal-overlay' },
           h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 380, overflow: 'visible', maxHeight: 'none', position: 'relative' } },
             h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, "Editar Subcategoria"),
