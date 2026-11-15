@@ -156,6 +156,7 @@
       const [contabTab, setContabTab] = useState("plano");
       const [contabPlano, setContabPlano] = useState([]);
       const [contabLancamentos, setContabLancamentos] = useState([]);
+      const [contabLancamentosAnteriores, setContabLancamentosAnteriores] = useState([]);
       const [contabLoading, setContabLoading] = useState(false);
       const [contabErro, setContabErro] = useState("");
       const [contabCodigo, setContabCodigo] = useState("");
@@ -911,7 +912,7 @@
             const configDRE = localStorage.getItem("foundmyapp-dre-contas-" + uidAtual);
             setContabDreContas(configDRE === null ? null : JSON.parse(configDRE));
           } catch (e) { setContabDreContas(null); }
-          setContabLancamentos([]); setContabConsultaExecutada(false); setContabRelatorioExecutado(false);
+          // Preserva consultas e relatórios ao navegar entre telas da contabilidade.
         } catch (e) { console.error("Contabilidade:", e); setContabErro("Não foi possível carregar a contabilidade: " + (e.message || "erro desconhecido")); }
         finally { setContabLoading(false); }
       }
@@ -969,8 +970,16 @@
         if (!contabConsultaIni || !contabConsultaFim || contabConsultaIni > contabConsultaFim) return alert("Informe um período válido.");
         setContabLoading(true); setContabErro("");
         try {
-          const { data, error } = await supabaseClient.from("contabilidade_lancamentos").select("*, contabilidade_lancamento_itens(*, contabilidade_plano_contas(codigo,descricao))").eq("user_id",session.user.id).gte("data_lancamento",contabConsultaIni).lte("data_lancamento",contabConsultaFim).order("data_lancamento",{ascending:true});
-          if(error) throw error; setContabLancamentos(data||[]); setContabRelatorioExecutado(true);
+          const camposLancamento = "*, contabilidade_lancamento_itens(*, contabilidade_plano_contas(codigo,descricao))";
+          const [anterioresResp, periodoResp] = await Promise.all([
+            supabaseClient.from("contabilidade_lancamentos").select(camposLancamento).eq("user_id",session.user.id).lt("data_lancamento",contabConsultaIni).order("data_lancamento",{ascending:true}),
+            supabaseClient.from("contabilidade_lancamentos").select(camposLancamento).eq("user_id",session.user.id).gte("data_lancamento",contabConsultaIni).lte("data_lancamento",contabConsultaFim).order("data_lancamento",{ascending:true})
+          ]);
+          if(anterioresResp.error) throw anterioresResp.error;
+          if(periodoResp.error) throw periodoResp.error;
+          setContabLancamentosAnteriores(anterioresResp.data||[]);
+          setContabLancamentos(periodoResp.data||[]);
+          setContabRelatorioExecutado(true);
         } catch(e) { setContabErro("Não foi possível gerar o relatório: "+(e.message||"erro desconhecido")); }
         finally { setContabLoading(false); }
       }
@@ -3997,9 +4006,49 @@
               ) : h("div",{style:{overflowX:"auto"}},[
                 h("h3",null,contabRelatorioTipo==="dre"?"Demonstração do Resultado (DRE)":contabRelatorioTipo==="balanco"?"Balanço Patrimonial":"Balancete de Verificação"),
                 h("table",null,[
-                  h("thead",null,h("tr",null,["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"].map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
-                  h("tbody",null,contabPlano.filter(c=>c.tipo==="ANALITICA"&&(contabRelatorioTipo==="dre"?idsContasDREAtivas().includes(String(c.id)):contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"].includes(c.natureza):true)).map(c=>{const ps=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=ps.reduce((a,i)=>a+Number(i.debito||0),0);const cr=ps.reduce((a,i)=>a+Number(i.credito||0),0);return (d===0&&cr===0)?null:h("tr",{key:c.id},[h("td",null,c.codigo),h("td",null,c.descricao),h("td",{className:"right num"},formatBRL(d)),h("td",{className:"right num"},formatBRL(cr)),h("td",{className:"right num"},formatBRL(Math.max(0,d-cr))),h("td",{className:"right num"},formatBRL(Math.max(0,cr-d)))]);}).filter(Boolean)),
-                  h("tfoot",null,h("tr",{style:{fontWeight:700}},[h("td",{colSpan:2},"Totais"),...["debito","credito"].map(k=>h("td",{className:"right num",key:k},formatBRL(contabLancamentos.reduce((a,l)=>a+Number(l["total_"+k]||0),0)))),h("td",{colSpan:2})]))
+                  h("thead",null,h("tr",null,(contabRelatorioTipo==="balancete"?["Código","Conta","Saldo Inicial","Débito","Créditos","Saldo Final"]:["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"]).map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
+                  h("tbody",null,contabRelatorioTipo==="balancete" ? (()=>{
+                    const lancamentosDaConta = (lista, contaId) => (lista||[]).flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>String(it.conta_id)===String(contaId));
+                    const descendentes = (conta) => {
+                      const encontrados=[]; const fila=[conta]; const vistos=new Set();
+                      while(fila.length){const atual=fila.shift();if(vistos.has(String(atual.id)))continue;vistos.add(String(atual.id));encontrados.push(atual);
+                        if(atual.tipo==="SINTETICA") (contabPlano||[]).filter(x=>String(x.conta_pai_id)===String(atual.id)).forEach(x=>fila.push(x));
+                      }
+                      return encontrados.filter(x=>x.tipo==="ANALITICA");
+                    };
+                    const contasOrdenadas=[...(contabPlano||[])].sort((a,b)=>String(a.codigo||"").localeCompare(String(b.codigo||""),"pt-BR",{numeric:true}));
+                    const linhas=contasOrdenadas.map(conta=>{
+                      const analiticas=conta.tipo==="ANALITICA"?[conta]:descendentes(conta);
+                      const ids=new Set(analiticas.map(x=>String(x.id)));
+                      const itensAnteriores=(contabLancamentosAnteriores||[]).flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>ids.has(String(it.conta_id)));
+                      const itensPeriodo=(contabLancamentos||[]).flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>ids.has(String(it.conta_id)));
+                      const saldoInicial=itensAnteriores.reduce((s,it)=>s+Number(it.debito||0)-Number(it.credito||0),0);
+                      const debito=itensPeriodo.reduce((s,it)=>s+Number(it.debito||0),0);
+                      const credito=itensPeriodo.reduce((s,it)=>s+Number(it.credito||0),0);
+                      const saldoFinal=saldoInicial+debito-credito;
+                      return h("tr",{key:conta.id,style:{fontWeight:conta.tipo==="SINTETICA"?700:400,background:conta.tipo==="SINTETICA"?"var(--surface-2)":"transparent"}},[
+                        h("td",null,conta.codigo),h("td",null,conta.descricao),
+                        h("td",{className:"right num"},formatBRL(saldoInicial)),
+                        h("td",{className:"right num"},formatBRL(debito)),
+                        h("td",{className:"right num"},formatBRL(credito)),
+                        h("td",{className:"right num"},formatBRL(saldoFinal))
+                      ]);
+                    });
+                    const analiticas=contasOrdenadas.filter(x=>x.tipo==="ANALITICA");
+                    const totais=analiticas.reduce((acc,conta)=>{
+                      const ant=lancamentosDaConta(contabLancamentosAnteriores,conta.id), per=lancamentosDaConta(contabLancamentos,conta.id);
+                      acc.inicial+=ant.reduce((s,it)=>s+Number(it.debito||0)-Number(it.credito||0),0);
+                      acc.debito+=per.reduce((s,it)=>s+Number(it.debito||0),0);
+                      acc.credito+=per.reduce((s,it)=>s+Number(it.credito||0),0);return acc;
+                    },{inicial:0,debito:0,credito:0});
+                    linhas.push(h("tr",{key:"total-balancete",style:{fontWeight:700,borderTop:"2px solid var(--line)"}},[
+                      h("td",{colSpan:2},"Totais"),h("td",{className:"right num"},formatBRL(totais.inicial)),
+                      h("td",{className:"right num"},formatBRL(totais.debito)),h("td",{className:"right num"},formatBRL(totais.credito)),
+                      h("td",{className:"right num"},formatBRL(totais.inicial+totais.debito-totais.credito))
+                    ]));
+                    return linhas;
+                  })() : contabPlano.filter(c=>c.tipo==="ANALITICA"&&(contabRelatorioTipo==="dre"?idsContasDREAtivas().includes(String(c.id)):["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"].includes(c.natureza))).map(c=>{const ps=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(i=>i.conta_id===c.id);const d=ps.reduce((a,i)=>a+Number(i.debito||0),0);const cr=ps.reduce((a,i)=>a+Number(i.credito||0),0);return (d===0&&cr===0)?null:h("tr",{key:c.id},[h("td",null,c.codigo),h("td",null,c.descricao),h("td",{className:"right num"},formatBRL(d)),h("td",{className:"right num"},formatBRL(cr)),h("td",{className:"right num"},formatBRL(Math.max(0,d-cr))),h("td",{className:"right num"},formatBRL(Math.max(0,cr-d)))]);}).filter(Boolean)),
+                  contabRelatorioTipo!=="balancete" && h("tfoot",null,h("tr",{style:{fontWeight:700}},[h("td",{colSpan:2},"Totais"),...["debito","credito"].map(k=>h("td",{className:"right num",key:k},formatBRL(contabLancamentos.reduce((a,l)=>a+Number(l["total_"+k]||0),0)))),h("td",{colSpan:2})]))
                 ])
               ])
             )
