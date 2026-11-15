@@ -1119,15 +1119,26 @@
       }
       function abrirNovoLancamentoManual() { contabManualSalvandoRef.current = false; setContabManualSalvando(false); limparLancamentoManual(); setContabManualModal(true); }
       async function editarLancamentoManual(l) {
-        
-        const itens = l.contabilidade_lancamento_itens || [];
-        const debitos = itens.filter(x => Number(x.debito || 0) > 0).map(x=>({contaId:String(x.conta_id),valor:String(Number(x.debito).toFixed(2)).replace(".",",")}));
-        const creditos = itens.filter(x => Number(x.credito || 0) > 0).map(x=>({contaId:String(x.conta_id),valor:String(Number(x.credito).toFixed(2)).replace(".",",")}));
-        if (!debitos.length || !creditos.length) return alert("Este lançamento não possui partidas completas para edição.");
-        const tipo = debitos.length===1 && creditos.length===1 ? "SIMPLES" : debitos.length===1 ? "UM_DEBITO_VARIOS_CREDITOS" : creditos.length===1 ? "VARIOS_DEBITOS_UM_CREDITO" : "VARIOS_DEBITOS_VARIOS_CREDITOS";
-        contabManualSalvandoRef.current = false; setContabManualSalvando(false);
-        setContabManualEditId(l.id); setContabData(l.data_lancamento || currentDate()); setContabHistorico(l.historico || "");
-        setContabManualTipo(tipo); setContabManualDebitos(debitos); setContabManualCreditos(creditos); setContabManualModal(true);
+        if (!l || !l.id) return alert("Não foi possível identificar o lançamento selecionado.");
+        try {
+          const {data,error}=await supabaseClient.from("contabilidade_lancamentos")
+            .select("*, contabilidade_lancamento_itens(*, contabilidade_plano_contas(codigo,descricao))")
+            .eq("id",l.id).eq("user_id",session.user.id).single();
+          if(error) throw error;
+          const lancamento=data||l;
+          const itens=lancamento.contabilidade_lancamento_itens||l.contabilidade_lancamento_itens||[];
+          const debitos=itens.filter(x=>Number(x.debito||0)>0).map(x=>({contaId:String(x.conta_id),valor:String(Number(x.debito).toFixed(2)).replace(".",",")}));
+          const creditos=itens.filter(x=>Number(x.credito||0)>0).map(x=>({contaId:String(x.conta_id),valor:String(Number(x.credito).toFixed(2)).replace(".",",")}));
+          if(!debitos.length||!creditos.length)return alert("Este lançamento não possui partidas completas para edição.");
+          const tipo=debitos.length===1&&creditos.length===1?"SIMPLES":debitos.length===1?"UM_DEBITO_VARIOS_CREDITOS":creditos.length===1?"VARIOS_DEBITOS_UM_CREDITO":"VARIOS_DEBITOS_VARIOS_CREDITOS";
+          contabManualSalvandoRef.current=false;setContabManualSalvando(false);
+          setContabManualEditId(lancamento.id);setContabData(lancamento.data_lancamento||currentDate());setContabHistorico(lancamento.historico||"");
+          setContabManualTipo(tipo);setContabManualDebitos(debitos);setContabManualCreditos(creditos);
+          setContabManualBuscaContas({});
+          setContabManualModal(true);
+        } catch(e) {
+          alert("Não foi possível abrir o lançamento para alteração: "+(e.message||"erro desconhecido"));
+        }
       }
       async function salvarLancamentoContabil(e) {
         e.preventDefault();
