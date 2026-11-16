@@ -3970,6 +3970,7 @@
                 contabLancamentos.length===0 ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum lançamento encontrado no período consultado.") :
                 h('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:820}},
                   h('thead',null,h('tr',null,
+                    h('th',{style:{width:42,padding:'10px 8px'}}),
                     h('th',{style:{textAlign:'left',padding:'10px 12px',whiteSpace:'nowrap'}},'Data'),
                     h('th',{style:{textAlign:'left',padding:'10px 12px',whiteSpace:'nowrap'}},'Nº lançamento'),
                     h('th',{style:{textAlign:'left',padding:'10px 12px',whiteSpace:'nowrap'}},'Origem'),
@@ -3978,8 +3979,9 @@
                     h('th',{style:{textAlign:'left',padding:'10px 12px'}},'Histórico')
                   )),
                   h('tbody',null,contabLancamentos.map(l=>h('tr',{key:l.id,style:{borderTop:'1px solid var(--line)'}},[
+                    h('td',{style:{padding:'9px 8px',textAlign:'center',width:42}},l.origem==="MANUAL"&&h('input',{type:'checkbox',checked:contabSelecionados.includes(String(l.id)),onChange:e=>setContabSelecionados(prev=>e.target.checked?[...prev,String(l.id)]:prev.filter(id=>String(id)!==String(l.id)))})),
                     h('td',{style:{padding:'9px 12px',whiteSpace:'nowrap'}},formatDateBR(l.data_lancamento)),
-                    h('td',{style:{padding:'9px 12px',whiteSpace:'nowrap'}},h('div',{style:{display:'flex',alignItems:'center',gap:7}},l.origem==="MANUAL"&&h('input',{type:'checkbox',checked:contabSelecionados.includes(String(l.id)),onChange:e=>setContabSelecionados(prev=>e.target.checked?[...prev,String(l.id)]:prev.filter(id=>String(id)!==String(l.id)))}),h('button',{type:'button',onClick:e=>{e.preventDefault();e.stopPropagation();editarLancamentoManual(l);},style:{border:0,background:'transparent',padding:0,color:'var(--primary)',textDecoration:'underline',cursor:'pointer',fontWeight:650}},String(l.numero||"—")))),
+                    h('td',{style:{padding:'9px 12px',whiteSpace:'nowrap'}},h('button',{type:'button',onClick:e=>{e.preventDefault();e.stopPropagation();editarLancamentoManual(l);},style:{border:0,background:'transparent',padding:0,color:'var(--primary)',textDecoration:'underline',cursor:'pointer',fontWeight:650}},String(l.numero||"—"))),
                     h('td',{style:{padding:'9px 12px',whiteSpace:'nowrap'}},l.origem||"SEM ORIGEM"),
                     h('td',{style:{padding:'9px 12px',textAlign:'right',whiteSpace:'nowrap'}},formatBRL(Number(l.total_debito||0))),
                     h('td',{style:{padding:'9px 12px',textAlign:'right',whiteSpace:'nowrap'}},formatBRL(Number(l.total_credito||0))),
