@@ -1137,7 +1137,7 @@
         );
       }
       function abrirNovoLancamentoManual() { contabManualSalvandoRef.current = false; setContabManualSalvando(false); limparLancamentoManual(); setContabManualModal(true); }
-      function editarLancamentoManual(l) {
+      function editarLancamentoManual(l, duplicar = false) {
         try {
           if (!l || !l.id) return alert("Não foi possível identificar o lançamento selecionado.");
           const itens = l.contabilidade_lancamento_itens || [];
@@ -1147,7 +1147,7 @@
           const tipo = debitos.length===1 && creditos.length===1 ? "SIMPLES" : debitos.length===1 ? "UM_DEBITO_VARIOS_CREDITOS" : creditos.length===1 ? "VARIOS_DEBITOS_UM_CREDITO" : "VARIOS_DEBITOS_VARIOS_CREDITOS";
           contabManualSalvandoRef.current = false;
           setContabManualSalvando(false);
-          setContabManualEditId(l.id);
+          setContabManualEditId(duplicar ? "" : l.id);
           setContabData(l.data_lancamento || currentDate());
           setContabHistorico(l.historico || "");
           setContabManualTipo(tipo);
@@ -3962,6 +3962,7 @@
                 h("div",{style:{fontSize:12,marginTop:5}},(l.contabilidade_lancamento_itens||[]).map(it=>{const cc=contabPlano.find(c=>c.id===it.conta_id);return (cc?.codigo||"")+" "+(cc?.descricao||"")+" — D "+formatBRL(Number(it.debito||0))+" / C "+formatBRL(Number(it.credito||0));}).join(" | "))
               ]),l.origem==="MANUAL"&&h('div',{style:{display:'flex',gap:6,flexShrink:0}},
                 h('button',{type:'button',className:'action-btn',onClick:()=>editarLancamentoManual(l),title:'Alterar lançamento'},h(Pencil,{size:15})," Alterar"),
+                h('button',{type:'button',className:'action-btn',onClick:()=>editarLancamentoManual(l,true),title:'Duplicar lançamento'}," Duplicar"),
                 h('button',{type:'button',className:'action-btn',onClick:()=>excluirLancamentoManual(l.id),title:'Excluir lançamento'},h(Trash2,{size:15})," Excluir")
               ))))
             ),
