@@ -160,8 +160,8 @@
       const [contabLoading, setContabLoading] = useState(false);
       const [contabErro, setContabErro] = useState("");
       const [contabCodigo, setContabCodigo] = useState("");
-      const [contabMascara, setContabMascara] = useState(() => localStorage.getItem("foundmyapp-contab-mascara") || "#.#.##.##.####");
-      const [contabMascaraEdit, setContabMascaraEdit] = useState(() => localStorage.getItem("foundmyapp-contab-mascara") || "#.#.##.##.####");
+      const [contabMascara, setContabMascara] = useState(() => { const m = localStorage.getItem("foundmyapp-contab-mascara") || "#.#.##.##.######"; return m.replace(/#+$/, g => "#".repeat(6)); });
+      const [contabMascaraEdit, setContabMascaraEdit] = useState(() => { const m = localStorage.getItem("foundmyapp-contab-mascara") || "#.#.##.##.######"; return m.replace(/#+$/, g => "#".repeat(6)); });
       const [contabMascaraAberta, setContabMascaraAberta] = useState(false);
       const [contabDescricao, setContabDescricao] = useState("");
       const [contabBuscaConta, setContabBuscaConta] = useState("");
@@ -1001,7 +1001,8 @@
 
       function salvarMascaraContabil() {
         const grupos = contabMascaraEdit.split(".");
-        if (!contabMascaraEdit.trim() || grupos.some(g => !/^#+$/.test(g))) return alert("Use somente # separados por pontos. Exemplo: #.#.##.##.####");
+        if (!contabMascaraEdit.trim() || grupos.some(g => !/^#+$/.test(g))) return alert("Use somente # separados por pontos. Exemplo: #.#.##.##.######");
+        if (grupos[grupos.length - 1].length !== 6) return alert("O último nível da máscara deve ter exatamente 6 números para as contas analíticas.");
         localStorage.setItem("foundmyapp-contab-mascara", contabMascaraEdit);
         setContabMascara(contabMascaraEdit);
         setContabCodigo(c => formatarCodigoContabil(c, contabMascaraEdit));
@@ -1042,8 +1043,13 @@
         if (!contabCodigo.trim() || !contabDescricao.trim()) return alert("Informe código e descrição da conta.");
         const codigoFormatado = formatarCodigoContabil(contabCodigo);
         const nivelConta = codigoFormatado.split(".").filter(Boolean).length;
+        const gruposMascara = String(contabMascara || "").split(".").filter(Boolean);
+        const ultimoNivelMascara = gruposMascara.length;
+        const larguraUltimoNivel = gruposMascara[gruposMascara.length - 1] ? gruposMascara[gruposMascara.length - 1].length : 0;
         if (nivelConta >= 2 && !contabContaPai) return alert("A partir do segundo nível, é obrigatório informar a conta mãe.");
         if (contabContaPai && !contabPlano.some(c => c.id === contabContaPai && c.tipo === "SINTETICA")) return alert("A conta mãe precisa ser uma conta sintética válida.");
+        if (!contabEditandoId && contabTipo === "ANALITICA" && (nivelConta !== ultimoNivelMascara || codigoFormatado.split(".").pop().length !== 6 || larguraUltimoNivel !== 6)) return alert("A conta analítica deve ser criada no último nível, com exatamente 6 números.");
+        if (!contabEditandoId && contabTipo === "SINTETICA" && nivelConta >= ultimoNivelMascara) return alert("O último nível da máscara é reservado para contas analíticas com 6 números.");
         const payload = { user_id: session.user.id, codigo: codigoFormatado, descricao: contabDescricao.trim(), natureza: contabNatureza, tipo: contabTipo, conta_pai_id: contabContaPai || null, aceita_lancamento: contabTipo === "ANALITICA", ativa: true };
         const query = contabEditandoId
           ? supabaseClient.from("contabilidade_plano_contas").update(payload).eq("id", contabEditandoId).eq("user_id", session.user.id)
@@ -1104,10 +1110,13 @@
         if (!contaPai || contaPai.tipo !== "SINTETICA") return;
         const codigoFilho = proximoCodigoFilhoContabil(contaPai.codigo);
         if (!codigoFilho) return alert("Esta conta já está no último nível permitido pela máscara do plano de contas.");
+        const nivelFilho = codigoFilho.split(".").filter(Boolean).length;
+        const totalNiveis = String(contabMascara || "").split(".").filter(Boolean).length;
+        const tipoFilho = nivelFilho === totalNiveis ? "ANALITICA" : "SINTETICA";
         limparFormularioContaContabil();
         setContabCodigo(codigoFilho);
         setContabNatureza(contaPai.natureza || "ATIVO");
-        setContabTipo("ANALITICA");
+        setContabTipo(tipoFilho);
         setContabContaPai(contaPai.id);
         setContabModalAberto(true);
       }
