@@ -189,6 +189,7 @@
       const [contabManualLinhas, setContabManualLinhas] = useState([{ contaId: "", debito: "", credito: "", historico: "" }]);
       const [contabManualBuscaContas, setContabManualBuscaContas] = useState({});
       const [contabSelecionados, setContabSelecionados] = useState([]);
+      const [contabAcoesMenu, setContabAcoesMenu] = useState(false);
       const [contabRelatorioTipo, setContabRelatorioTipo] = useState("balancete");
       const [contabConsultaIni, setContabConsultaIni] = useState(currentMonth()+"-01");
       const [contabConsultaFim, setContabConsultaFim] = useState(currentDate());
@@ -3955,7 +3956,14 @@
               ),
               contabConsultaExecutada && contabLancamentos.some(l=>l.origem==="MANUAL") && h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}},
                 h('label',{style:{display:'flex',alignItems:'center',gap:7}},h('input',{type:'checkbox',checked:contabLancamentos.filter(l=>l.origem==="MANUAL").length>0&&contabLancamentos.filter(l=>l.origem==="MANUAL").every(l=>contabSelecionados.includes(String(l.id))),onChange:e=>setContabSelecionados(e.target.checked?contabLancamentos.filter(l=>l.origem==="MANUAL").map(l=>String(l.id)):[])})," Selecionar todos os manuais"),
-                h('button',{type:'button',className:'action-btn',onClick:excluirSelecionadosManuais,disabled:!contabSelecionados.length},"Excluir selecionados ("+contabSelecionados.length+")")
+                h('div',{style:{position:'relative'}},
+                  h('button',{type:'button',className:'action-btn',onClick:()=>setContabAcoesMenu(v=>!v),disabled:!contabSelecionados.length},"Ações ("+contabSelecionados.length+")"),
+                  contabAcoesMenu && h('div',{style:{position:'absolute',top:'calc(100% + 5px)',right:0,zIndex:20,minWidth:180,background:'var(--surface)',border:'1px solid var(--line)',borderRadius:8,padding:6,boxShadow:'0 8px 24px rgba(0,0,0,.16)',display:'flex',flexDirection:'column',gap:4}},
+                    h('button',{type:'button',className:'action-btn',disabled:contabSelecionados.length!==1,onClick:()=>{const l=contabLancamentos.find(x=>String(x.id)===String(contabSelecionados[0])&&x.origem==="MANUAL");setContabAcoesMenu(false);if(l)editarLancamentoManual(l);}},"Alterar lançamento"),
+                    h('button',{type:'button',className:'action-btn',disabled:contabSelecionados.length!==1,onClick:()=>{const l=contabLancamentos.find(x=>String(x.id)===String(contabSelecionados[0])&&x.origem==="MANUAL");setContabAcoesMenu(false);if(l)editarLancamentoManual(l,true);}},"Duplicar lançamento"),
+                    h('button',{type:'button',className:'action-btn',onClick:()=>{setContabAcoesMenu(false);excluirSelecionadosManuais();}},"Excluir selecionado(s)")
+                  )
+                )
               ),
               !contabConsultaExecutada ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Informe o período e clique em Consultar para visualizar os lançamentos.") :
               h("div",{className:"list-vertical"},contabLancamentos.length===0 ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum lançamento encontrado no período consultado.") : contabLancamentos.map(l=>h("div",{className:"list-item",key:l.id,style:{alignItems:'flex-start'}},h("div",{className:"list-item-main"},[
@@ -3963,11 +3971,7 @@
                 h("div",{style:{fontWeight:650}},"Nº "+String(l.numero||"—")+" • "+formatDateBR(l.data_lancamento)+" • "+l.historico),
                 h("div",{style:{fontSize:12,color:"var(--ink-soft)"}},(l.origem||"SEM ORIGEM")+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0))),
                 h("div",{style:{fontSize:12,marginTop:5}},(l.contabilidade_lancamento_itens||[]).map(it=>{const cc=contabPlano.find(c=>c.id===it.conta_id);return (cc?.codigo||"")+" "+(cc?.descricao||"")+" — D "+formatBRL(Number(it.debito||0))+" / C "+formatBRL(Number(it.credito||0));}).join(" | "))
-              ]),l.origem==="MANUAL"&&h('div',{style:{display:'flex',gap:6,flexShrink:0}},
-                h('button',{type:'button',className:'action-btn',onClick:()=>editarLancamentoManual(l),title:'Alterar lançamento'},h(Pencil,{size:15})," Alterar"),
-                h('button',{type:'button',className:'action-btn',onClick:()=>editarLancamentoManual(l,true),title:'Duplicar lançamento'}," Duplicar"),
-                h('button',{type:'button',className:'action-btn',onClick:()=>excluirLancamentoManual(l.id),title:'Excluir lançamento'},h(Trash2,{size:15})," Excluir")
-              ))))
+              ]))))
             ),
             contabTab === "relatorios" && h(React.Fragment, null,
               h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:12}},
