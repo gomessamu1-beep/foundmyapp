@@ -3966,12 +3966,27 @@
                 )
               ),
               !contabConsultaExecutada ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Informe o período e clique em Consultar para visualizar os lançamentos.") :
-              h("div",{className:"list-vertical"},contabLancamentos.length===0 ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum lançamento encontrado no período consultado.") : contabLancamentos.map(l=>h("div",{className:"list-item",key:l.id,style:{alignItems:'flex-start'}},h("div",{className:"list-item-main"},[
-                l.origem==="MANUAL"&&h('label',{style:{display:'inline-flex',alignItems:'center',gap:6,marginRight:8,fontSize:12}},h('input',{type:'checkbox',checked:contabSelecionados.includes(String(l.id)),onChange:e=>setContabSelecionados(prev=>e.target.checked?[...prev,String(l.id)]:prev.filter(id=>String(id)!==String(l.id)))}),"Selecionar"),
-                h("div",{style:{fontWeight:650}},"Nº "+String(l.numero||"—")+" • "+formatDateBR(l.data_lancamento)+" • "+l.historico),
-                h("div",{style:{fontSize:12,color:"var(--ink-soft)"}},(l.origem||"SEM ORIGEM")+" • Débito "+formatBRL(Number(l.total_debito||0))+" • Crédito "+formatBRL(Number(l.total_credito||0))),
-                h("div",{style:{fontSize:12,marginTop:5}},(l.contabilidade_lancamento_itens||[]).map(it=>{const cc=contabPlano.find(c=>c.id===it.conta_id);return (cc?.codigo||"")+" "+(cc?.descricao||"")+" — D "+formatBRL(Number(it.debito||0))+" / C "+formatBRL(Number(it.credito||0));}).join(" | "))
-              ]))))
+              h('div',{style:{overflowX:'auto',border:'1px solid var(--line)',borderRadius:8}},
+                contabLancamentos.length===0 ? h("div",{style:{padding:24,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum lançamento encontrado no período consultado.") :
+                h('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:820}},
+                  h('thead',null,h('tr',null,
+                    h('th',{style:{textAlign:'left',padding:'10px 12px',whiteSpace:'nowrap'}},'Data'),
+                    h('th',{style:{textAlign:'left',padding:'10px 12px',whiteSpace:'nowrap'}},'Nº lançamento'),
+                    h('th',{style:{textAlign:'left',padding:'10px 12px',whiteSpace:'nowrap'}},'Origem'),
+                    h('th',{style:{textAlign:'right',padding:'10px 12px',whiteSpace:'nowrap'}},'Total débito'),
+                    h('th',{style:{textAlign:'right',padding:'10px 12px',whiteSpace:'nowrap'}},'Total crédito'),
+                    h('th',{style:{textAlign:'left',padding:'10px 12px'}},'Histórico')
+                  )),
+                  h('tbody',null,contabLancamentos.map(l=>h('tr',{key:l.id,style:{borderTop:'1px solid var(--line)'}},[
+                    h('td',{style:{padding:'9px 12px',whiteSpace:'nowrap'}},formatDateBR(l.data_lancamento)),
+                    h('td',{style:{padding:'9px 12px',whiteSpace:'nowrap'}},h('div',{style:{display:'flex',alignItems:'center',gap:7}},l.origem==="MANUAL"&&h('input',{type:'checkbox',checked:contabSelecionados.includes(String(l.id)),onChange:e=>setContabSelecionados(prev=>e.target.checked?[...prev,String(l.id)]:prev.filter(id=>String(id)!==String(l.id)))}),String(l.numero||"—"))),
+                    h('td',{style:{padding:'9px 12px',whiteSpace:'nowrap'}},l.origem||"SEM ORIGEM"),
+                    h('td',{style:{padding:'9px 12px',textAlign:'right',whiteSpace:'nowrap'}},formatBRL(Number(l.total_debito||0))),
+                    h('td',{style:{padding:'9px 12px',textAlign:'right',whiteSpace:'nowrap'}},formatBRL(Number(l.total_credito||0))),
+                    h('td',{style:{padding:'9px 12px',minWidth:220}},l.historico||"")
+                  ])))
+                )
+              )
             ),
             contabTab === "relatorios" && h(React.Fragment, null,
               h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap",marginBottom:12}},
