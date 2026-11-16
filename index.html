@@ -4105,18 +4105,23 @@
                         else if(natureza==="RECEITA")resumo.receitas-=saldoFinal;
                         else if(natureza==="DESPESA")resumo.despesas+=saldoFinal;
                       }
-                      const naturezaConta=String(conta.natureza||"").toUpperCase();
-                      const naturezaDevedora=["ATIVO","DESPESA"].includes(naturezaConta);
-                      const naturezaCredora=["PASSIVO","PATRIMONIO_LIQUIDO","PATRIMÔNIO_LÍQUIDO","RECEITA"].includes(naturezaConta);
-                      const saldoInvertido=naturezaDevedora?saldoFinal<0:naturezaCredora?saldoFinal>0:false;
-                      const fundoLinha=contabBalanceteDestacarInvertidas&&saldoInvertido?"rgba(220,38,38,.13)":contabBalanceteZebrado&&indiceLinhaBalancete%2===1?"var(--surface-2)":conta.tipo==="SINTETICA"?"var(--surface-2)":"transparent";
+                      const naturezaConta=String(conta.natureza||"").trim().toUpperCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").replace(/\\s+/g,"_");
+                      const naturezaAtivo=naturezaConta==="ATIVO"||naturezaConta.startsWith("ATIVO_");
+                      const naturezaPassivo=naturezaConta==="PASSIVO"||naturezaConta.startsWith("PASSIVO_");
+                      // Ativo tem natureza devedora: saldo credor (negativo) é invertido.
+                      // Passivo tem natureza credora: saldo devedor (positivo) é invertido.
+                      const saldoInvertido=(naturezaAtivo&&saldoFinal<0)||(naturezaPassivo&&saldoFinal>0);
+                      const destacarLinha=contabBalanceteDestacarInvertidas&&saldoInvertido;
+                      const zebrarLinha=contabBalanceteZebrado&&indiceLinhaBalancete%2===1;
+                      const fundoLinha=destacarLinha?"rgba(220,38,38,.13)":zebrarLinha?"#f1f5f9":conta.tipo==="SINTETICA"?"var(--surface-2)":"transparent";
                       indiceLinhaBalancete++;
-                      linhas.push(h("tr",{key:conta.id,style:{fontWeight:conta.tipo==="SINTETICA"?700:400,background:fundoLinha,color:contabBalanceteDestacarInvertidas&&saldoInvertido?"#b91c1c":undefined}},[
-                        h("td",null,conta.codigo),h("td",{style:{paddingLeft:(nivelConta(conta)*8+8)+"px"}},conta.tipo==="ANALITICA"?h("button",{type:"button",onClick:()=>{setContabRelatorioTipo("razao");setContabRazaoContaId(String(conta.id));setContabRazaoBusca("");},style:{border:0,background:"transparent",padding:0,color:contabBalanceteDestacarInvertidas&&saldoInvertido?"#b91c1c":"var(--primary)",textDecoration:"underline",cursor:"pointer",font: "inherit",fontWeight:400}},conta.descricao):conta.descricao),
-                        h("td",{className:"right num"},formatBRL(saldoInicial)),
-                        h("td",{className:"right num"},formatBRL(debito)),
-                        h("td",{className:"right num"},formatBRL(credito)),
-                        h("td",{className:"right num"},formatBRL(saldoFinal))
+                      const estiloCelula={backgroundColor:fundoLinha,color:destacarLinha?"#b91c1c":undefined};
+                      linhas.push(h("tr",{key:conta.id,style:{fontWeight:conta.tipo==="SINTETICA"?700:400}},[
+                        h("td",{style:estiloCelula},conta.codigo),h("td",{style:{...estiloCelula,paddingLeft:(nivelConta(conta)*8+8)+"px"}},conta.tipo==="ANALITICA"?h("button",{type:"button",onClick:()=>{setContabRelatorioTipo("razao");setContabRazaoContaId(String(conta.id));setContabRazaoBusca("");},style:{border:0,background:"transparent",padding:0,color:destacarLinha?"#b91c1c":"var(--primary)",textDecoration:"underline",cursor:"pointer",font: "inherit",fontWeight:400}},conta.descricao):conta.descricao),
+                        h("td",{className:"right num",style:estiloCelula},formatBRL(saldoInicial)),
+                        h("td",{className:"right num",style:estiloCelula},formatBRL(debito)),
+                        h("td",{className:"right num",style:estiloCelula},formatBRL(credito)),
+                        h("td",{className:"right num",style:estiloCelula},formatBRL(saldoFinal))
                       ]));
                     });
                     const analiticas=contasOrdenadas.filter(x=>x.tipo==="ANALITICA"&&(!isBalanco||naturezasBalanco.includes(String(x.natureza||"").toUpperCase())));
