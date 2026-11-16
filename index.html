@@ -3889,9 +3889,12 @@
               ),
               contabManualModal && h('div',{className:'modal-overlay',style:{zIndex:10090},onMouseDown:e=>e.stopPropagation(),onClick:e=>e.stopPropagation()},
                 h('div',{className:'modal-content',onMouseDown:e=>e.stopPropagation(),onClick:e=>e.stopPropagation(),style:{maxWidth:1040,width:'min(1040px, calc(100vw - 32px))',maxHeight:'94vh',overflowY:'auto',padding:22}},
-                  h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+                  h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,marginBottom:12,flexWrap:'wrap'}},
                     h('h3',{style:{margin:0}},contabManualEditId?"Alterar lançamento contábil":"Incluir lançamento manual"),
-                    h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualModal(false)},"✕")
+                    h('div',{style:{display:'flex',alignItems:'center',gap:6}},
+                      contabManualEditId && h('button',{type:'button',className:'action-btn',onClick:()=>{contabManualSalvandoRef.current=false;setContabManualSalvando(false);setContabManualEditId("");},title:'Criar uma cópia deste lançamento'},"Duplicar lançamento"),
+                      h('button',{type:'button',className:'action-btn',onClick:()=>setContabManualModal(false)},"✕")
+                    )
                   ),
                   h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10}},"Origem: MANUAL • Informe as partidas de débito e crédito. Os totais precisam ser iguais."),
                   h('form',{onSubmit:salvarLancamentoContabil,style:{display:'flex',flexDirection:'column',gap:12}},
