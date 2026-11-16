@@ -196,6 +196,8 @@
       const [contabConsultaExecutada, setContabConsultaExecutada] = useState(false);
       const [contabRelatorioExecutado, setContabRelatorioExecutado] = useState(false);
       const [contabImprimirTotais, setContabImprimirTotais] = useState(false);
+      const [contabBalanceteZebrado, setContabBalanceteZebrado] = useState(false);
+      const [contabBalanceteDestacarInvertidas, setContabBalanceteDestacarInvertidas] = useState(false);
       const [contabRazaoContaId, setContabRazaoContaId] = useState("");
       const [contabRazaoBusca, setContabRazaoBusca] = useState("");
       const [contabRazaoSeletorAberto, setContabRazaoSeletorAberto] = useState(false);
@@ -4051,6 +4053,10 @@
                 ]))
               ) : h("div",{style:{overflowX:"auto"}},[
                 h("h3",null,contabRelatorioTipo==="dre"?"Demonstração do Resultado (DRE)":contabRelatorioTipo==="balanco"?"Balanço Patrimonial":"Balancete de Verificação"),
+                contabRelatorioTipo==="balancete" && h("div",{style:{display:"flex",gap:18,alignItems:"center",flexWrap:"wrap",margin:"8px 0 12px"}},
+                  h("label",{style:{display:"inline-flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:13}},h("input",{type:"checkbox",checked:contabBalanceteZebrado,onChange:e=>setContabBalanceteZebrado(e.target.checked)})," Linhas zebradas"),
+                  h("label",{style:{display:"inline-flex",alignItems:"center",gap:7,cursor:"pointer",fontSize:13}},h("input",{type:"checkbox",checked:contabBalanceteDestacarInvertidas,onChange:e=>setContabBalanceteDestacarInvertidas(e.target.checked)})," Destacar contas com saldo invertido")
+                ),
                 h("table",null,[
                   h("thead",null,h("tr",null,(contabRelatorioTipo==="balancete"||contabRelatorioTipo==="balanco"?["Código","Conta","Saldo Inicial","Débito","Crédito","Saldo Final"]:["Código","Conta","Débitos","Créditos","Saldo Devedor","Saldo Credor"]).map((v,i)=>h("th",{key:i,className:i>1?"right":""},v)))),
                   h("tbody",null,(contabRelatorioTipo==="balancete"||contabRelatorioTipo==="balanco") ? (()=>{
@@ -4076,6 +4082,7 @@
                       return nivel;
                     };
                     const linhas=[];
+                    let indiceLinhaBalancete=0;
                     const resumo={ativo:0,passivo:0,receitas:0,despesas:0};
                     contasOrdenadas.forEach(conta=>{
                       if(isBalanco && nivelConta(conta)>3)return;
@@ -4098,8 +4105,14 @@
                         else if(natureza==="RECEITA")resumo.receitas-=saldoFinal;
                         else if(natureza==="DESPESA")resumo.despesas+=saldoFinal;
                       }
-                      linhas.push(h("tr",{key:conta.id,style:{fontWeight:conta.tipo==="SINTETICA"?700:400,background:conta.tipo==="SINTETICA"?"var(--surface-2)":"transparent"}},[
-                        h("td",null,conta.codigo),h("td",{style:{paddingLeft:(nivelConta(conta)*8+8)+"px"}},conta.tipo==="ANALITICA"?h("button",{type:"button",onClick:()=>{setContabRelatorioTipo("razao");setContabRazaoContaId(String(conta.id));setContabRazaoBusca("");},style:{border:0,background:"transparent",padding:0,color:"var(--primary)",textDecoration:"underline",cursor:"pointer",font: "inherit",fontWeight:400}},conta.descricao):conta.descricao),
+                      const naturezaConta=String(conta.natureza||"").toUpperCase();
+                      const naturezaDevedora=["ATIVO","DESPESA"].includes(naturezaConta);
+                      const naturezaCredora=["PASSIVO","PATRIMONIO_LIQUIDO","PATRIMÔNIO_LÍQUIDO","RECEITA"].includes(naturezaConta);
+                      const saldoInvertido=naturezaDevedora?saldoFinal<0:naturezaCredora?saldoFinal>0:false;
+                      const fundoLinha=contabBalanceteDestacarInvertidas&&saldoInvertido?"rgba(220,38,38,.13)":contabBalanceteZebrado&&indiceLinhaBalancete%2===1?"var(--surface-2)":conta.tipo==="SINTETICA"?"var(--surface-2)":"transparent";
+                      indiceLinhaBalancete++;
+                      linhas.push(h("tr",{key:conta.id,style:{fontWeight:conta.tipo==="SINTETICA"?700:400,background:fundoLinha,color:contabBalanceteDestacarInvertidas&&saldoInvertido?"#b91c1c":undefined}},[
+                        h("td",null,conta.codigo),h("td",{style:{paddingLeft:(nivelConta(conta)*8+8)+"px"}},conta.tipo==="ANALITICA"?h("button",{type:"button",onClick:()=>{setContabRelatorioTipo("razao");setContabRazaoContaId(String(conta.id));setContabRazaoBusca("");},style:{border:0,background:"transparent",padding:0,color:contabBalanceteDestacarInvertidas&&saldoInvertido?"#b91c1c":"var(--primary)",textDecoration:"underline",cursor:"pointer",font: "inherit",fontWeight:400}},conta.descricao):conta.descricao),
                         h("td",{className:"right num"},formatBRL(saldoInicial)),
                         h("td",{className:"right num"},formatBRL(debito)),
                         h("td",{className:"right num"},formatBRL(credito)),
