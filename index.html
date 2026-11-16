@@ -1070,9 +1070,40 @@
         setContabModalAberto(true);
       }
 
+      function proximoCodigoFilhoContabil(codigoPai) {
+        const partesPai = formatarCodigoContabil(codigoPai).split(".").filter(Boolean);
+        const larguras = String(contabMascara || "").split(".").map(g => g.length).filter(n => n > 0);
+        if (partesPai.length >= larguras.length) return "";
+        const largura = larguras[partesPai.length];
+        const prefixo = partesPai.join(".") + ".";
+        let maior = 0;
+        (contabPlano || []).forEach(conta => {
+          const codigo = String(conta.codigo || "");
+          if (!codigo.startsWith(prefixo)) return;
+          const partes = codigo.split(".");
+          if (partes.length !== partesPai.length + 1) return;
+          const segmento = partes[partes.length - 1];
+          if (!/^\\d+$/.test(segmento) || segmento.length !== largura) return;
+          maior = Math.max(maior, Number(segmento) || 0);
+        });
+        return prefixo + String(maior + 1).padStart(largura, "0");
+      }
+
+      function nivelHierarquiaPlano(conta) {
+        let nivel = 0, atual = conta;
+        const vistos = new Set();
+        while (atual && atual.conta_pai_id && !vistos.has(String(atual.id))) {
+          vistos.add(String(atual.id));
+          atual = (contabPlano || []).find(x => String(x.id) === String(atual.conta_pai_id));
+          if (atual) nivel++;
+        }
+        return nivel;
+      }
+
       function abrirInclusaoContaFilha(contaPai) {
         if (!contaPai || contaPai.tipo !== "SINTETICA") return;
-        const codigoFilho = proximoCodigoContabil(contaPai.codigo);
+        const codigoFilho = proximoCodigoFilhoContabil(contaPai.codigo);
+        if (!codigoFilho) return alert("Esta conta já está no último nível permitido pela máscara do plano de contas.");
         limparFormularioContaContabil();
         setContabCodigo(codigoFilho);
         setContabNatureza(contaPai.natureza || "ATIVO");
@@ -3867,7 +3898,7 @@
               ),
               h('div', { className: 'list-vertical', style:{gap:0,marginTop:8} }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contasPlanoFiltradas().length === 0 ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Nenhuma conta encontrada com esse nome ou código.") : contasPlanoFiltradas().map(c => {
                 const mae = contabPlano.find(p => p.id === c.conta_pai_id);
-                return h('div', { className: 'list-item', key:c.id, style:{ padding: '5px 10px', paddingLeft: c.conta_pai_id ? 30 : 10, borderRadius:0, borderLeft:0, borderRight:0, borderTop:0 } },
+                return h('div', { className: 'list-item', key:c.id, style:{ padding: '5px 10px', paddingLeft: 10 + nivelHierarquiaPlano(c) * 22, borderRadius:0, borderLeft:0, borderRight:0, borderTop:0 } },
                   h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,minHeight:24}},
                     h('div',{style:{display:'flex',alignItems:'center',gap:8,minWidth:0,flex:1,flexWrap:'wrap'}},
                       h('span',{style:{fontSize:14,fontWeight:c.tipo==="SINTETICA"?800:500}},c.codigo+" - "+c.descricao),
