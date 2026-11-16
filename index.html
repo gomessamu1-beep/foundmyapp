@@ -966,7 +966,7 @@
         if (!contabConsultaIni || !contabConsultaFim || contabConsultaIni > contabConsultaFim) return alert("Informe um período válido.");
         setContabLoading(true); setContabErro("");
         try {
-          const { data, error } = await supabaseClient.from("contabilidade_lancamentos").select("*, contabilidade_lancamento_itens(*, contabilidade_plano_contas(codigo,descricao))").eq("user_id",session.user.id).gte("data_lancamento",contabConsultaIni).lte("data_lancamento",contabConsultaFim).order("data_lancamento",{ascending:false});
+          const { data, error } = await supabaseClient.from("contabilidade_lancamentos").select("*, contabilidade_lancamento_itens(*, contabilidade_plano_contas(codigo,descricao))").eq("user_id",session.user.id).gte("data_lancamento",contabConsultaIni).lte("data_lancamento",contabConsultaFim).order("data_lancamento",{ascending:true});
           if(error) throw error; setContabLancamentos(data||[]); setContabConsultaExecutada(true);
         } catch(e) { setContabErro("Não foi possível consultar os lançamentos: "+(e.message||"erro desconhecido")); }
         finally { setContabLoading(false); }
