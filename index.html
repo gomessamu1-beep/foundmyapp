@@ -177,6 +177,11 @@
       const [contabRegerarTodasCategorias, setContabRegerarTodasCategorias] = useState(true);
       const [contabRegerarCategorias, setContabRegerarCategorias] = useState([]);
       const [contabData, setContabData] = useState(currentDate());
+      const [contabPeriodoModal, setContabPeriodoModal] = useState(false);
+      const [contabPeriodo, setContabPeriodo] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("foundmyapp-contab-periodo-" + (JSON.parse(localStorage.getItem("foundmyapp-session-user") || "null")?.id || "default")) || "null") || { inicio:"", fim:"" }; }
+        catch(e) { return { inicio:"", fim:"" }; }
+      });
       const [contabHistorico, setContabHistorico] = useState("");
       const [contabDebitoId, setContabDebitoId] = useState("");
       const [contabCreditoId, setContabCreditoId] = useState("");
@@ -1182,6 +1187,27 @@
           h("td",null,h("button",{type:"button",className:"action-btn",title:"Remover partida",onClick:()=>setContabManualLinhas(prev=>prev.length>1?prev.filter((x,j)=>j!==i):[{contaId:"",debito:"",credito:"",historico:""}]),disabled:contabManualLinhas.length<=1},"×"))
         );
       }
+      function periodoContabilAtual() {
+        try { return JSON.parse(localStorage.getItem("foundmyapp-contab-periodo-" + (session?.user?.id || "default")) || "null") || { inicio:"", fim:"" }; }
+        catch(e) { return { inicio:"", fim:"" }; }
+      }
+      function validarPeriodoContabil(data, avisar = true) {
+        const periodo = periodoContabilAtual();
+        if (!periodo.inicio || !periodo.fim) return true;
+        if (data >= periodo.inicio && data <= periodo.fim) return true;
+        if (avisar) alert("Lançamento fora do Período de Trabalho da Contabilidade. Período permitido: " + periodo.inicio.split("-").reverse().join("/") + " até " + periodo.fim.split("-").reverse().join("/") + ".");
+        return false;
+      }
+      function salvarPeriodoContabil() {
+        if (!contabPeriodo.inicio || !contabPeriodo.fim || contabPeriodo.inicio > contabPeriodo.fim) return alert("Informe um período válido, com a data inicial anterior ou igual à data final.");
+        localStorage.setItem("foundmyapp-contab-periodo-" + (session?.user?.id || "default"), JSON.stringify(contabPeriodo));
+        setContabPeriodoModal(false);
+        alert("Período de Trabalho da Contabilidade salvo.");
+      }
+      function abrirPeriodoContabil() {
+        setContabPeriodo(periodoContabilAtual());
+        setContabPeriodoModal(true);
+      }
       function abrirNovoLancamentoManual() { contabManualSalvandoRef.current = false; setContabManualSalvando(false); limparLancamentoManual(); setContabManualModal(true); }
       function editarLancamentoManual(l, duplicar = false) {
         try {
@@ -1216,6 +1242,7 @@
         const creditos=contabManualLinhas.filter(x=>parseValorInput(x.credito)>0).map(x=>({contaId:String(x.contaId||""),valor:parseValorInput(x.credito),historico:x.historico||""}));
         const totalDebito=debitos.reduce((s,x)=>s+x.valor,0), totalCredito=creditos.reduce((s,x)=>s+x.valor,0);
         if(!contabData || !contabHistorico.trim())return alert("Preencha a data e o histórico do lançamento.");
+        if (!validarPeriodoContabil(contabData)) return;
         if(!debitos.length || !creditos.length || debitos.some(x=>!x.contaId || !(x.valor>0)) || creditos.some(x=>!x.contaId || !(x.valor>0)))return alert("Informe uma conta analítica e um valor maior que zero para cada partida.");
         if(Math.abs(totalDebito-totalCredito)>0.005)return alert("Lançamento não balanceado. Total dos débitos: "+formatBRL(totalDebito)+"; total dos créditos: "+formatBRL(totalCredito)+". Os dois totais precisam ser iguais.");
         const todasContas=[...debitos,...creditos].map(x=>x.contaId);
@@ -1287,6 +1314,7 @@
         const contaCredito = (contabPlano || []).find(c => String(c.id) === String(cartao?.contaContabilId) && c.tipo === "ANALITICA" && c.ativa !== false);
         const valor = Number(compra.total || 0);
         const dataMov = compra.dataCompra || currentDate();
+        if (!validarPeriodoContabil(dataMov, false)) return false;
         const competenciaBase = String(compra.inicio || dataMov).slice(0, 7);
         if (!contaDebito || !contaCredito || !(valor > 0)) {
           if (avisar) alert("A compra foi salva na fatura, mas não foi contabilizada. Verifique se a subcategoria possui uma conta contábil analítica e se o cartão selecionado possui uma conta contábil analítica vinculada.");
@@ -1340,6 +1368,7 @@
             const p = f.item;
             const dataMov = f.tipo === "fatura" ? (p.dataCompra || currentDate()) : (p.dataBaixa || p.dataCompra || currentDate());
             if (dataMov < contabRegerarIni || dataMov > contabRegerarFim) { foraPeriodo++; continue; }
+            if (!validarPeriodoContabil(dataMov, false)) { foraPeriodo++; continue; }
             if (categoriasAlvo && !categoriasAlvo.includes(String(p.categoriaId))) { continue; }
             const banco = contasBancarias.find(x => x.id === p.bancoBaixaId);
             const cartao = f.tipo === "fatura" ? (cartoes || []).find(x => String(x.id) === String(p.cartaoId)) : null;
@@ -3974,8 +4003,24 @@
               h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
                 h('h3',{style:{margin:0}},"Lançamentos Contábeis"),
                 h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+                  h('button',{type:'button',className:'action-btn',onClick:abrirPeriodoContabil},"Período de Trabalho"),
                   h('button',{type:'button',className:'primary',onClick:abrirNovoLancamentoManual},h(Plus,{size:15})," Incluir lançamento"),
                   h('button',{type:'button',className:'action-btn',onClick:abrirModalRegerarContabilidade,disabled:contabLoading},contabLoading?"Processando...":"Regerar Contabilidade")
+                )
+              ),
+              contabPeriodoModal && h('div',{className:'modal-overlay',style:{zIndex:10100},onMouseDown:e=>{if(e.target===e.currentTarget)setContabPeriodoModal(false);}},
+                h('div',{className:'modal-content',style:{maxWidth:460}},
+                  h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,marginBottom:14}},
+                    h('h3',{style:{margin:0}},"Período de Trabalho"),
+                    h('button',{type:'button',className:'action-btn',onClick:()=>setContabPeriodoModal(false)},"✕")
+                  ),
+                  h('p',{style:{fontSize:13,color:'var(--ink-soft)',marginTop:0}},"Somente lançamentos com data dentro deste intervalo poderão ser incluídos ou alterados. Deixe em branco para não aplicar o bloqueio."),
+                  h('div',{className:'field'},h('label',null,"Data inicial"),h('input',{type:'date',value:contabPeriodo.inicio||"",onChange:e=>setContabPeriodo(p=>({...p,inicio:e.target.value}))})),
+                  h('div',{className:'field'},h('label',null,"Data final"),h('input',{type:'date',value:contabPeriodo.fim||"",onChange:e=>setContabPeriodo(p=>({...p,fim:e.target.value}))})),
+                  h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,marginTop:14,flexWrap:'wrap'}},
+                    h('button',{type:'button',className:'action-btn',onClick:()=>{setContabPeriodo({inicio:"",fim:""});localStorage.removeItem("foundmyapp-contab-periodo-"+(session?.user?.id||"default"));setContabPeriodoModal(false);}},"Liberar período"),
+                    h('button',{type:'button',className:'primary',onClick:salvarPeriodoContabil},"Salvar período")
+                  )
                 )
               ),
               contabManualModal && h('div',{className:'modal-overlay',style:{zIndex:10090},onMouseDown:e=>e.stopPropagation(),onClick:e=>e.stopPropagation()},
