@@ -372,6 +372,9 @@
       const [planilhaArquivo, setPlanilhaArquivo] = useState("");
       const [planilhaImportando, setPlanilhaImportando] = useState(false);
       const [pdfModalOpen, setPdfModalOpen] = useState(false);
+      const [pdfLayouts, setPdfLayouts] = useState([]);
+      const [pdfLayoutSelecionado, setPdfLayoutSelecionado] = useState("");
+      const [pdfLayoutsCarregando, setPdfLayoutsCarregando] = useState(false);
       const [pdfPreview, setPdfPreview] = useState([]);
       const [pdfError, setPdfError] = useState("");
       const [pdfArquivo, setPdfArquivo] = useState("");
@@ -1676,11 +1679,45 @@
         return contasBancarias.find(c => normalizarTextoImportacao(c.nome) === alvo) || null;
       }
 
-      function abrirImportacaoPDF() {
+      async function carregarLayoutsFaturaPDF() {
+        if (!supabaseClient) {
+          setPdfError("Conexão com o Supabase indisponível.");
+          return;
+        }
+        setPdfLayoutsCarregando(true);
+        try {
+          const { data: usuarioAtual, error: erroUsuario } = await supabaseClient.auth.getUser();
+          const usuarioId = usuarioAtual?.user?.id || session?.user?.id;
+          if (erroUsuario || !usuarioId) throw erroUsuario || new Error("Sessão não identificada. Entre novamente no aplicativo.");
+          const { data, error } = await supabaseClient
+            .from("layouts_faturas_pdf")
+            .select("id,banco,nome,parser_key,configuracao")
+            .eq("ativo", true)
+            .order("banco", { ascending: true })
+            .order("nome", { ascending: true });
+          if (error) throw error;
+          const layouts = data || [];
+          setPdfLayouts(layouts);
+          setPdfLayoutSelecionado(atual => layouts.some(x => String(x.id) === String(atual))
+            ? atual
+            : (layouts.find(x => x.parser_key === "santander_cartao_v1")?.id || layouts[0]?.id || ""));
+          if (!layouts.length) setPdfError("Nenhum layout ativo foi cadastrado no Supabase.");
+        } catch (error) {
+          console.error("[FoundMyApp] Erro ao carregar layouts de fatura:", error);
+          setPdfError("Não foi possível carregar os layouts do Supabase: " + (error?.message || "erro desconhecido"));
+        } finally {
+          setPdfLayoutsCarregando(false);
+        }
+      }
+
+      async function abrirImportacaoPDF() {
         setPdfError("");
         setPdfPreview([]);
         setPdfArquivo("");
+        setPdfLayouts([]);
+        setPdfLayoutSelecionado("");
         setPdfModalOpen(true);
+        await carregarLayoutsFaturaPDF();
       }
 
       function normalizarDescricaoPDF(valor) {
@@ -1812,6 +1849,17 @@
         const file = event.target.files?.[0];
         if (!file) return;
         setPdfError("");
+        const layoutSelecionado = pdfLayouts.find(x => String(x.id) === String(pdfLayoutSelecionado));
+        if (!layoutSelecionado) {
+          setPdfError("Selecione um layout de fatura antes de escolher o PDF.");
+          event.target.value = "";
+          return;
+        }
+        if (layoutSelecionado.parser_key !== "santander_cartao_v1") {
+          setPdfError("O layout " + layoutSelecionado.nome + " está cadastrado no Supabase, mas ainda não possui um interpretador de PDF implementado no FoundMyApp. O leitor desse banco precisa ser desenvolvido antes da importação.");
+          event.target.value = "";
+          return;
+        }
         setPdfPreview([]);
         setPdfArquivo(file.name);
         setPdfImportando(true);
@@ -4728,12 +4776,28 @@
               h('strong', { style: { fontSize: 18 } }, 'Importar Fatura do Cartão — PDF'),
               h('button', { type: 'button', className: 'action-btn', onClick: () => setPdfModalOpen(false), disabled: pdfImportando }, h(XIcon, { size: 16 }))
             ),
-            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione o PDF da fatura. O sistema identifica os lançamentos, marca duplicados e permite informar categoria, subcategoria e parcelas dos novos. Faturas fechadas não aceitam novas importações.'),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Primeiro escolha o layout do banco. Depois selecione o PDF. O sistema identifica os lançamentos, marca duplicados e permite informar categoria, subcategoria e parcelas dos novos. Faturas fechadas não aceitam novas importações.'),
+            h('div', { className: 'field', style: { marginBottom: 12, maxWidth: 460 } },
+              h('label', null, 'Layout da fatura'),
+              h('select', {
+                value: pdfLayoutSelecionado,
+                disabled: pdfLayoutsCarregando || pdfImportando || !pdfLayouts.length,
+                onChange: e => { setPdfLayoutSelecionado(e.target.value); setPdfError(""); },
+                style: { width: '100%' }
+              },
+                h('option', { value: '' }, pdfLayoutsCarregando ? 'Carregando layouts...' : 'Selecione o banco / layout'),
+                pdfLayouts.map(layout => h('option', { key: layout.id, value: layout.id }, layout.banco + ' — ' + layout.nome))
+              ),
+              h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 4 } },
+                pdfLayoutsCarregando ? 'Consultando os layouts cadastrados no Supabase...' :
+                (pdfLayouts.length ? 'Os layouts são carregados diretamente do Supabase.' : 'Cadastre um layout ativo na tabela layouts_faturas_pdf do Supabase.')
+              )
+            ),
             h('div', { style: { display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12 } },
-              h('button', { type: 'button', className: 'primary', onClick: () => { if (pdfInputRef.current) pdfInputRef.current.click(); }, disabled: pdfImportando, style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: pdfImportando ? 'wait' : 'pointer', background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
+              h('button', { type: 'button', className: 'primary', onClick: () => { if (pdfInputRef.current && pdfLayoutSelecionado && !pdfLayoutsCarregando) pdfInputRef.current.click(); }, disabled: pdfImportando || pdfLayoutsCarregando || !pdfLayoutSelecionado, style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: pdfImportando ? 'wait' : 'pointer', background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
                 h(FileText, { size: 17 }), ' Selecionar PDF para Importação'
               ),
-              h('input', { ref: pdfInputRef, type: 'file', accept: 'application/pdf,.pdf', style: { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }, onChange: lerFaturaPDF })
+              h('input', { ref: pdfInputRef, type: 'file', accept: 'application/pdf,.pdf', disabled: pdfLayoutsCarregando || !pdfLayoutSelecionado || pdfImportando, style: { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }, onChange: lerFaturaPDF })
             ),
             pdfArquivo && h('div', { style: { fontSize: 12, marginBottom: 8 } }, 'Arquivo: ' + pdfArquivo),
             pdfImportando && h('div', { style: { padding: 10, background: '#FAF8F2', marginBottom: 10 } }, 'Lendo a fatura...'),
