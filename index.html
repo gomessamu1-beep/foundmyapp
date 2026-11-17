@@ -1326,7 +1326,7 @@
         }
         const userId = session.user.id;
         const categoriasAlvo = contabRegerarTodasCategorias ? null : contabRegerarCategorias;
-        if (!confirm("Confirma regerar a contabilidade de " + contabRegerarIni.split("-").reverse().join("/") + " até " + contabRegerarFim.split("-").reverse().join("/") + (categoriasAlvo ? ", para todas as categorias" : ", para " + categoriasAlvo.length + " categoria(s)") + "? Os lançamentos contábeis existentes serão preservados e não serão duplicados.")) return;
+        if (!confirm("Confirma regerar a contabilidade de " + contabRegerarIni.split("-").reverse().join("/") + " até " + contabRegerarFim.split("-").reverse().join("/") + (contabRegerarTodasCategorias ? ", para todas as categorias" : ", para " + categoriasAlvo.length + " categoria(s)") + "? Os lançamentos contábeis existentes serão preservados e não serão duplicados.")) return;
         let criados = 0, jaExistentes = 0, semVinculo = 0, foraPeriodo = 0, falhas = 0;
         setContabLoading(true);
         setContabErro("");
