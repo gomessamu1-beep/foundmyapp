@@ -270,6 +270,7 @@
       const [concilEditModal, setConcilEditModal] = useState({ open: false, item: null });
 
       const [baixaModal, setBaixaModal] = useState({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
+      const [pagamentoCartaoModal, setPagamentoCartaoModal] = useState({ open:false, id:null, dataBaixa:currentDate(), cartaoId:"", juros:"", parcelas:"1", competencia:currentMonth() });
       const [batchBaixaModal, setBatchBaixaModal] = useState({ open: false, bancoId: "", dataBaixa: currentDate() });
       const [fecharFaturaModal, setFecharFaturaModal] = useState({ open: false, comp: "", totais: [], vencimentos: {} });
       const [fecharFaturaCatId, setFecharFaturaCatId] = useState("");
@@ -3158,6 +3159,61 @@
         return { ok:true };
       }
 
+      async function criarLancamentoContabilPagamentoCartaoPagar(titulo, cartaoId, dataBaixaStr, juros) {
+        const userId = session && session.user && session.user.id;
+        if (!userId || !supabaseClient) return { ok:false, mensagem:"Não foi possível acessar a contabilidade. Faça login novamente." };
+        const cartao = (cartoes || []).find(x => String(x.id) === String(cartaoId));
+        const contaCartao = contabPlano.find(x => String(x.id) === String(cartao && cartao.contaContabilId) && x.tipo === "ANALITICA" && x.natureza === "PASSIVO" && x.ativa !== false && x.aceita_lancamento !== false);
+        const contaFornecedores = contabPlano.find(x => String(x.descricao || "").trim().toUpperCase() === "FORNECEDORES" && x.natureza === "PASSIVO" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
+        const contaJuros = contabPlano.find(x => String(x.id) === String(contabContaAcrescimoId) && x.tipo === "ANALITICA" && x.natureza === "DESPESA" && x.ativa !== false && x.aceita_lancamento !== false);
+        const principal = Math.max(0, Number(titulo.valorParcela || titulo.total || 0));
+        const totalJuros = Math.max(0, Number(juros || 0));
+        const total = Number((principal + totalJuros).toFixed(2));
+        if (!cartao || !contaCartao) return { ok:false, mensagem:"O cartão precisa ter uma conta contábil analítica de PASSIVO vinculada." };
+        if (!contaFornecedores) return { ok:false, mensagem:"A conta analítica FORNECEDORES não foi encontrada no Plano de Contas." };
+        if (totalJuros > 0 && !contaJuros) return { ok:false, mensagem:"Configure uma conta contábil analítica de despesa para juros/acréscimos." };
+        if (!(principal > 0) || !(total > 0)) return { ok:false, mensagem:"O valor da conta precisa ser maior que zero." };
+        if (!validarPeriodoContabil(dataBaixaStr, false)) return { ok:false, mensagem:"A data da baixa está fora do período contábil permitido." };
+        const busca = await supabaseClient.from("contabilidade_lancamentos").select("id").eq("user_id",userId).eq("origem","CONTAS_PAGAR_CARTAO").eq("origem_id",String(titulo.id)).maybeSingle();
+        if (busca.error) return { ok:false, mensagem:"Não foi possível verificar lançamentos anteriores: " + busca.error.message };
+        if (busca.data) return { ok:true, existente:true };
+        const historico = "Pagamento com cartão " + cartao.nome + ": " + (titulo.descricao || "Conta a pagar");
+        const partidas = [{user_id:userId,conta_id:contaFornecedores.id,sequencia:1,historico,debito:principal,credito:0}];
+        if (totalJuros > 0) partidas.push({user_id:userId,conta_id:contaJuros.id,sequencia:2,historico:"Juros do pagamento com cartão",debito:totalJuros,credito:0});
+        partidas.push({user_id:userId,conta_id:contaCartao.id,sequencia:partidas.length+1,historico,debito:0,credito:total});
+        const cabRes = await supabaseClient.from("contabilidade_lancamentos").insert({user_id:userId,data_lancamento:dataBaixaStr,competencia:String(dataBaixaStr).slice(0,7)+"-01",historico,origem:"CONTAS_PAGAR_CARTAO",origem_id:String(titulo.id),status:"EFETIVADO",total_debito:total,total_credito:total}).select().single();
+        if (cabRes.error || !cabRes.data) return {ok:false,mensagem:"Não foi possível criar o lançamento contábil: " + (cabRes.error && cabRes.error.message || "erro desconhecido")};
+        const itensRes = await supabaseClient.from("contabilidade_lancamento_itens").insert(partidas.map(x => Object.assign({},x,{lancamento_id:cabRes.data.id})));
+        if (itensRes.error) { await supabaseClient.from("contabilidade_lancamentos").delete().eq("id",cabRes.data.id).eq("user_id",userId); return {ok:false,mensagem:"Não foi possível gravar as partidas: " + itensRes.error.message}; }
+        return {ok:true};
+      }
+
+      async function executarPagamentoCartaoPagar() {
+        const modal = pagamentoCartaoModal;
+        const titulo = contasPagar.find(p => String(p.id) === String(modal.id));
+        if (!titulo || titulo.status === "Baixado") return alert("Esta conta não está disponível para pagamento.");
+        if (!modal.dataBaixa || !modal.cartaoId || !modal.competencia) return alert("Informe a data da baixa, o cartão e a competência inicial.");
+        const juros = modal.juros.trim() ? parseValorInput(modal.juros) : 0;
+        const parcelas = Number(modal.parcelas);
+        if (!Number.isFinite(juros) || juros < 0 || !Number.isInteger(parcelas) || parcelas < 1 || parcelas > 60) return alert("Informe juros válidos e de 1 a 60 parcelas.");
+        const principal = Number(titulo.valorParcela || titulo.total || 0);
+        const total = Number((principal + juros).toFixed(2));
+        if (!(principal > 0) || !(total > 0)) return alert("O valor da conta é inválido.");
+        if (isDiaFechado(modal.dataBaixa) || isMesFechado(modal.dataBaixa.slice(0,7))) return alert("A data da baixa está em um período fechado.");
+        if (isFaturaFechada(modal.competencia) || isMesFechado(modal.competencia)) return alert("A competência inicial da fatura está fechada.");
+        const cartao = (cartoes || []).find(x => String(x.id) === String(modal.cartaoId));
+        if (!cartao) return alert("Selecione um cartão válido.");
+        if ((purchases || []).some(x => String(x.contaPagarOrigemId || "") === String(titulo.id))) return alert("Já existe uma compra de cartão vinculada a esta conta.");
+        const resultado = await criarLancamentoContabilPagamentoCartaoPagar(titulo,modal.cartaoId,modal.dataBaixa,juros);
+        if (!resultado.ok) return alert(resultado.mensagem);
+        const compra = {id:uid(),descricao:"Pagamento de conta: " + (titulo.descricao || "Conta a pagar"),observacao:"Gerado pela baixa da conta a pagar " + String(titulo.id),total,valorBase:principal,valorParcela:Number((total/parcelas).toFixed(2)),valorParcelaBase:Number((principal/parcelas).toFixed(2)),acrescimo:juros,desconto:0,dataCompra:modal.dataBaixa,dataVencimento:modal.dataBaixa,parcelas,parcelaInicial:1,inicio:modal.competencia,recorrente:false,cartaoId:modal.cartaoId,categoriaId:titulo.categoriaId || null,subcategoriaId:titulo.subcategoriaId || null,status:"Em aberto",origem:"FATURA",naoContabilizarDespesa:true,contaPagarOrigemId:String(titulo.id),criadoEm:Date.now()};
+        const novasCompras = purchases.concat([compra]);
+        const novasContasPagar = contasPagar.map(p => String(p.id) === String(titulo.id) ? Object.assign({},p,{status:"Baixado",bancoBaixaId:null,dataBaixa:modal.dataBaixa,formaBaixa:"CARTAO",cartaoBaixaId:modal.cartaoId,compraCartaoId:compra.id,jurosPagamentoCartao:juros,valorPagamentoCartao:total}) : p);
+        setPurchases(novasCompras); setContasPagar(novasContasPagar);
+        await saveDataToSupabase(novasCompras,novasContasPagar,contasReceber,cartoes,contasBancarias,categorias,deparaList,faturasFechadas,faturasBaixadas,diasFechados,mesesFechados);
+        setPagamentoCartaoModal({open:false,id:null,dataBaixa:currentDate(),cartaoId:"",juros:"",parcelas:"1",competencia:currentMonth()});
+        alert("Conta baixada e compra parcelada criada na fatura do cartão.");
+      }
       async function executarBaixaIndividual(type, id, bancoId, dataBaixaStr) {
         if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
         const titulo = type === "pagar" ? contasPagar.find(p => String(p.id) === String(id)) : null;
