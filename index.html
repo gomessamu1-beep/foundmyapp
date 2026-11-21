@@ -238,6 +238,8 @@
       const [conferenciaErro, setConferenciaErro] = useState("");
       const [menuMobileOpen, setMenuMobileOpen] = useState(false);
       const [cadastroTab, setCadastroTab] = useState(() => sessionStorage.getItem('fatura-cadtab-v1') || "cartoes");
+      const [tiposMovimentacao,setTiposMovimentacao]=useState([]);
+      const [paramTipo,setParamTipo]=useState("PAGAMENTO"),[paramDescricao,setParamDescricao]=useState(""),[paramExigeBanco,setParamExigeBanco]=useState(false),[paramExigeCartao,setParamExigeCartao]=useState(false),[paramEditId,setParamEditId]=useState("");
       const [categoriaTipoTab, setCategoriaTipoTab] = useState(() => sessionStorage.getItem("fatura-categoriatipo-v1") || "despesa");
       const [lancamentoTab, setLancamentoTab] = useState(() => sessionStorage.getItem("fatura-lancamentotab-v1") || "cartao");
       const [relatorioTab, setRelatorioTab] = useState(() => sessionStorage.getItem("fatura-relatoriotab-v1") || "pagar");
@@ -562,6 +564,18 @@
         return () => subscription.unsubscribe();
       }, []);
 
+      useEffect(()=>{if(session?.user?.id)carregarTiposMovimentacao();else setTiposMovimentacao([]);},[session?.user?.id]);
+      async function carregarTiposMovimentacao(){if(!session?.user?.id)return;const {data,error}=await supabaseClient.from("tipos_movimentacao").select("*").eq("user_id",session.user.id).order("ordem").order("descricao");if(error){console.error(error);return;}setTiposMovimentacao(data||[]);}
+      async function salvarTipoMovimentacao(e){e.preventDefault();const descricao=paramDescricao.trim();if(!descricao)return alert("Informe a descrição.");if(paramTipo==="RECEBIMENTO"&&paramExigeCartao)return alert("Cartão só pode ser usado em pagamentos.");const payload={user_id:session.user.id,tipo:paramTipo,descricao,exige_banco:paramExigeBanco,exige_cartao:paramExigeCartao,updated_at:new Date().toISOString()};const q=paramEditId?supabaseClient.from("tipos_movimentacao").update(payload).eq("id",paramEditId).eq("user_id",session.user.id):supabaseClient.from("tipos_movimentacao").insert(payload);const {error}=await q;if(error)return alert(error.message);setParamDescricao("");setParamExigeBanco(false);setParamExigeCartao(false);setParamEditId("");carregarTiposMovimentacao();}
+      async function alternarTipoMov(item){const {error}=await supabaseClient.from("tipos_movimentacao").update({ativo:!item.ativo,updated_at:new Date().toISOString()}).eq("id",item.id).eq("user_id",session.user.id);if(error)return alert(error.message);carregarTiposMovimentacao();}
+      async function excluirTipoMov(item){if(!confirm("Excluir "+item.descricao+"?"))return;const {error}=await supabaseClient.from("tipos_movimentacao").delete().eq("id",item.id).eq("user_id",session.user.id);if(error)return alert(error.message);carregarTiposMovimentacao();}
+      function renderParametrosMovimentacao(){const lista=tiposMovimentacao.filter(x=>x.tipo===paramTipo);return h(React.Fragment,null,
+        h("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},h("button",{type:"button",className:paramTipo==="PAGAMENTO"?"primary":"action-btn",onClick:()=>{setParamTipo("PAGAMENTO");setParamEditId("");}},"Tipos de Pagamento"),h("button",{type:"button",className:paramTipo==="RECEBIMENTO"?"primary":"action-btn",onClick:()=>{setParamTipo("RECEBIMENTO");setParamEditId("");}},"Tipos de Recebimento")),
+        h("form",{onSubmit:salvarTipoMovimentacao,className:"form-card",style:{padding:14,marginBottom:14}},h("div",{className:"field"},h("label",null,"Descrição *"),h("input",{value:paramDescricao,onChange:e=>setParamDescricao(e.target.value),required:true,maxLength:80})),
+          h("div",{style:{display:"flex",gap:18,margin:"10px 0",flexWrap:"wrap"}},h("label",null,h("input",{type:"checkbox",checked:paramExigeBanco,onChange:e=>setParamExigeBanco(e.target.checked)})," Exige banco/conta"),paramTipo==="PAGAMENTO"&&h("label",null,h("input",{type:"checkbox",checked:paramExigeCartao,onChange:e=>{setParamExigeCartao(e.target.checked);if(e.target.checked)setParamExigeBanco(false);}})," Exige cartão de crédito")),
+          h("div",{style:{display:"flex",justifyContent:"flex-end",gap:8}},paramEditId&&h("button",{type:"button",className:"action-btn",onClick:()=>{setParamEditId("");setParamDescricao("");}},"Cancelar"),h("button",{type:"submit",className:"primary"},paramEditId?"Salvar alterações":"Adicionar tipo"))),
+        h("div",{style:{fontWeight:700,marginBottom:8}},"Tipos cadastrados"),lista.length? h("div",{className:"list-vertical"},lista.map(x=>h("div",{className:"list-item",key:x.id},h("div",{className:"list-item-main"},h("strong",null,x.descricao),h("div",{style:{fontSize:12,color:"var(--ink-soft)"}},(x.exige_banco?"Exige banco":"Sem banco obrigatório")+(x.exige_cartao?" • Exige cartão":"")+(x.ativo?" • Ativo":" • Inativo"))),h("div",{style:{display:"flex",gap:5}},h("button",{className:"action-btn",type:"button",onClick:()=>{setParamEditId(x.id);setParamDescricao(x.descricao);setParamExigeBanco(!!x.exige_banco);setParamExigeCartao(!!x.exige_cartao);}},"Editar"),h("button",{className:"action-btn",type:"button",onClick:()=>alternarTipoMov(x)},x.ativo?"Desativar":"Ativar"),h("button",{className:"action-btn delete",type:"button",onClick:()=>excluirTipoMov(x)},"Excluir"))))):h("div",{style:{padding:18,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum tipo cadastrado.")
+      );}
       async function loadDataFromSupabase(userId) {
         setDataLoading(true);
         const { data } = await supabaseClient.from('app_data').select('*').eq('user_id', userId).single();
@@ -4162,9 +4176,11 @@
             h('div', { className: 'sub-nav', style: { marginBottom: 16 } },
               h('button', { className: contabTab === "plano" ? "active" : "", onClick: () => setContabTab("plano") }, "Plano de Contas"),
               h('button', { className: contabTab === "lancamentos" ? "active" : "", onClick: () => setContabTab("lancamentos") }, "Lançamentos"),
-              h('button', { className: contabTab === "relatorios" ? "active" : "", onClick: () => { setContabTab("relatorios"); carregarContabilidade(); } }, "Relatórios")
+              h('button', { className: contabTab === "relatorios" ? "active" : "", onClick: () => { setContabTab("relatorios"); carregarContabilidade(); } }, "Relatórios"),
+              h('button',{className:contabTab==="parametros"?"active":"",onClick:()=>{setContabTab("parametros");setParamTipo("PAGAMENTO");}},"Parâmetros")
             ),
-            contabErro && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, contabErro),
+            contabTab === "parametros" && renderParametrosMovimentacao(),
+            contabErro && contabTab !== "parametros" && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, contabErro),
             contabLoading && h('div', { style: { padding: 12, color: 'var(--ink-soft)' } }, "Carregando dados contábeis..."),
             contabTab === "plano" && h(React.Fragment, null,
               h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
@@ -4556,8 +4572,10 @@
               h('button', { className: cadastroTab === "contas" ? "active" : "", onClick: () => setCadastroTab("contas") }, "🏦 Contas"),
               h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => setCadastroTab("categorias") }, "Categorias"),
               h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => setCadastroTab("depara") }, "De-Para (Regras)"),
-              h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => setCadastroTab("importar-txt") }, "📥 Importar TXT")
+              h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => setCadastroTab("importar-txt") }, "📥 Importar TXT"),
+              h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");}},"Parâmetros")
             ),
+            cadastroTab === "parametros" && renderParametrosMovimentacao(),
             cadastroTab === "cartoes" && h(React.Fragment, null,
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, h('div', { style: { fontSize: 14, color: 'var(--ink-soft)' } }, "Meus Cartões"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingCartaoId(null); setNovoCartaoNome(""); setNovoCartaoBanco("033"); setNovoCartaoCor(CARD_COLORS[0]); setNovoCartaoFechamento("01"); setNovoCartaoVencimento("10"); setNovoCartaoContaContabilId(""); setCartaoModalOpen(true); } }, h(Plus), " Novo Cartão")),
               h('div', { className: 'list-vertical', style: { marginTop: 12 } }, cartoes.map((c) => h('div', { className: 'list-item', key: c.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', { className: 'dot', style: { background: c.cor } }), h('div', null, h('div', null, c.nome), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `Fecha dia ${c.fechamento || '01'} • Vence dia ${c.vencimento || '10'}`))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingCartaoId(c.id); setNovoCartaoNome(c.nome); setNovoCartaoBanco(c.bancoCode || "033"); setNovoCartaoCor(c.cor || CARD_COLORS[0]); setNovoCartaoFechamento(c.fechamento || "01"); setNovoCartaoVencimento(c.vencimento || "10"); setNovoCartaoContaContabilId(c.contaContabilId || ""); setCartaoModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'cartao', id: c.id, title: 'Excluir Cartão', message: `Excluir ${c.nome}?`, option: "all" }) }, h(Trash2, { size: 14 })))))))
