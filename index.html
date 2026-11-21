@@ -840,7 +840,9 @@
           return alvo.getFullYear() + "-" + String(alvo.getMonth() + 1).padStart(2, "0") + "-" + String(Math.min(partes[2], ultimoDia)).padStart(2, "0");
         };
         contasPagar.forEach(p => {
-          if (p.isLancamentoDireto || String(p.status || "").toLocaleLowerCase("pt-BR").includes("baixad")) return;
+          const statusCalendario = String(p.status || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const estaBaixadaCalendario = /^(baixad[oa]|pago|quitad[oa]|liquidado|cancelado|estornado)/.test(statusCalendario);
+          if (p.isLancamentoDireto || estaBaixadaCalendario) return;
           if (p.parcelaIndividual) {
             const vencimento = normalizarDataCalendario(p.dataVencimento || p.dataCompra || (p.inicio ? p.inicio + "-01" : ""));
             if (vencimento && vencimento.slice(0, 7) === pagarCalendarioMes) itens.push({ ...p, dataCalendario: vencimento, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) });
