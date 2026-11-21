@@ -826,9 +826,10 @@
         const itens = [];
         const normalizarDataCalendario = (valor) => {
           const s = String(valor || "").trim();
-          if (s.length >= 10 && s[4] === "-" && s[7] === "-") return s.slice(0, 10);
+          if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
           const partes = s.split("/");
-          if (partes.length === 3 && partes[2].length === 4) return partes[2] + "-" + partes[1].padStart(2, "0") + "-" + partes[0].padStart(2, "0");
+          if (partes.length === 3 && /^\d{4}$/.test(partes[2])) return partes[2] + "-" + partes[1].padStart(2, "0") + "-" + partes[0].padStart(2, "0");
+          if (/^\d{4}-\d{2}$/.test(s)) return s + "-01";
           return "";
         };
         const avancarVencimento = (dataBase, meses) => {
@@ -839,20 +840,22 @@
           const ultimoDia = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
           return alvo.getFullYear() + "-" + String(alvo.getMonth() + 1).padStart(2, "0") + "-" + String(Math.min(partes[2], ultimoDia)).padStart(2, "0");
         };
-        contasPagar.forEach(p => {
-          const statusCalendario = String(p.status || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const estaBaixadaCalendario = /^(baixad[oa]|pago|quitad[oa]|liquidado|cancelado|estornado)/.test(statusCalendario);
-          if (p.isLancamentoDireto || estaBaixadaCalendario) return;
+        (Array.isArray(contasPagar) ? contasPagar : []).forEach(p => {
+          if (!p || p.isLancamentoDireto) return;
+          const status = String(p.status || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          if (/^(baixad[oa]|pago|quitad[oa]|liquidado|cancelado|estornado)/.test(status)) return;
+          const dataBase = normalizarDataCalendario(p.dataVencimento) || normalizarDataCalendario(p.dataCompra) || normalizarDataCalendario(p.inicio);
+          if (!dataBase) return;
           if (p.parcelaIndividual) {
-            const vencimento = normalizarDataCalendario(p.dataVencimento || p.dataCompra || (p.inicio ? p.inicio + "-01" : ""));
-            if (vencimento && vencimento.slice(0, 7) === pagarCalendarioMes) itens.push({ ...p, dataCalendario: vencimento, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) });
+            if (dataBase.slice(0, 7) === pagarCalendarioMes) {
+              itens.push({ ...p, dataCalendario: dataBase, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) });
+            }
             return;
           }
-          const dataBase = p.dataVencimento || p.dataCompra || (p.inicio ? p.inicio + "-01" : "");
-          const competenciaInicial = String(p.inicio || normalizarDataCalendario(dataBase).slice(0, 7) || "").slice(0, 7);
-          if (competenciaInicial.length !== 7 || competenciaInicial[4] !== "-") return;
+          const competenciaInicial = String(p.inicio || dataBase.slice(0, 7)).slice(0, 7);
+          if (!/^\d{4}-\d{2}$/.test(competenciaInicial)) return;
           const idx = monthDiff(competenciaInicial, pagarCalendarioMes);
-          if (idx < 0 || (p.canceladoEm && pagarCalendarioMes >= String(p.canceladoEm).slice(0, 7)) || (p.mesesExcluidos || []).includes(pagarCalendarioMes)) return;
+          if (idx < 0 || (p.canceladoEm && pagarCalendarioMes >= String(p.canceladoEm).slice(0, 7)) || (Array.isArray(p.mesesExcluidos) && p.mesesExcluidos.includes(pagarCalendarioMes))) return;
           const parcelaInicial = Math.max(1, Number(p.parcelaInicial || 1));
           const quantidadeParcelas = Math.max(1, Number(p.parcelas || 1));
           if (!p.recorrente && idx >= quantidadeParcelas - parcelaInicial + 1) return;
@@ -862,7 +865,7 @@
           const vencimento = avancarVencimento(dataBase, idx);
           if (vencimento && vencimento.slice(0, 7) === pagarCalendarioMes) itens.push({ ...p, dataCalendario: vencimento, index: numeroParcela, parcelas: quantidadeParcelas, valorParcela: valor });
         });
-        return itens;
+        return itens.sort((a,b) => a.dataCalendario.localeCompare(b.dataCalendario));
       }, [contasPagar, pagarCalendarioMes]);
       const calendarioPagarAno = Number((pagarCalendarioMes || currentMonth()).slice(0,4));
       const calendarioPagarMesNumero = Number((pagarCalendarioMes || currentMonth()).slice(5,7));
