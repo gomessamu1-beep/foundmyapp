@@ -3169,9 +3169,16 @@
         setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
       }
 
-      function executarBaixaLote(type, bancoId, ids, dataBaixaStr) {
+      async function executarBaixaLote(type, bancoId, ids, dataBaixaStr) {
         if (!bancoId || !ids || ids.length === 0 || !dataBaixaStr) return alert("Preencha todos os campos."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
-        if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchReceberIds([]); }
+        if (type === "pagar") {
+          const titulosComAjuste = contasPagar.filter(p => ids.includes(p.id) && (Number(p.acrescimo || 0) > 0 || Number(p.desconto || 0) > 0));
+          for (const titulo of titulosComAjuste) {
+            const resultadoContabil = await criarLancamentoContabilAjustePagar(titulo, bancoId, dataBaixaStr);
+            if (!resultadoContabil.ok) return alert("A baixa em lote foi interrompida. " + resultadoContabil.mensagem + " Os títulos só serão baixados depois que os vínculos contábeis estiverem corretos.");
+          }
+          updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchPagarIds([]);
+        } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); setBatchReceberIds([]); }
         setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate() });
       }
 
