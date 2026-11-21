@@ -700,6 +700,11 @@
       const contasPagarForMonth = useMemo(() => {
         const mapped = contasPagar.map(p => {
           if (p.isLancamentoDireto) return null;
+          if (p.parcelaIndividual) {
+            const competenciaParcela = String(p.dataVencimento || p.inicio || p.dataCompra || "").slice(0, 7);
+            if (competenciaParcela !== month) return null;
+            return { ...p, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) };
+          }
           const idx = monthDiff(p.inicio, month); 
           if (idx < 0) return null; 
           if (p.canceladoEm && month >= p.canceladoEm) return null;
@@ -769,7 +774,7 @@
       const terminandoPagar = useMemo(() => contasPagarForMonth.filter(p => !p.recorrente && p.index === p.parcelas && p.parcelas > 1), [contasPagarForMonth]);
       const terminandoReceber = useMemo(() => contasReceberForMonth.filter(p => !p.recorrente && p.index === p.parcelas && p.parcelas > 1), [contasReceberForMonth]);
 
-      const contasPagarConsulta = useMemo(() => contasPagar.filter(p => !p.isLancamentoDireto).map(p => { const parcelaAtual = Math.max(1, Number(p.parcelaInicial || 1)); const valores = splitInstallments(Number(p.total || 0), Math.max(1, Number(p.parcelas || 1))); return { ...p, index: parcelaAtual, valorParcela: Number(p.recorrente ? (p.valorParcela || p.total) : (p.valorParcela || valores[parcelaAtual - 1] || p.total)) }; }).filter(p => { const d = pagarTipoData === "emissao" ? (p.dataCompra || "") : (p.dataVencimento || p.dataCompra || ""); return (!pagarDataIni || d >= pagarDataIni) && (!pagarDataFim || d <= pagarDataFim) && (!pagarCategoriaId || p.categoriaId === pagarCategoriaId) && (!pagarSubcategoriaId || p.subcategoriaId === pagarSubcategoriaId); }).sort((a,b) => { const da = pagarTipoData === "emissao" ? (a.dataCompra || "") : (a.dataVencimento || a.dataCompra || ""); const db = pagarTipoData === "emissao" ? (b.dataCompra || "") : (b.dataVencimento || b.dataCompra || ""); return faturaOrdem === "atual" ? db.localeCompare(da) : da.localeCompare(db); }), [contasPagar, pagarDataIni, pagarDataFim, pagarTipoData, pagarCategoriaId, pagarSubcategoriaId, faturaOrdem]);
+      const contasPagarConsulta = useMemo(() => contasPagar.filter(p => !p.isLancamentoDireto).map(p => { if (p.parcelaIndividual) return { ...p, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) }; const parcelaAtual = Math.max(1, Number(p.parcelaInicial || 1)); const valores = splitInstallments(Number(p.total || 0), Math.max(1, Number(p.parcelas || 1))); return { ...p, index: parcelaAtual, valorParcela: Number(p.recorrente ? (p.valorParcela || p.total) : (p.valorParcela || valores[parcelaAtual - 1] || p.total)) }; }).filter(p => { const d = pagarTipoData === "emissao" ? (p.dataCompra || "") : (p.dataVencimento || p.dataCompra || ""); return (!pagarDataIni || d >= pagarDataIni) && (!pagarDataFim || d <= pagarDataFim) && (!pagarCategoriaId || p.categoriaId === pagarCategoriaId) && (!pagarSubcategoriaId || p.subcategoriaId === pagarSubcategoriaId); }).sort((a,b) => { const da = pagarTipoData === "emissao" ? (a.dataCompra || "") : (a.dataVencimento || a.dataCompra || ""); const db = pagarTipoData === "emissao" ? (b.dataCompra || "") : (b.dataVencimento || b.dataCompra || ""); return faturaOrdem === "atual" ? db.localeCompare(da) : da.localeCompare(db); }), [contasPagar, pagarDataIni, pagarDataFim, pagarTipoData, pagarCategoriaId, pagarSubcategoriaId, faturaOrdem]);
       const contasReceberConsulta = useMemo(() => contasReceber.filter(p => !p.isLancamentoDireto).map(p => { const parcelaAtual = Math.max(1, Number(p.parcelaInicial || 1)); const valores = splitInstallments(Number(p.total || 0), Math.max(1, Number(p.parcelas || 1))); return { ...p, index: parcelaAtual, valorParcela: Number(p.recorrente ? (p.valorParcela || p.total) : (p.valorParcela || valores[parcelaAtual - 1] || p.total)) }; }).filter(p => { const d = receberTipoData === "emissao" ? (p.dataCompra || "") : (p.dataVencimento || p.dataCompra || ""); return (!receberDataIni || d >= receberDataIni) && (!receberDataFim || d <= receberDataFim) && (!receberCategoriaId || p.categoriaId === receberCategoriaId) && (!receberSubcategoriaId || p.subcategoriaId === receberSubcategoriaId); }).sort((a,b) => { const da = receberTipoData === "emissao" ? (a.dataCompra || "") : (a.dataVencimento || a.dataCompra || ""); const db = receberTipoData === "emissao" ? (b.dataCompra || "") : (b.dataVencimento || b.dataCompra || ""); return faturaOrdem === "atual" ? db.localeCompare(da) : da.localeCompare(db); }), [contasReceber, receberDataIni, receberDataFim, receberTipoData, receberCategoriaId, receberSubcategoriaId, faturaOrdem]);
       function abrirConsultaFinanceira(tipo) { if (tipo === "pagar") { setPagarDataIni(""); setPagarDataFim(""); setPagarTipoData("vencimento"); setPagarCategoriaId(""); setPagarSubcategoriaId(""); setPagarConsultaExecutada(false); setBatchPagarIds([]); setLancamentoTab("pagar"); } else { setReceberDataIni(""); setReceberDataFim(""); setReceberTipoData("vencimento"); setReceberCategoriaId(""); setReceberSubcategoriaId(""); setReceberConsultaExecutada(false); setBatchReceberIds([]); setLancamentoTab("receber"); } }
       function consultarContasFinanceiras(tipo) { if (tipo === "pagar") { if (pagarDataIni && pagarDataFim && pagarDataIni > pagarDataFim) return alert("A data inicial não pode ser maior que a data final."); setPagarConsultaExecutada(true); setBatchPagarIds([]); } else { if (receberDataIni && receberDataFim && receberDataIni > receberDataFim) return alert("A data inicial não pode ser maior que a data final."); setReceberConsultaExecutada(true); setBatchReceberIds([]); } }
@@ -931,7 +936,8 @@
         if (info) reabrirFatura(comp); else openFecharFaturaModal(comp);
       }
 
-      function handleValorTotalChange(val) { setValorTotal(val); const numVal = parseValorInput(val); const numParc = parseInt(parcelas, 10) || 1; if (Number.isFinite(numVal) && numVal > 0) setValorParcelaInput((numVal / numParc).toFixed(2).replace(".", ",")); else setValorParcelaInput(""); }
+      function valorTotalFinalInput() { const base = parseValorInput(valorTotal); if (!Number.isFinite(base) || !valorTotal.trim()) return ""; const acres = acrescimoInput.trim() ? (parseValorInput(acrescimoInput) || 0) : 0; const desc = descontoInput.trim() ? (parseValorInput(descontoInput) || 0) : 0; return (base + acres - desc).toFixed(2).replace(".", ","); }
+      function handleValorTotalChange(val) { const final = parseValorInput(val); if (!Number.isFinite(final)) { setValorTotal(val); return; } const acres = acrescimoInput.trim() ? (parseValorInput(acrescimoInput) || 0) : 0; const desc = descontoInput.trim() ? (parseValorInput(descontoInput) || 0) : 0; const base = final - acres + desc; setValorTotal(base.toFixed(2).replace(".", ",")); const numParc = parseInt(parcelas, 10) || 1; setValorParcelaInput((base / numParc).toFixed(2).replace(".", ",")); }
       function handleValorParcelaChange(val) { setValorParcelaInput(val); const numVal = parseValorInput(val); const numParc = parseInt(parcelas, 10) || 1; if (Number.isFinite(numVal) && numVal > 0) setValorTotal((numVal * numParc).toFixed(2).replace(".", ",")); else setValorTotal(""); }
       function handleParcelasChange(val) { setParcelas(val); const numParc = parseInt(val, 10) || 1; const numTot = parseValorInput(valorTotal); if (Number.isFinite(numTot) && numTot > 0) setValorParcelaInput((numTot / numParc).toFixed(2).replace(".", ",")); }
 
@@ -2902,6 +2908,14 @@
         }
       }
 
+      function adicionarMesesDataISO(dataISO, quantidade) {
+        const partes = String(dataISO || currentDate()).split("-").map(Number);
+        const ano = partes[0], mes = partes[1], dia = partes[2];
+        const alvo = new Date(ano, mes - 1 + quantidade, 1);
+        const ultimoDia = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+        return alvo.getFullYear() + "-" + String(alvo.getMonth() + 1).padStart(2, "0") + "-" + String(Math.min(dia, ultimoDia)).padStart(2, "0");
+      }
+
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
         if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : null; if (itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
@@ -2921,7 +2935,7 @@
         const cat = getCategoria(categoriaId);
         const exigeSubcat = cat && !cat.isTransferencia;
 
-        if (!descricao.trim() || !categoriaId || (exigeSubcat && !subcategoriaId) || !Number.isFinite(valorBase) || valorBase <= 0 || !Number.isFinite(acrescimo) || acrescimo < 0 || !Number.isFinite(desconto) || desconto < 0 || total <= 0 || (lancamentoTab === "cartao" && !faturaMes)) {
+        if (!descricao.trim() || !categoriaId || (exigeSubcat && !subcategoriaId) || !Number.isFinite(valorBase) || valorBase <= 0 || !Number.isFinite(acrescimo) || acrescimo < 0 || !Number.isFinite(desconto) || desconto < 0 || total <= 0 || (lancamentoTab === "cartao" && !faturaMes) || (!isRecorrente && (!Number.isInteger(n) || n < 1 || n > 60 || !Number.isInteger(atual) || atual < 1 || atual > n))) {
           return setFormError("Preencha todos os campos obrigatórios corretamente.");
         }
 
@@ -2938,9 +2952,58 @@
             if (editingId) { updateContasReceber(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
             else { updateContasReceber(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
         }
-        else if (lancamentoTab === "pagar") { 
-            if (editingId) { updateContasPagar(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); setModalOpen(false); } 
-            else { updateContasPagar(prev => [...prev, novoRegistro]); resetFormAfterSave(); } 
+        else if (lancamentoTab === "pagar") {
+            if (editingId) {
+              updateContasPagar(prev => prev.map(p => p.id === editingId ? { ...p, ...novoRegistro, ...(p.parcelaIndividual ? { parcelaIndividual: true, numeroParcelaOriginal: p.numeroParcelaOriginal, totalParcelasOriginal: p.totalParcelasOriginal, grupoParcelamentoId: p.grupoParcelamentoId, parcelas: 1, parcelaInicial: 1 } : {}), status: p.status, bancoBaixaId: p.bancoBaixaId, dataBaixa: p.dataBaixa, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p));
+              setModalOpen(false);
+            } else {
+              if (isRecorrente) {
+                updateContasPagar(prev => [...prev, novoRegistro]);
+              } else {
+                const grupoParcelamentoId = uid();
+                const centavos = Math.round(valorBase * 100);
+                const acrescimoCentavos = Math.round(acrescimo * 100);
+                const descontoCentavos = Math.round(desconto * 100);
+                const dividirCentavos = (valor, quantidade, indice) => {
+                  const base = Math.floor(valor / quantidade);
+                  const resto = valor - base * quantidade;
+                  return base + (indice < resto ? 1 : 0);
+                };
+                const dataVencimentoBase = dataVencimento || dataLancamento || currentDate();
+                const novasParcelas = [];
+                for (let numero = atual; numero <= n; numero++) {
+                  const indice = numero - 1;
+                  const baseParcela = dividirCentavos(centavos, n, indice) / 100;
+                  const acrescimoParcela = dividirCentavos(acrescimoCentavos, n, indice) / 100;
+                  const descontoParcela = dividirCentavos(descontoCentavos, n, indice) / 100;
+                  const totalParcela = baseParcela + acrescimoParcela - descontoParcela;
+                  const vencimentoParcela = adicionarMesesDataISO(dataVencimentoBase, indice);
+                  novasParcelas.push({
+                    ...novoRegistro,
+                    id: uid(),
+                    total: totalParcela,
+                    valorBase: baseParcela,
+                    valorParcela: totalParcela,
+                    valorParcelaBase: baseParcela,
+                    acrescimo: acrescimoParcela,
+                    desconto: descontoParcela,
+                    parcelas: 1,
+                    parcelaInicial: 1,
+                    inicio: vencimentoParcela.slice(0, 7),
+                    dataVencimento: vencimentoParcela,
+                    parcelaIndividual: true,
+                    numeroParcelaOriginal: numero,
+                    totalParcelasOriginal: n,
+                    grupoParcelamentoId,
+                    status: "Em aberto",
+                    bancoBaixaId: null,
+                    dataBaixa: null
+                  });
+                }
+                updateContasPagar(prev => [...prev, ...novasParcelas]);
+              }
+              resetFormAfterSave();
+            }
         }
         else { 
             novoRegistro.cartaoId = cartaoId || null; 
@@ -4995,8 +5058,8 @@
               
               h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: subcategoriaId, onChange: e => setSubcategoriaId(e.target.value), required: getCategoria(categoriaId) ? !getCategoria(categoriaId).isTransferencia : true, disabled: getCategoria(categoriaId)?.isTransferencia }, h('option', { value: "" }, getCategoria(categoriaId)?.isTransferencia ? "Não aplicável" : "Selecione..."), subcategoriasDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome)))),
               
-              h('div', { className: 'field' }, h('label', null, isRecorrente ? "Valor Mensal *" : "Valor Total *"), h('input', { type: 'text', value: valorTotal, onChange: e => handleValorTotalChange(e.target.value), required: true })), 
               !isRecorrente && h('div', { className: 'field' }, h('label', null, "Valor da Parcela"), h('input', { type: 'text', value: valorParcelaInput, onChange: e => handleValorParcelaChange(e.target.value) })),
+              h('div', { className: 'field' }, h('label', null, isRecorrente ? "Valor Mensal *" : "Valor Total * (com acréscimos e descontos)"), h('input', { type: 'text', value: valorTotalFinalInput(), onChange: e => handleValorTotalChange(e.target.value), required: true })),
               h('div', { className: 'field' }, h('label', null, "Acréscimo (multa, juros ou taxa)"), h('input', { type: 'text', inputMode: 'decimal', value: acrescimoInput, onChange: e => setAcrescimoInput(e.target.value), placeholder: '0,00' })),
               h('div', { className: 'field' }, h('label', null, "Desconto (abatimento ou desconto)"), h('input', { type: 'text', inputMode: 'decimal', value: descontoInput, onChange: e => setDescontoInput(e.target.value), placeholder: '0,00' })),
               !isRecorrente && h('div', { className: 'field' }, h('label', null, "Parcela Atual"), h('input', { type: 'number', min: '1', value: parcelaAtual, onChange: e => setParcelaAtual(e.target.value) })), 
