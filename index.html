@@ -208,6 +208,8 @@
       const [contabRazaoSeletorAberto, setContabRazaoSeletorAberto] = useState(false);
       const [contabRazaoBuscaModal, setContabRazaoBuscaModal] = useState("");
       const [contabDreContas, setContabDreContas] = useState(null);
+      const [contabContaAcrescimoId, setContabContaAcrescimoId] = useState("");
+      const [contabContaDescontoId, setContabContaDescontoId] = useState("");
       const [contabDreConfiguracaoAberta, setContabDreConfiguracaoAberta] = useState(false);
       function contasElegiveisDRE() {
         return contabPlano.filter(c => c.tipo === "ANALITICA" && ["RECEITA","DESPESA","RESULTADO"].includes(String(c.natureza || "").toUpperCase()));
@@ -302,6 +304,26 @@
       const [lrSubcategoriaId, setLrSubcategoriaId] = useState('');
       const [lrIsTransferencia, setLrIsTransferencia] = useState(false);
       const [lrError, setLrError] = useState('');
+
+      useEffect(() => {
+        if (!session?.user?.id || !contabPlano.length) return;
+        const chave = "foundmyapp-contas-ajustes-pagar-" + session.user.id;
+        let config = null;
+        try { config = JSON.parse(localStorage.getItem(chave) || "null"); } catch (e) {}
+        const normalizar = v => String(v || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toUpperCase().trim();
+        const contaJurosPadrao = contabPlano.find(x => normalizar(x.descricao) === "JUROS SOBRE TITULOS PAGOS EM ATRASO" && x.natureza === "DESPESA" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
+        const contaDescontoPadrao = contabPlano.find(x => normalizar(x.descricao) === "DESCONTOS OBTIDOS" && x.natureza === "RECEITA" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
+        setContabContaAcrescimoId(config?.acrescimo || contaJurosPadrao?.id || "");
+        setContabContaDescontoId(config?.desconto || contaDescontoPadrao?.id || "");
+      }, [session?.user?.id, contabPlano]);
+
+      function salvarConfiguracaoAjustesPagar() {
+        const elegiveisDespesa = contabPlano.some(x => String(x.id) === String(contabContaAcrescimoId) && x.natureza === "DESPESA" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
+        const elegiveisReceita = contabPlano.some(x => String(x.id) === String(contabContaDescontoId) && x.natureza === "RECEITA" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
+        if (!elegiveisDespesa || !elegiveisReceita) return alert("Selecione uma conta analítica ativa de Despesa para acréscimos e uma conta analítica ativa de Receita para descontos.");
+        localStorage.setItem("foundmyapp-contas-ajustes-pagar-" + (session?.user?.id || "default"), JSON.stringify({ acrescimo:String(contabContaAcrescimoId), desconto:String(contabContaDescontoId) }));
+        alert("Vínculos contábeis de acréscimos e descontos salvos.");
+      }
 
       useEffect(() => {
         if (session) carregarContabilidade();
@@ -937,9 +959,9 @@
       }
 
       function valorTotalFinalInput() { const base = parseValorInput(valorTotal); if (!Number.isFinite(base) || !valorTotal.trim()) return ""; const acres = acrescimoInput.trim() ? (parseValorInput(acrescimoInput) || 0) : 0; const desc = descontoInput.trim() ? (parseValorInput(descontoInput) || 0) : 0; return (base + acres - desc).toFixed(2).replace(".", ","); }
-      function handleValorTotalChange(val) { const final = parseValorInput(val); if (!Number.isFinite(final)) { setValorTotal(val); return; } const acres = acrescimoInput.trim() ? (parseValorInput(acrescimoInput) || 0) : 0; const desc = descontoInput.trim() ? (parseValorInput(descontoInput) || 0) : 0; const base = final - acres + desc; setValorTotal(base.toFixed(2).replace(".", ",")); const numParc = parseInt(parcelas, 10) || 1; setValorParcelaInput((base / numParc).toFixed(2).replace(".", ",")); }
-      function handleValorParcelaChange(val) { setValorParcelaInput(val); const numVal = parseValorInput(val); const numParc = parseInt(parcelas, 10) || 1; if (Number.isFinite(numVal) && numVal > 0) setValorTotal((numVal * numParc).toFixed(2).replace(".", ",")); else setValorTotal(""); }
-      function handleParcelasChange(val) { setParcelas(val); const numParc = parseInt(val, 10) || 1; const numTot = parseValorInput(valorTotal); if (Number.isFinite(numTot) && numTot > 0) setValorParcelaInput((numTot / numParc).toFixed(2).replace(".", ",")); }
+      function handleValorTotalChange(val) { const final = parseValorInput(val); if (!Number.isFinite(final)) { setValorTotal(val); return; } const acres = acrescimoInput.trim() ? (parseValorInput(acrescimoInput) || 0) : 0; const desc = descontoInput.trim() ? (parseValorInput(descontoInput) || 0) : 0; const base = final - acres + desc; setValorTotal(base.toFixed(2).replace(".", ",")); const numParc = parseInt(parcelas, 10) || 1; const parcelaAtual = valorParcelaInput.trim() ? parseValorInput(valorParcelaInput) : null; if (!(lancamentoTab === "pagar" && parcelaAtual === 0 && (acres > 0 || desc > 0))) setValorParcelaInput((base / numParc).toFixed(2).replace(".", ",")); }
+      function handleValorParcelaChange(val) { setValorParcelaInput(val); const numVal = parseValorInput(val); const numParc = parseInt(parcelas, 10) || 1; if (Number.isFinite(numVal) && numVal > 0) setValorTotal((numVal * numParc).toFixed(2).replace(".", ",")); else if (!(lancamentoTab === "pagar" && numVal === 0 && (parseValorInput(acrescimoInput) > 0 || parseValorInput(descontoInput) > 0))) setValorTotal(""); }
+      function handleParcelasChange(val) { setParcelas(val); const numParc = parseInt(val, 10) || 1; const numTot = parseValorInput(valorTotal); const parcelaAtual = valorParcelaInput.trim() ? parseValorInput(valorParcelaInput) : null; if (Number.isFinite(numTot) && numTot > 0 && !(lancamentoTab === "pagar" && parcelaAtual === 0 && (parseValorInput(acrescimoInput) > 0 || parseValorInput(descontoInput) > 0))) setValorParcelaInput((numTot / numParc).toFixed(2).replace(".", ",")); }
 
       async function carregarContabilidade() {
         if (!supabaseClient || !session?.user?.id) return;
@@ -1387,7 +1409,7 @@
         try {
           const fontes = [
             ...(purchases || []).filter(p => p.origem === "FATURA" || p.tipoImportacao === "FATURA" || p.cartaoId).map(p => ({ item:p, origem:"FATURA", tipo:"fatura" })),
-            ...(contasPagar || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:p.origem === "CONCILIACAO BANCARIA" || p.isLancamentoDireto ? "CONCILIACAO BANCARIA" : "CONTAS A PAGAR", tipo:"despesa" })),
+            ...(contasPagar || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:p.origem === "CONCILIACAO BANCARIA" || p.isLancamentoDireto ? "CONCILIACAO BANCARIA" : "CONTAS_PAGAR", tipo:"despesa" })),
             ...(contasReceber || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:p.origem === "CONCILIACAO BANCARIA" || p.isLancamentoDireto ? "CONCILIACAO BANCARIA" : "CONTAS A RECEBER", tipo:"receita" }))
           ];
           for (const f of fontes) {
@@ -2935,7 +2957,10 @@
         const cat = getCategoria(categoriaId);
         const exigeSubcat = cat && !cat.isTransferencia;
 
-        if (!descricao.trim() || !categoriaId || (exigeSubcat && !subcategoriaId) || !Number.isFinite(valorBase) || valorBase <= 0 || !Number.isFinite(acrescimo) || acrescimo < 0 || !Number.isFinite(desconto) || desconto < 0 || total <= 0 || (lancamentoTab === "cartao" && !faturaMes) || (!isRecorrente && (!Number.isInteger(n) || n < 1 || n > 60 || !Number.isInteger(atual) || atual < 1 || atual > n))) {
+        const ajusteFinanceiroInformado = acrescimo > 0 || desconto > 0;
+        const valorParcelaZerado = Number.isFinite(valorParcelaBase) && valorParcelaBase === 0;
+        const totalFinalValido = total > 0 || (lancamentoTab === "pagar" && total === 0 && ajusteFinanceiroInformado);
+        if (!descricao.trim() || !categoriaId || (exigeSubcat && !subcategoriaId) || !Number.isFinite(valorBase) || valorBase <= 0 || !Number.isFinite(acrescimo) || acrescimo < 0 || !Number.isFinite(desconto) || desconto < 0 || !totalFinalValido || (lancamentoTab === "pagar" && valorParcelaZerado && !ajusteFinanceiroInformado) || (lancamentoTab === "cartao" && !faturaMes) || (!isRecorrente && (!Number.isInteger(n) || n < 1 || n > 60 || !Number.isInteger(atual) || atual < 1 || atual > n))) {
           return setFormError("Preencha todos os campos obrigatórios corretamente.");
         }
 
@@ -3090,8 +3115,56 @@
         }
       }
 
-      function executarBaixaIndividual(type, id, bancoId, dataBaixaStr) {
+      async function criarLancamentoContabilAjustePagar(titulo, bancoId, dataBaixaStr) {
+        const acrescimo = Math.max(0, Number(titulo.acrescimo || 0));
+        const desconto = Math.max(0, Number(titulo.desconto || 0));
+        if (acrescimo <= 0 && desconto <= 0) return { ok:true };
+        const userId = session?.user?.id;
+        if (!userId || !supabaseClient) return { ok:false, mensagem:"Não foi possível acessar a contabilidade. Faça login novamente." };
+        const contaBanco = contasBancarias.find(x => String(x.id) === String(bancoId))?.contaContabilId;
+        const contaFornecedores = contabPlano.find(x => String(x.descricao || "").trim().toUpperCase() === "FORNECEDORES" && x.natureza === "PASSIVO" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
+        const contaJuros = contabPlano.find(x => String(x.id) === String(contabContaAcrescimoId));
+        const contaDesconto = contabPlano.find(x => String(x.id) === String(contabContaDescontoId));
+        if (!contaBanco) return { ok:false, mensagem:"Vincule uma conta contábil à conta bancária selecionada antes de baixar este título." };
+        if (!contaFornecedores) return { ok:false, mensagem:"A conta analítica FORNECEDORES não foi encontrada no Plano de Contas." };
+        if (acrescimo > 0 && (!contaJuros || contaJuros.natureza !== "DESPESA" || contaJuros.tipo !== "ANALITICA" || contaJuros.ativa === false || contaJuros.aceita_lancamento === false)) return { ok:false, mensagem:"Configure a conta contábil de acréscimos na aba Contabilidade > Plano de Contas." };
+        if (desconto > 0 && (!contaDesconto || contaDesconto.natureza !== "RECEITA" || contaDesconto.tipo !== "ANALITICA" || contaDesconto.ativa === false || contaDesconto.aceita_lancamento === false)) return { ok:false, mensagem:"Configure a conta contábil de descontos na aba Contabilidade > Plano de Contas." };
+        const valorBaseSalvo = titulo.valorParcelaBase ?? titulo.valorBase;
+        const valorEfetivoSalvo = Number(titulo.valorParcela ?? titulo.valor ?? titulo.total ?? 0);
+        const valorBase = Math.max(0, Number(valorBaseSalvo != null ? valorBaseSalvo : (valorEfetivoSalvo - acrescimo + desconto)) || 0);
+        const valorPago = Math.max(0, Number((valorBase + acrescimo - desconto).toFixed(2)));
+        if (valorBase + acrescimo + desconto <= 0 || valorPago < 0) return { ok:false, mensagem:"Os valores do título não permitem gerar um lançamento contábil válido." };
+        const { data:existente, error:erroBusca } = await supabaseClient.from("contabilidade_lancamentos").select("id").eq("user_id",userId).eq("origem","CONTAS_PAGAR").eq("origem_id",String(titulo.id)).maybeSingle();
+        if (erroBusca) return { ok:false, mensagem:"Não foi possível verificar lançamentos contábeis anteriores: " + erroBusca.message };
+        if (existente) return { ok:true, existente:true };
+        const historico = "Baixa de " + (titulo.descricao || "conta a pagar") + (acrescimo > 0 ? " - com acréscimo" : "") + (desconto > 0 ? " - com desconto" : "");
+        const partidas = [];
+        let sequencia = 1;
+        if (valorBase > 0) partidas.push({ user_id:userId, conta_id:contaFornecedores.id, sequencia:sequencia++, historico, debito:valorBase, credito:0 });
+        if (acrescimo > 0) partidas.push({ user_id:userId, conta_id:contaJuros.id, sequencia:sequencia++, historico:"Acréscimos pagos: " + (titulo.descricao || ""), debito:acrescimo, credito:0 });
+        if (valorPago > 0) partidas.push({ user_id:userId, conta_id:contaBanco, sequencia:sequencia++, historico:"Valor efetivamente pago: " + (titulo.descricao || ""), debito:0, credito:valorPago });
+        if (desconto > 0) partidas.push({ user_id:userId, conta_id:contaDesconto.id, sequencia:sequencia++, historico:"Descontos obtidos: " + (titulo.descricao || ""), debito:0, credito:desconto });
+        const totalDebito = partidas.reduce((s,x)=>s+Number(x.debito||0),0);
+        const totalCredito = partidas.reduce((s,x)=>s+Number(x.credito||0),0);
+        if (!partidas.some(x=>x.debito>0) || !partidas.some(x=>x.credito>0) || Math.abs(totalDebito-totalCredito)>0.005) return { ok:false, mensagem:"O lançamento contábil do ajuste não ficou balanceado. Confira os valores do título." };
+        const { data:cab, error } = await supabaseClient.from("contabilidade_lancamentos").insert({ user_id:userId, data_lancamento:dataBaixaStr, competencia:String(dataBaixaStr).slice(0,7)+"-01", historico, origem:"CONTAS_PAGAR", origem_id:String(titulo.id), status:"EFETIVADO", total_debito:totalDebito, total_credito:totalCredito }).select().single();
+        if (error || !cab) return { ok:false, mensagem:"Não foi possível criar o lançamento contábil: " + (error?.message || "erro desconhecido") };
+        const itens = partidas.map(x => ({ ...x, lancamento_id:cab.id }));
+        const { error:erroItens } = await supabaseClient.from("contabilidade_lancamento_itens").insert(itens);
+        if (erroItens) {
+          await supabaseClient.from("contabilidade_lancamentos").delete().eq("id",cab.id).eq("user_id",userId);
+          return { ok:false, mensagem:"Não foi possível gravar as partidas contábeis: " + erroItens.message };
+        }
+        return { ok:true };
+      }
+
+      async function executarBaixaIndividual(type, id, bancoId, dataBaixaStr) {
         if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
+        const titulo = type === "pagar" ? contasPagar.find(p => String(p.id) === String(id)) : null;
+        if (type === "pagar" && titulo && (Number(titulo.acrescimo || 0) > 0 || Number(titulo.desconto || 0) > 0)) {
+          const resultadoContabil = await criarLancamentoContabilAjustePagar(titulo, bancoId, dataBaixaStr);
+          if (!resultadoContabil.ok) return alert(resultadoContabil.mensagem);
+        }
         if (type === "pagar") updateContasPagar(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); else if (type === "receber") updateContasReceber(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p));
         setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
       }
@@ -4015,6 +4088,27 @@
               h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
                 h('h3', { style: { margin: 0 } }, "Cadastro do Plano de Contas"),
                 h('button', { type: 'button', className: 'action-btn', onClick: () => { setContabMascaraEdit(contabMascara); setContabMascaraAberta(v => !v); } }, h(FolderTree, { size: 15 }), " Máscara contábil")
+              ),
+              h('div', { className:'form-card', style:{padding:14,marginBottom:14,border:'1px solid var(--line)'} },
+                h('div', { style:{fontWeight:700,marginBottom:6} }, "Contabilização de acréscimos e descontos - Contas a Pagar"),
+                h('div', { style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10} }, "Defina as contas usadas automaticamente na baixa de títulos com juros, multas ou descontos. A conta FORNECEDORES e a conta bancária vinculada serão usadas nas demais partidas."),
+                h('div', { className:'field', style:{marginBottom:10} },
+                  h('label', null, "Acréscimos - Despesas com Juros e Multas"),
+                  h('select', { value:contabContaAcrescimoId, onChange:e=>setContabContaAcrescimoId(e.target.value) },
+                    h('option',{value:""},"Selecione a conta de despesa..."),
+                    contabPlano.filter(x=>x.natureza==="DESPESA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
+                  )
+                ),
+                h('div', { className:'field', style:{marginBottom:10} },
+                  h('label', null, "Descontos - Descontos Obtidos"),
+                  h('select', { value:contabContaDescontoId, onChange:e=>setContabContaDescontoId(e.target.value) },
+                    h('option',{value:""},"Selecione a conta de receita..."),
+                    contabPlano.filter(x=>x.natureza==="RECEITA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
+                  )
+                ),
+                h('div', { style:{display:'flex',justifyContent:'flex-end'} },
+                  h('button',{type:'button',className:'primary',onClick:salvarConfiguracaoAjustesPagar},"Salvar vínculos contábeis")
+                )
               ),
               contabMascaraAberta && h('div', { className: 'form-card', style: { marginBottom: 14, padding: 14, border: '1px solid var(--line)' } },
                 h('div', { style: { fontWeight: 700, marginBottom: 6 } }, "Configurar máscara do código contábil"),
