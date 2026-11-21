@@ -1409,8 +1409,8 @@
         setContabErro("");
         try {
           const fontes = [
-            ...(purchases || []).filter(p => p.origem === "FATURA" || p.tipoImportacao === "FATURA" || p.cartaoId).map(p => ({ item:p, origem:"FATURA", tipo:"fatura" })),
-            ...(contasPagar || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:p.origem === "CONCILIACAO BANCARIA" || p.isLancamentoDireto ? "CONCILIACAO BANCARIA" : "CONTAS_PAGAR", tipo:"despesa" })),
+            ...(purchases || []).filter(p => !p.naoContabilizarDespesa && (p.origem === "FATURA" || p.tipoImportacao === "FATURA" || p.cartaoId)).map(p => ({ item:p, origem:"FATURA", tipo:"fatura" })),
+            ...(contasPagar || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:p.formaBaixa === "CARTAO" ? "CONTAS_PAGAR_CARTAO" : (p.origem === "CONCILIACAO BANCARIA" || p.isLancamentoDireto ? "CONCILIACAO BANCARIA" : "CONTAS_PAGAR"), tipo:p.formaBaixa === "CARTAO" ? "pagarCartao" : "despesa" })),
             ...(contasReceber || []).filter(p => p.status === "Baixado").map(p => ({ item:p, origem:p.origem === "CONCILIACAO BANCARIA" || p.isLancamentoDireto ? "CONCILIACAO BANCARIA" : "CONTAS A RECEBER", tipo:"receita" }))
           ];
           for (const f of fontes) {
@@ -1420,23 +1420,32 @@
             if (!validarPeriodoContabil(dataMov, false)) { foraPeriodo++; continue; }
             if (categoriasAlvo && !categoriasAlvo.includes(String(p.categoriaId))) { continue; }
             const banco = contasBancarias.find(x => x.id === p.bancoBaixaId);
-            const cartao = f.tipo === "fatura" ? (cartoes || []).find(x => String(x.id) === String(p.cartaoId)) : null;
+            const cartao = (f.tipo === "fatura" || f.tipo === "pagarCartao") ? (cartoes || []).find(x => String(x.id) === String(f.tipo === "fatura" ? p.cartaoId : p.cartaoBaixaId)) : null;
             const sub = getSubcategoria(p.categoriaId, p.subcategoriaId);
-            const contaBanco = f.tipo === "fatura" ? cartao?.contaContabilId : banco?.contaContabilId;
+            const contaBanco = f.tipo === "fatura" || f.tipo === "pagarCartao" ? cartao?.contaContabilId : banco?.contaContabilId;
             const contaCategoria = sub?.contaContabilId;
-            const valor = f.tipo === "fatura" ? Number(p.total || 0) : Number(p.valorParcela || p.valor || p.total || 0);
-            if (!contaBanco || !contaCategoria || !(valor > 0)) { semVinculo++; continue; }
+            const contaFornecedores = contabPlano.find(x => String(x.descricao || "").trim().toUpperCase() === "FORNECEDORES" && x.natureza === "PASSIVO" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
+            const contaJuros = contabPlano.find(x => String(x.id) === String(contabContaAcrescimoId));
+            const valor = f.tipo === "fatura" ? Number(p.total || 0) : f.tipo === "pagarCartao" ? Number(p.valorPagamentoCartao || p.valorParcela || p.total || 0) : Number(p.valorParcela || p.valor || p.total || 0);
+            if (f.tipo === "pagarCartao" ? (!contaBanco || !contaFornecedores || !(valor > 0) || (Number(p.jurosPagamentoCartao || 0) > 0 && !contaJuros)) : (!contaBanco || !contaCategoria || !(valor > 0))) { semVinculo++; continue; }
             const { data: existente, error: erroBusca } = await supabaseClient.from("contabilidade_lancamentos").select("id").eq("user_id",userId).eq("origem",f.origem).eq("origem_id",String(p.id)).maybeSingle();
             if (erroBusca) { console.error("Falha ao verificar lançamento contábil existente:", erroBusca); falhas++; continue; }
             if (existente) { jaExistentes++; continue; }
             const historico = f.tipo === "fatura"
               ? "Compra no cartão " + (cartao?.nome || "") + ": " + (p.descricao || "Despesa")
+              : f.tipo === "pagarCartao" ? "Pagamento com cartão " + (cartao?.nome || "") + ": " + (p.descricao || "Conta a pagar")
               : (f.tipo === "despesa" ? "Pagamento: " : "Recebimento: ") + (p.descricao || "Movimento financeiro");
             const { data: cab, error } = await supabaseClient.from("contabilidade_lancamentos").insert({ user_id:userId, data_lancamento:dataMov, competencia:String(dataMov).slice(0,7)+"-01", historico, origem:f.origem, origem_id:String(p.id), status:"EFETIVADO", total_debito:valor, total_credito:valor }).select().single();
             if (error || !cab) { console.error("Falha ao criar lançamento contábil:", error); falhas++; continue; }
-            const partidas = (f.tipo === "despesa" || f.tipo === "fatura")
-              ? [{ user_id:userId,lancamento_id:cab.id,conta_id:contaCategoria,sequencia:1,historico,debito:valor,credito:0 },{ user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:2,historico,debito:0,credito:valor }]
-              : [{ user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:1,historico,debito:valor,credito:0 },{ user_id:userId,lancamento_id:cab.id,conta_id:contaCategoria,sequencia:2,historico,debito:0,credito:valor }];
+            const partidas = f.tipo === "pagarCartao"
+              ? [
+                  { user_id:userId,lancamento_id:cab.id,conta_id:contaFornecedores.id,sequencia:1,historico,debito:Number(p.valorPagamentoCartao || 0)-Number(p.jurosPagamentoCartao || 0),credito:0 },
+                  ...(Number(p.jurosPagamentoCartao || 0)>0 ? [{ user_id:userId,lancamento_id:cab.id,conta_id:contaJuros.id,sequencia:2,historico:"Juros do pagamento com cartão",debito:Number(p.jurosPagamentoCartao || 0),credito:0 }] : []),
+                  { user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:3,historico,debito:0,credito:valor }
+                ]
+              : (f.tipo === "despesa" || f.tipo === "fatura")
+                ? [{ user_id:userId,lancamento_id:cab.id,conta_id:contaCategoria,sequencia:1,historico,debito:valor,credito:0 },{ user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:2,historico,debito:0,credito:valor }]
+                : [{ user_id:userId,lancamento_id:cab.id,conta_id:contaBanco,sequencia:1,historico,debito:valor,credito:0},{ user_id:userId,lancamento_id:cab.id,conta_id:contaCategoria,sequencia:2,historico,debito:0,credito:valor }];
             const { error: erroPartidas } = await supabaseClient.from("contabilidade_lancamento_itens").insert(partidas);
             if (erroPartidas) {
               await supabaseClient.from("contabilidade_lancamentos").delete().eq("id",cab.id).eq("user_id",userId);
@@ -4731,10 +4740,11 @@
                       h('td', { style: { whiteSpace: 'nowrap', color: isBaixado ? '#065F46' : 'var(--ink-soft)', fontWeight: isBaixado ? 600 : 400 } }, p.dataBaixa ? formatDateBR(p.dataBaixa) : '-'),
                       h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('details', { style: { marginTop: 4, fontSize: 11, color: 'var(--ink-soft)' } }, h('summary', { style: { cursor: 'pointer', width: 'fit-content' } }, 'Exibir detalhes'), h('div', { style: { marginTop: 4, whiteSpace: 'normal' } }, `📝 ${p.observacao}`)), p.linkFatura && h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', fontSize: 10, marginTop: 6, display: 'inline-flex', gap: 4 }, onClick: () => { setLancamentoTab('cartao'); setMonth(p.linkFatura); } }, h(FileText, { size: 10 }), "Ver Fatura do Cartão")),
                       h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.acrescimo || 0) ? showMoney(p.acrescimo) : '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.desconto || 0) ? showMoney(p.desconto) : '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)),
-                      h('td', { className: 'center' }, h('span', { className: `badge ${isBaixado ? 'baixado' : 'aberto'}`, style: isBaixado ? { background:'#D1FAE5', color:'#065F46', borderColor:'#A7F3D0', fontWeight:700 } : {} }, isBaixado ? 'Baixado' : 'Aberto')),
+                      h('td', { className: 'center' }, h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3}},h('span', { className: `badge ${isBaixado ? 'baixado' : 'aberto'}`, style: isBaixado ? { background:'#D1FAE5', color:'#065F46', borderColor:'#A7F3D0', fontWeight:700 } : {} }, isBaixado ? 'Baixado' : 'Aberto'),p.formaBaixa === 'CARTAO' && h('span',{className:'badge',style:{fontSize:10,background:'#FEF3C7',color:'#92400E',borderColor:'#FDE68A'}},'Pago com cartão'))),
                       h('td', { className: 'right num' }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)),
                       h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, 
-                        !isBaixado ? h('button', { type: 'button', className: 'primary', style: { padding: '4px' }, onClick: () => setBaixaModal({ open: true, type: 'pagar', id: p.id, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }), title: 'Baixar Lançamento' }, h(CheckCircle, { size: 14 })) : h('button', { type: 'button', className: 'danger', style: { padding: '4px' }, onClick: () => executarEstornoBaixa('pagar', p.id, p.dataBaixa), title: 'Estornar Baixa' }, h(RefreshCw, { size: 14 })), 
+                        !isBaixado ? h('button', { type: 'button', className: 'primary', style: { padding: '4px' }, onClick: () => setBaixaModal({ open: true, type: 'pagar', id: p.id, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }), title: 'Baixar Lançamento' }, h(CheckCircle, { size: 14 })) : h('button', { type: 'button', className: 'danger', style: { padding: '4px' }, onClick: () => executarEstornoBaixa('pagar', p.id, p.dataBaixa), title: 'Estornar Baixa' }, h(RefreshCw, { size: 14 })),
+                        !isBaixado && h('button',{type:'button',className:'action-btn',style:{padding:'4px'},onClick:()=>setPagamentoCartaoModal({open:true,id:p.id,dataBaixa:currentDate(),cartaoId:'',juros:'',parcelas:'1',competencia:currentMonth()}),title:'Pagar com cartão'},h(CreditCard,{size:14})), 
                         !isBaixado && h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? (p.valorParcela - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setDataVencimento(p.dataVencimento || ''); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('pagar'); setModalOpen(true); }, title: 'Editar' }, h(Pencil, { size: 14 })), 
                         h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao + ' (Cópia)'); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? ((p.recorrente ? p.valorParcela : p.total) - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setDataVencimento(p.dataVencimento || ''); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual('1'); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('pagar'); setModalOpen(true); }, title: 'Duplicar' }, h(Copy, { size: 14 })),
                         h('button', { type: 'button', className: 'action-btn delete', title: isBaixado ? 'Baixado: Exclusão bloqueada' : 'Excluir', onClick: () => setDeleteModal({ open: true, type: 'pagar', id: p.id, purchase: p, title: 'Excluir Conta', message: isBaixado ? 'ERRO: Este lançamento já está baixado e não pode ser excluído.' : ``, option: 'current' }) }, h(Trash2, { size: 14 }))
@@ -5256,6 +5266,20 @@
               ))
             ),
             h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setFecharFaturaModal({ open: false, comp: "", totais: [], vencimentos: {} }) }, "Cancelar"), h('button', { type: 'button', className: 'primary', onClick: confirmarFecharFatura }, h(CheckCircle, { size: 16 }), " Gerar Contas a Pagar"))
+          )
+        ),
+
+        pagamentoCartaoModal.open && h('div', { className:'modal-overlay' },
+          h('div', { className:'modal-content', onClick:e=>e.stopPropagation(), style:{maxWidth:420} },
+            h('div',{style:{fontSize:16,fontWeight:'bold',marginBottom:12}},'Pagar conta com cartão de crédito'),
+            h('div',{className:'field',style:{marginBottom:9}},h('label',null,'Data da baixa *'),h('input',{type:'date',value:pagamentoCartaoModal.dataBaixa,onChange:e=>setPagamentoCartaoModal(Object.assign({},pagamentoCartaoModal,{dataBaixa:e.target.value}))})),
+            h('div',{className:'field',style:{marginBottom:9}},h('label',null,'Cartão *'),h('select',{value:pagamentoCartaoModal.cartaoId,onChange:e=>setPagamentoCartaoModal(Object.assign({},pagamentoCartaoModal,{cartaoId:e.target.value}))},h('option',{value:''},'Selecione o cartão...'),(cartoes||[]).map(x=>h('option',{key:x.id,value:x.id},x.nome)))),
+            h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}},
+              h('div',{className:'field'},h('label',null,'Juros / acréscimos (R$)'),h('input',{type:'text',inputMode:'decimal',placeholder:'0,00',value:pagamentoCartaoModal.juros,onChange:e=>setPagamentoCartaoModal(Object.assign({},pagamentoCartaoModal,{juros:e.target.value}))})),
+              h('div',{className:'field'},h('label',null,'Quantidade de parcelas *'),h('input',{type:'number',min:1,max:60,value:pagamentoCartaoModal.parcelas,onChange:e=>setPagamentoCartaoModal(Object.assign({},pagamentoCartaoModal,{parcelas:e.target.value}))}))),
+            h('div',{className:'field',style:{marginTop:9,marginBottom:12}},h('label',null,'Competência inicial da fatura *'),h('input',{type:'month',value:pagamentoCartaoModal.competencia,onChange:e=>setPagamentoCartaoModal(Object.assign({},pagamentoCartaoModal,{competencia:e.target.value}))})),
+            h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},'O valor da conta será lançado no cartão com os juros informados, dividido na quantidade de parcelas escolhida.'),
+            h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8}},h('button',{type:'button',className:'action-btn',onClick:()=>setPagamentoCartaoModal({open:false,id:null,dataBaixa:currentDate(),cartaoId:'',juros:'',parcelas:'1',competencia:currentMonth()})},'Cancelar'),h('button',{type:'button',className:'primary',onClick:executarPagamentoCartaoPagar},'Confirmar pagamento'))
           )
         ),
 
