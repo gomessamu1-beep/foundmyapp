@@ -3247,9 +3247,9 @@
           return;
         }
         if (tipoMov.exige_banco && !bancoId) return alert("Selecione banco.");
-        if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
+        if (tipoMov.exige_banco && !bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
         const titulo = type === "pagar" ? contasPagar.find(p => String(p.id) === String(id)) : null;
-        if (type === "pagar" && titulo && (Number(titulo.acrescimo || 0) > 0 || Number(titulo.desconto || 0) > 0)) {
+        if (type === "pagar" && tipoMov.exige_banco && titulo && (Number(titulo.acrescimo || 0) > 0 || Number(titulo.desconto || 0) > 0)) {
           const resultadoContabil = await criarLancamentoContabilAjustePagar(titulo, bancoId, dataBaixaStr);
           if (!resultadoContabil.ok) return alert(resultadoContabil.mensagem);
         }
