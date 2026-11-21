@@ -818,13 +818,52 @@
 
       const contasPagarConsulta = useMemo(() => contasPagar.filter(p => !p.isLancamentoDireto).map(p => { if (p.parcelaIndividual) return { ...p, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) }; const parcelaAtual = Math.max(1, Number(p.parcelaInicial || 1)); const valores = splitInstallments(Number(p.total || 0), Math.max(1, Number(p.parcelas || 1))); return { ...p, index: parcelaAtual, valorParcela: Number(p.recorrente ? (p.valorParcela || p.total) : (p.valorParcela || valores[parcelaAtual - 1] || p.total)) }; }).filter(p => { const d = pagarTipoData === "emissao" ? (p.dataCompra || "") : (p.dataVencimento || p.dataCompra || ""); return (!pagarDataIni || d >= pagarDataIni) && (!pagarDataFim || d <= pagarDataFim) && (!pagarCategoriaId || p.categoriaId === pagarCategoriaId) && (!pagarSubcategoriaId || p.subcategoriaId === pagarSubcategoriaId) && (!pagarBuscaGeral.trim() || (() => { const termo = pagarBuscaGeral.trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const vals = [p.descricao,p.observacao,cat?.nome,sub?.nome,p.status,p.dataCompra,p.dataVencimento,p.valorParcela,p.total,p.acrescimo,p.desconto,Number(p.valorParcela||0).toFixed(2),Number(p.valorParcela||0).toFixed(2).replace('.',','),Number(p.total||0).toFixed(2),Number(p.total||0).toFixed(2).replace('.',',')]; return vals.some(v => String(v ?? '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(termo)); })()); }).sort((a,b) => { const da = pagarTipoData === "emissao" ? (a.dataCompra || "") : (a.dataVencimento || a.dataCompra || ""); const db = pagarTipoData === "emissao" ? (b.dataCompra || "") : (b.dataVencimento || b.dataCompra || ""); return faturaOrdem === "atual" ? db.localeCompare(da) : da.localeCompare(db); }), [contasPagar, pagarDataIni, pagarDataFim, pagarTipoData, pagarCategoriaId, pagarSubcategoriaId, pagarBuscaGeral, faturaOrdem]);
       const contasReceberConsulta = useMemo(() => contasReceber.filter(p => !p.isLancamentoDireto).map(p => { const parcelaAtual = Math.max(1, Number(p.parcelaInicial || 1)); const valores = splitInstallments(Number(p.total || 0), Math.max(1, Number(p.parcelas || 1))); return { ...p, index: parcelaAtual, valorParcela: Number(p.recorrente ? (p.valorParcela || p.total) : (p.valorParcela || valores[parcelaAtual - 1] || p.total)) }; }).filter(p => { const d = receberTipoData === "emissao" ? (p.dataCompra || "") : (p.dataVencimento || p.dataCompra || ""); return (!receberDataIni || d >= receberDataIni) && (!receberDataFim || d <= receberDataFim) && (!receberCategoriaId || p.categoriaId === receberCategoriaId) && (!receberSubcategoriaId || p.subcategoriaId === receberSubcategoriaId) && (!receberBuscaGeral.trim() || (() => { const termo = receberBuscaGeral.trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, ''); const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const vals = [p.descricao,p.observacao,cat?.nome,sub?.nome,p.status,p.dataCompra,p.dataVencimento,p.valorParcela,p.total,p.acrescimo,p.desconto,Number(p.valorParcela||0).toFixed(2),Number(p.valorParcela||0).toFixed(2).replace('.',','),Number(p.total||0).toFixed(2),Number(p.total||0).toFixed(2).replace('.',',')]; return vals.some(v => String(v ?? '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(termo)); })()); }).sort((a,b) => { const da = receberTipoData === "emissao" ? (a.dataCompra || "") : (a.dataVencimento || a.dataCompra || ""); const db = receberTipoData === "emissao" ? (b.dataCompra || "") : (b.dataVencimento || b.dataCompra || ""); return faturaOrdem === "atual" ? db.localeCompare(da) : da.localeCompare(db); }), [contasReceber, receberDataIni, receberDataFim, receberTipoData, receberCategoriaId, receberSubcategoriaId, receberBuscaGeral, faturaOrdem]);
-      const calendarioPagarItens = useMemo(() => contasPagar.filter(p => !p.isLancamentoDireto).map(p => { if (p.parcelaIndividual) return { ...p, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) }; const parcelaAtual = Math.max(1, Number(p.parcelaInicial || 1)); const valores = splitInstallments(Number(p.total || 0), Math.max(1, Number(p.parcelas || 1))); return { ...p, index: parcelaAtual, valorParcela: Number(p.recorrente ? (p.valorParcela || p.total) : (p.valorParcela || valores[parcelaAtual - 1] || p.total)) }; }).filter(p => p.status !== "Baixado" && (p.dataVencimento || p.dataCompra)), [contasPagar]);
+      const calendarioPagarItens = useMemo(() => {
+        const itens = [];
+        const normalizarDataCalendario = (valor) => {
+          const s = String(valor || "").trim();
+          if (s.length >= 10 && s[4] === "-" && s[7] === "-") return s.slice(0, 10);
+          const partes = s.split("/");
+          if (partes.length === 3 && partes[2].length === 4) return partes[2] + "-" + partes[1].padStart(2, "0") + "-" + partes[0].padStart(2, "0");
+          return "";
+        };
+        const avancarVencimento = (dataBase, meses) => {
+          const base = normalizarDataCalendario(dataBase);
+          if (!base) return "";
+          const partes = base.split("-").map(Number);
+          const alvo = new Date(partes[0], partes[1] - 1 + meses, 1);
+          const ultimoDia = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+          return alvo.getFullYear() + "-" + String(alvo.getMonth() + 1).padStart(2, "0") + "-" + String(Math.min(partes[2], ultimoDia)).padStart(2, "0");
+        };
+        contasPagar.forEach(p => {
+          if (p.isLancamentoDireto || String(p.status || "").toLocaleLowerCase("pt-BR").includes("baixad")) return;
+          if (p.parcelaIndividual) {
+            const vencimento = normalizarDataCalendario(p.dataVencimento || p.dataCompra || (p.inicio ? p.inicio + "-01" : ""));
+            if (vencimento && vencimento.slice(0, 7) === pagarCalendarioMes) itens.push({ ...p, dataCalendario: vencimento, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) });
+            return;
+          }
+          const dataBase = p.dataVencimento || p.dataCompra || (p.inicio ? p.inicio + "-01" : "");
+          const competenciaInicial = String(p.inicio || normalizarDataCalendario(dataBase).slice(0, 7) || "").slice(0, 7);
+          if (competenciaInicial.length !== 7 || competenciaInicial[4] !== "-") return;
+          const idx = monthDiff(competenciaInicial, pagarCalendarioMes);
+          if (idx < 0 || (p.canceladoEm && pagarCalendarioMes >= String(p.canceladoEm).slice(0, 7)) || (p.mesesExcluidos || []).includes(pagarCalendarioMes)) return;
+          const parcelaInicial = Math.max(1, Number(p.parcelaInicial || 1));
+          const quantidadeParcelas = Math.max(1, Number(p.parcelas || 1));
+          if (!p.recorrente && idx >= quantidadeParcelas - parcelaInicial + 1) return;
+          const numeroParcela = p.recorrente ? idx + 1 : parcelaInicial + idx;
+          const valores = splitInstallments(Number(p.total || 0), quantidadeParcelas);
+          const valor = Number(p.recorrente ? (p.valorParcela || p.total || 0) : (p.valorParcela && quantidadeParcelas === 1 ? p.valorParcela : (valores[numeroParcela - 1] || p.valorParcela || p.total || 0)));
+          const vencimento = avancarVencimento(dataBase, idx);
+          if (vencimento && vencimento.slice(0, 7) === pagarCalendarioMes) itens.push({ ...p, dataCalendario: vencimento, index: numeroParcela, parcelas: quantidadeParcelas, valorParcela: valor });
+        });
+        return itens;
+      }, [contasPagar, pagarCalendarioMes]);
       const calendarioPagarAno = Number((pagarCalendarioMes || currentMonth()).slice(0,4));
       const calendarioPagarMesNumero = Number((pagarCalendarioMes || currentMonth()).slice(5,7));
       const calendarioPagarPrimeiroDia = new Date(calendarioPagarAno, calendarioPagarMesNumero - 1, 1);
       const calendarioPagarDiasMes = new Date(calendarioPagarAno, calendarioPagarMesNumero, 0).getDate();
       const calendarioPagarInicioSemana = calendarioPagarPrimeiroDia.getDay();
-      const calendarioPagarPorDia = calendarioPagarItens.reduce((acc, p) => { const data = p.dataVencimento || p.dataCompra; if (data && data.slice(0,7) === pagarCalendarioMes) { (acc[data] ||= []).push(p); } return acc; }, {});
+      const calendarioPagarPorDia = calendarioPagarItens.reduce((acc, p) => { const data = p.dataCalendario || p.dataVencimento || p.dataCompra; if (data && data.slice(0,7) === pagarCalendarioMes) { (acc[data] ||= []).push(p); } return acc; }, {});
       const calendarioPagarSelecionados = pagarCalendarioDiaSelecionado ? (calendarioPagarPorDia[pagarCalendarioDiaSelecionado] || []) : [];
       function navegarCalendarioPagar(delta) { const d = new Date(calendarioPagarAno, calendarioPagarMesNumero - 1 + delta, 1); setPagarCalendarioMes(d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0")); setPagarCalendarioDiaSelecionado(""); }
       function abrirConsultaFinanceira(tipo) { if (tipo === "pagar") { setPagarDataIni(""); setPagarDataFim(""); setPagarTipoData("vencimento"); setPagarCategoriaId(""); setPagarSubcategoriaId(""); setPagarConsultaExecutada(false); setBatchPagarIds([]); setLancamentoTab("pagar"); } else { setReceberDataIni(""); setReceberDataFim(""); setReceberTipoData("vencimento"); setReceberCategoriaId(""); setReceberSubcategoriaId(""); setReceberConsultaExecutada(false); setBatchReceberIds([]); setLancamentoTab("receber"); } }
@@ -4802,7 +4841,7 @@
                     h('button', { type: 'button', className: 'action-btn', onClick: () => navegarCalendarioPagar(1), title: 'Próximo mês' }, '›'),
                     h('button', { type: 'button', className: 'action-btn', onClick: () => { setPagarCalendarioMes(currentMonth()); setPagarCalendarioDiaSelecionado(""); } }, 'Hoje')
                   ),
-                  h('div', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, calendarioPagarItens.filter(p => (p.dataVencimento || p.dataCompra || '').slice(0,7) === pagarCalendarioMes).length + ' conta(s) em aberto no mês')
+                  h('div', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, calendarioPagarItens.length + ' conta(s) em aberto no mês')
                 ),
                 h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7,minmax(0,1fr))', gap: 6 } },
                   ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => h('div', { key: d, style: { textAlign: 'center', fontWeight: 700, fontSize: 12, padding: '8px 2px', color: 'var(--ink-soft)' } }, d)),
