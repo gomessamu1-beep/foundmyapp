@@ -3279,7 +3279,7 @@
 
       function executarEstornoLote(type, ids) {
         if (!ids || ids.length === 0) return alert("Nenhum item selecionado."); const listaAlvo = type === "pagar" ? contasPagar : contasReceber;
-        for (const id of ids) { const item = listaAlvo.find(i => i.id === id); if (item && item.dataBaixa) { if (isDiaFechado(item.dataBaixa) || isMesFechado(item.dataBaixa.substring(0, 7))) return alert(`Estorno cancelado: Há itens cuja data de baixa (${formatDateBR(item.dataBaixa)}) ou mês está bloqueada.`); } }
+        for (const id of ids) { const item = listaAlvo.find(i => i.id === id); if (type === "pagar" && item && item.formaBaixa === "CARTAO") return alert("O estorno de pagamentos com cartão deve ser feito individualmente, para remover também a compra vinculada da fatura."); if (item && item.dataBaixa) { if (isDiaFechado(item.dataBaixa) || isMesFechado(item.dataBaixa.substring(0, 7))) return alert(`Estorno cancelado: Há itens cuja data de baixa (${formatDateBR(item.dataBaixa)}) ou mês está bloqueada.`); } }
         if (!window.confirm(`Deseja estornar a baixa dos ${ids.length} itens?`)) return;
         if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p)); setBatchReceberIds([]); }
       }
