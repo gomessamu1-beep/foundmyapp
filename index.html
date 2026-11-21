@@ -5058,8 +5058,10 @@
               
               h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: subcategoriaId, onChange: e => setSubcategoriaId(e.target.value), required: getCategoria(categoriaId) ? !getCategoria(categoriaId).isTransferencia : true, disabled: getCategoria(categoriaId)?.isTransferencia }, h('option', { value: "" }, getCategoria(categoriaId)?.isTransferencia ? "Não aplicável" : "Selecione..."), subcategoriasDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome)))),
               
-              !isRecorrente && h('div', { className: 'field' }, h('label', null, "Valor da Parcela"), h('input', { type: 'text', value: valorParcelaInput, onChange: e => handleValorParcelaChange(e.target.value) })),
-              h('div', { className: 'field' }, h('label', null, isRecorrente ? "Valor Mensal *" : "Valor Total * (com acréscimos e descontos)"), h('input', { type: 'text', value: valorTotalFinalInput(), onChange: e => handleValorTotalChange(e.target.value), required: true })),
+              h('div', { className: 'field full', style: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, alignItems: 'start' } },
+                !isRecorrente && h('div', { className: 'field' }, h('label', null, "Valor da Parcela"), h('input', { type: 'text', value: valorParcelaInput, onChange: e => handleValorParcelaChange(e.target.value) })),
+                h('div', { className: 'field', style: { gridColumn: isRecorrente ? 'span 2' : 'auto' } }, h('label', null, isRecorrente ? "Valor Mensal *" : "Valor Total * (com acréscimos e descontos)"), h('input', { type: 'text', value: valorTotalFinalInput(), onChange: e => handleValorTotalChange(e.target.value), required: true }))
+              ),
               h('div', { className: 'field' }, h('label', null, "Acréscimo (multa, juros ou taxa)"), h('input', { type: 'text', inputMode: 'decimal', value: acrescimoInput, onChange: e => setAcrescimoInput(e.target.value), placeholder: '0,00' })),
               h('div', { className: 'field' }, h('label', null, "Desconto (abatimento ou desconto)"), h('input', { type: 'text', inputMode: 'decimal', value: descontoInput, onChange: e => setDescontoInput(e.target.value), placeholder: '0,00' })),
               !isRecorrente && h('div', { className: 'field' }, h('label', null, "Parcela Atual"), h('input', { type: 'number', min: '1', value: parcelaAtual, onChange: e => setParcelaAtual(e.target.value) })), 
