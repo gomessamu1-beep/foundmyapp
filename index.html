@@ -28,7 +28,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "contabilidade-2026-11-13";
+    const APP_BUILD = "parametros-pagamento-2026-11-21";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -572,7 +572,7 @@
       function renderParametrosMovimentacao(){const lista=tiposMovimentacao.filter(x=>x.tipo===paramTipo);return h(React.Fragment,null,
         h("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},h("button",{type:"button",className:paramTipo==="PAGAMENTO"?"primary":"action-btn",onClick:()=>{setParamTipo("PAGAMENTO");setParamEditId("");}},"Tipos de Pagamento"),h("button",{type:"button",className:paramTipo==="RECEBIMENTO"?"primary":"action-btn",onClick:()=>{setParamTipo("RECEBIMENTO");setParamEditId("");}},"Tipos de Recebimento")),
         h("form",{onSubmit:salvarTipoMovimentacao,className:"form-card",style:{padding:14,marginBottom:14}},h("div",{className:"field"},h("label",null,"Descrição *"),h("input",{value:paramDescricao,onChange:e=>setParamDescricao(e.target.value),required:true,maxLength:80})),
-          h("div",{style:{display:"flex",gap:18,margin:"10px 0",flexWrap:"wrap"}},h("label",null,h("input",{type:"checkbox",checked:paramExigeBanco,onChange:e=>setParamExigeBanco(e.target.checked)})," Exige banco/conta"),paramTipo==="PAGAMENTO"&&h("label",null,h("input",{type:"checkbox",checked:paramExigeCartao,onChange:e=>{setParamExigeCartao(e.target.checked);if(e.target.checked)setParamExigeBanco(false);}})," Exige cartão de crédito")),
+          h("div",{style:{display:"flex",gap:18,margin:"10px 0",flexWrap:"wrap"}},h("label",null,h("input",{type:"checkbox",checked:paramExigeBanco,onChange:e=>{setParamExigeBanco(e.target.checked);if(e.target.checked)setParamExigeCartao(false);}})," Exige banco/conta"),paramTipo==="PAGAMENTO"&&h("label",null,h("input",{type:"checkbox",checked:paramExigeCartao,onChange:e=>{setParamExigeCartao(e.target.checked);if(e.target.checked)setParamExigeBanco(false);}})," Exige cartão de crédito")),
           h("div",{style:{display:"flex",justifyContent:"flex-end",gap:8}},paramEditId&&h("button",{type:"button",className:"action-btn",onClick:()=>{setParamEditId("");setParamDescricao("");}},"Cancelar"),h("button",{type:"submit",className:"primary"},paramEditId?"Salvar alterações":"Adicionar tipo"))),
         h("div",{style:{fontWeight:700,marginBottom:8}},"Tipos cadastrados"),lista.length? h("div",{className:"list-vertical"},lista.map(x=>h("div",{className:"list-item",key:x.id},h("div",{className:"list-item-main"},h("strong",null,x.descricao),h("div",{style:{fontSize:12,color:"var(--ink-soft)"}},(x.exige_banco?"Exige banco":"Sem banco obrigatório")+(x.exige_cartao?" • Exige cartão":"")+(x.ativo?" • Ativo":" • Inativo"))),h("div",{style:{display:"flex",gap:5}},h("button",{className:"action-btn",type:"button",onClick:()=>{setParamEditId(x.id);setParamDescricao(x.descricao);setParamExigeBanco(!!x.exige_banco);setParamExigeCartao(!!x.exige_cartao);}},"Editar"),h("button",{className:"action-btn",type:"button",onClick:()=>alternarTipoMov(x)},x.ativo?"Desativar":"Ativar"),h("button",{className:"action-btn delete",type:"button",onClick:()=>excluirTipoMov(x)},"Excluir"))))):h("div",{style:{padding:18,textAlign:"center",color:"var(--ink-soft)"}}, "Nenhum tipo cadastrado.")
       );}
