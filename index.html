@@ -4632,50 +4632,28 @@
           ),
 
           screen === "lancamentos" && h('div', { className: 'form-card' },
-            lancamentoTab === "" ? h('div', {
-              className: 'sub-nav launch-choice-nav',
-              style: { display: 'flex', flexDirection: 'column', gap: isAndroidApp ? 10 : 12, width: '100%', maxWidth: isAndroidApp ? '100%' : 420, margin: '18px auto 8px', alignItems: 'stretch' }
-            },
-              h('button', {
-                type: 'button',
-                onClick: () => setLancamentoTab("cartao"),
-                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: isAndroidApp ? 10 : 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--green)' : '1px solid var(--green)' }
-              }, h(CreditCard, { size: isAndroidApp ? 40 : 20 }), " Cartão de Crédito"),
-              h('button', {
-                type: 'button',
-                onClick: () => abrirConsultaFinanceira("pagar"),
-                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--red)' : '1px solid var(--red)' }
-              }, h(ArrowDownCircle, { size: isAndroidApp ? 40 : 20 }), " Contas a Pagar"),
-              h('button', {
-                type: 'button',
-                onClick: () => abrirConsultaFinanceira("receber"),
-                style: { width: '100%', boxSizing: 'border-box', minHeight: isAndroidApp ? 100 : 58, justifyContent: 'center', flexDirection: isAndroidApp ? 'column' : 'row', gap: 10, textAlign: isAndroidApp ? 'center' : 'left', whiteSpace: 'normal', overflowWrap: 'anywhere', padding: isAndroidApp ? '20px 20px' : '14px 16px', borderRadius: 10, fontSize: isAndroidApp ? 22 : 15, fontWeight: isAndroidApp ? 650 : 600, background: 'var(--card)', color: 'var(--ink)', border: isAndroidApp ? '5px solid var(--green)' : '1px solid var(--green)' }
-              }, h(ArrowUpCircle, { size: isAndroidApp ? 40 : 20 }), " Contas a Receber")
-            ) : h('div', {
+            h('div', {
               className: 'sub-nav launch-selected-nav',
-              style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, marginBottom: 16 }
+              style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }
             },
               h('button', {
                 type: 'button',
-                className: 'action-btn',
-                onClick: () => setLancamentoTab(""),
-                style: { marginBottom: 4 }
-              }, "← Voltar às opções"),
-              lancamentoTab === "cartao" && h('button', {
+                className: lancamentoTab === "pagar" ? "active" : "",
+                onClick: () => abrirConsultaFinanceira("pagar"),
+                style: { justifyContent: 'flex-start', padding: '9px 14px', fontWeight: 600 }
+              }, h(ArrowDownCircle, { size: 18 }), " Contas a Pagar"),
+              h('button', {
                 type: 'button',
-                className: 'active',
-                style: { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
-              }, h(CreditCard, { size: 20 }), " Cartão de Crédito"),
-              lancamentoTab === "pagar" && h('button', {
+                className: lancamentoTab === "receber" ? "active" : "",
+                onClick: () => abrirConsultaFinanceira("receber"),
+                style: { justifyContent: 'flex-start', padding: '9px 14px', fontWeight: 600 }
+              }, h(ArrowUpCircle, { size: 18 }), " Contas a Receber"),
+              h('button', {
                 type: 'button',
-                className: 'active',
-                style: { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
-              }, h(ArrowDownCircle, { size: 20 }), " Contas a Pagar"),
-              lancamentoTab === "receber" && h('button', {
-                type: 'button',
-                className: 'active',
-                style: { justifyContent: 'flex-start', padding: '8px 12px', fontWeight: 600 }
-              }, h(ArrowUpCircle, { size: 20 }), " Contas a Receber")
+                className: lancamentoTab === "cartao" ? "active" : "",
+                onClick: () => setLancamentoTab("cartao"),
+                style: { justifyContent: 'flex-start', padding: '9px 14px', fontWeight: 600 }
+              }, h(CreditCard, { size: 18 }), " Cartão de Crédito")
             ),
 
             lancamentoTab === "cartao" && h(React.Fragment, null,
