@@ -3247,24 +3247,34 @@
         setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate() });
       }
 
-      function executarEstornoBaixa(type, id, dataBaixa) {
-        if (dataBaixa && (isDiaFechado(dataBaixa) || isMesFechado(dataBaixa.substring(0, 7)))) return alert("Dia ou mês bloqueado."); 
-        if (!window.confirm("Deseja estornar baixa?")) return;
-        
-        let transId = null;
-        if (type === "pagar") { const item = contasPagar.find(p => p.id === id); transId = item?.transferenciaId; }
-        else if (type === "receber") { const item = contasReceber.find(p => p.id === id); transId = item?.transferenciaId; }
-
-        const estornoUpdater = prev => prev.map(p => (p.id === id || (transId && p.transferenciaId === transId)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p);
-
-        if (type === "pagar") { 
-          updateContasPagar(estornoUpdater); 
-          if (transId) updateContasReceber(estornoUpdater); 
-        } 
-        else if (type === "receber") { 
-          updateContasReceber(estornoUpdater); 
-          if (transId) updateContasPagar(estornoUpdater); 
+      async function executarEstornoBaixa(type, id, dataBaixa) {
+        if (dataBaixa && (isDiaFechado(dataBaixa) || isMesFechado(dataBaixa.substring(0, 7)))) return alert("Dia ou mês bloqueado.");
+        const itemPagar = type === "pagar" ? contasPagar.find(p => String(p.id) === String(id)) : null;
+        if (itemPagar && itemPagar.formaBaixa === "CARTAO") {
+          const compra = purchases.find(x => String(x.id) === String(itemPagar.compraCartaoId));
+          const competencia = compra && compra.inicio;
+          if (competencia && (isFaturaFechada(competencia) || isMesFechado(competencia))) return alert("Não é possível estornar: a fatura do cartão vinculada está fechada ou a competência está bloqueada. Reabra o período primeiro.");
+          if (!window.confirm("O estorno também removerá a compra parcelada vinculada da fatura do cartão. Deseja continuar?")) return;
+          try {
+            await removerLancamentoContabilOrigem("CONTAS_PAGAR_CARTAO", itemPagar.id);
+            const novasCompras = purchases.filter(x => String(x.id) !== String(itemPagar.compraCartaoId));
+            const novasContasPagar = contasPagar.map(p => String(p.id) === String(id) ? Object.assign({},p,{status:"Em aberto",bancoBaixaId:null,dataBaixa:null,formaBaixa:null,cartaoBaixaId:null,compraCartaoId:null,jurosPagamentoCartao:null,valorPagamentoCartao:null}) : p);
+            setPurchases(novasCompras);
+            setContasPagar(novasContasPagar);
+            await saveDataToSupabase(novasCompras,novasContasPagar,contasReceber,cartoes,contasBancarias,categorias,deparaList,faturasFechadas,faturasBaixadas,diasFechados,mesesFechados);
+          } catch (e) {
+            console.error("Erro ao estornar pagamento com cartão:",e);
+            alert("Não foi possível concluir o estorno: " + (e.message || "erro desconhecido"));
+          }
+          return;
         }
+        if (!window.confirm("Deseja estornar baixa?")) return;
+        let transId = null;
+        if (type === "pagar") transId = itemPagar && itemPagar.transferenciaId;
+        else if (type === "receber") { const item = contasReceber.find(p => p.id === id); transId = item && item.transferenciaId; }
+        const estornoUpdater = prev => prev.map(p => (p.id === id || (transId && p.transferenciaId === transId)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p);
+        if (type === "pagar") { updateContasPagar(estornoUpdater); if (transId) updateContasReceber(estornoUpdater); }
+        else if (type === "receber") { updateContasReceber(estornoUpdater); if (transId) updateContasPagar(estornoUpdater); }
       }
 
       function executarEstornoLote(type, ids) {
