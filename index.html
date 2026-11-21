@@ -271,8 +271,8 @@
 
       const [concilEditModal, setConcilEditModal] = useState({ open: false, item: null });
 
-      const [baixaModal, setBaixaModal] = useState({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
-      const [pagamentoCartaoModal, setPagamentoCartaoModal] = useState({ open:false, id:null, dataBaixa:currentDate(), cartaoId:"", juros:"", parcelas:"1", competencia:currentMonth() });
+      const [baixaModal, setBaixaModal] = useState({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate(), tipoMovimentacaoId: "" });
+      const [pagamentoCartaoModal, setPagamentoCartaoModal] = useState({ open:false, id:null, dataBaixa:currentDate(), cartaoId:"", juros:"", parcelas:"1", competencia:currentMonth(), tipoMovimentacaoId:"" });
       const [batchBaixaModal, setBatchBaixaModal] = useState({ open: false, bancoId: "", dataBaixa: currentDate() });
       const [fecharFaturaModal, setFecharFaturaModal] = useState({ open: false, comp: "", totais: [], vencimentos: {} });
       const [fecharFaturaCatId, setFecharFaturaCatId] = useState("");
@@ -3229,22 +3229,31 @@
         if ((purchases || []).some(x => String(x.contaPagarOrigemId || "") === String(titulo.id))) return alert("Já existe uma compra de cartão vinculada a esta conta.");
         const resultado = await criarLancamentoContabilPagamentoCartaoPagar(titulo,modal.cartaoId,modal.dataBaixa,juros);
         if (!resultado.ok) return alert(resultado.mensagem);
+        const tipoPagamento = tiposMovimentacao.find(x=>String(x.id)===String(modal.tipoMovimentacaoId));
         const compra = {id:uid(),descricao:"Pagamento de conta: " + (titulo.descricao || "Conta a pagar"),observacao:"Gerado pela baixa da conta a pagar " + String(titulo.id),total,valorBase:principal,valorParcela:Number((total/parcelas).toFixed(2)),valorParcelaBase:Number((principal/parcelas).toFixed(2)),acrescimo:juros,desconto:0,dataCompra:modal.dataBaixa,dataVencimento:modal.dataBaixa,parcelas,parcelaInicial:1,inicio:modal.competencia,recorrente:false,cartaoId:modal.cartaoId,categoriaId:titulo.categoriaId || null,subcategoriaId:titulo.subcategoriaId || null,status:"Em aberto",origem:"FATURA",naoContabilizarDespesa:true,contaPagarOrigemId:String(titulo.id),criadoEm:Date.now()};
         const novasCompras = purchases.concat([compra]);
-        const novasContasPagar = contasPagar.map(p => String(p.id) === String(titulo.id) ? Object.assign({},p,{status:"Baixado",bancoBaixaId:null,dataBaixa:modal.dataBaixa,formaBaixa:"CARTAO",cartaoBaixaId:modal.cartaoId,compraCartaoId:compra.id,jurosPagamentoCartao:juros,valorPagamentoCartao:total}) : p);
+        const novasContasPagar = contasPagar.map(p => String(p.id) === String(titulo.id) ? Object.assign({},p,{status:"Baixado",bancoBaixaId:null,dataBaixa:modal.dataBaixa,formaBaixa:"CARTAO",tipoPagamentoId:tipoPagamento?.id||null,tipoPagamentoDescricao:tipoPagamento?.descricao||"Cartão de Crédito",cartaoBaixaId:modal.cartaoId,compraCartaoId:compra.id,jurosPagamentoCartao:juros,valorPagamentoCartao:total}) : p);
         setPurchases(novasCompras); setContasPagar(novasContasPagar);
         await saveDataToSupabase(novasCompras,novasContasPagar,contasReceber,cartoes,contasBancarias,categorias,deparaList,faturasFechadas,faturasBaixadas,diasFechados,mesesFechados);
         setPagamentoCartaoModal({open:false,id:null,dataBaixa:currentDate(),cartaoId:"",juros:"",parcelas:"1",competencia:currentMonth()});
         alert("Conta baixada e compra parcelada criada na fatura do cartão.");
       }
-      async function executarBaixaIndividual(type, id, bancoId, dataBaixaStr) {
+      async function executarBaixaIndividual(type, id, bancoId, dataBaixaStr, tipoMovimentacaoId) {
+        const tipoMov = tiposMovimentacao.find(x => String(x.id) === String(tipoMovimentacaoId) && x.tipo === (type === "pagar" ? "PAGAMENTO" : "RECEBIMENTO") && x.ativo);
+        if (!tipoMov) return alert("Selecione um tipo de " + (type === "pagar" ? "pagamento" : "recebimento") + " ativo.");
+        if (tipoMov.exige_cartao && type === "pagar") {
+          setPagamentoCartaoModal({open:true,id,dataBaixa:dataBaixaStr||currentDate(),cartaoId:"",juros:"",parcelas:"1",competencia:currentMonth(),tipoMovimentacaoId:tipoMov.id});
+          setBaixaModal({open:false,type:null,id:null,bancoId:"",dataBaixa:currentDate(),tipoMovimentacaoId:""});
+          return;
+        }
+        if (tipoMov.exige_banco && !bancoId) return alert("Selecione banco.");
         if (!bancoId) return alert("Selecione banco."); if (!dataBaixaStr) return alert("Informe data."); if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
         const titulo = type === "pagar" ? contasPagar.find(p => String(p.id) === String(id)) : null;
         if (type === "pagar" && titulo && (Number(titulo.acrescimo || 0) > 0 || Number(titulo.desconto || 0) > 0)) {
           const resultadoContabil = await criarLancamentoContabilAjustePagar(titulo, bancoId, dataBaixaStr);
           if (!resultadoContabil.ok) return alert(resultadoContabil.mensagem);
         }
-        if (type === "pagar") updateContasPagar(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p)); else if (type === "receber") updateContasReceber(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: bancoId, dataBaixa: dataBaixaStr } : p));
+        if (type === "pagar") updateContasPagar(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: tipoMov.exige_banco ? bancoId : null, dataBaixa: dataBaixaStr, tipoPagamentoId: tipoMov.id, tipoPagamentoDescricao: tipoMov.descricao, formaBaixa: "TIPO" } : p)); else if (type === "receber") updateContasReceber(prev => prev.map(p => p.id === id ? { ...p, status: "Baixado", bancoBaixaId: tipoMov.exige_banco ? bancoId : null, dataBaixa: dataBaixaStr, tipoRecebimentoId: tipoMov.id, tipoRecebimentoDescricao: tipoMov.descricao, formaBaixa: "TIPO" } : p));
         setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() });
       }
 
@@ -5314,8 +5323,10 @@
         baixaModal.open && h('div', { className: 'modal-overlay' },
           h('div', { className: 'modal-content', onClick: e => e.stopPropagation(), style: { maxWidth: 360 } },
             h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 } }, "Efetuar Baixa da Conta"),
-            h('div', { className: 'field', style: { marginBottom: 10 } }, h('label', null, "Data da Baixa *"), h('input', { type: 'date', value: baixaModal.dataBaixa, onChange: e => setBaixaModal({ ...baixaModal, dataBaixa: e.target.value }) })), h('div', { className: 'field', style: { marginBottom: 14 } }, h('label', null, "Selecione o Banco / Conta *"), h('select', { value: baixaModal.bancoId, onChange: e => setBaixaModal({ ...baixaModal, bancoId: e.target.value }) }, h('option', { value: "" }, "Selecione..."), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
-            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() }) }, "Cancelar"), h('button', { type: 'button', className: 'primary', onClick: () => executarBaixaIndividual(baixaModal.type, baixaModal.id, baixaModal.bancoId, baixaModal.dataBaixa) }, "Confirmar Baixa"))
+            h('div', { className: 'field', style: { marginBottom: 10 } }, h('label', null, "Data da Baixa *"), h('input', { type: 'date', value: baixaModal.dataBaixa, onChange: e => setBaixaModal({ ...baixaModal, dataBaixa: e.target.value }) })),
+            h('div',{className:'field',style:{marginBottom:10}},h('label',null,baixaModal.type==="pagar"?"Tipo de Pagamento *":"Tipo de Recebimento *"),h('select',{value:baixaModal.tipoMovimentacaoId,onChange:e=>setBaixaModal({...baixaModal,tipoMovimentacaoId:e.target.value,bancoId:""})},h('option',{value:""},"Selecione..."),tiposMovimentacao.filter(x=>x.tipo===(baixaModal.type==="pagar"?"PAGAMENTO":"RECEBIMENTO")&&x.ativo).map(x=>h('option',{key:x.id,value:x.id},x.descricao)))),
+            (()=>{const tp=tiposMovimentacao.find(x=>String(x.id)===String(baixaModal.tipoMovimentacaoId));return tp?.exige_banco?h('div',{className:'field',style:{marginBottom:14}},h('label',null,"Selecione o Banco / Conta *"),h('select',{value:baixaModal.bancoId,onChange:e=>setBaixaModal({...baixaModal,bancoId:e.target.value})},h('option',{value:""},"Selecione..."),contasBancarias.map(x=>h('option',{key:x.id,value:x.id},x.nome)))):tp?.exige_cartao?h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:12}},"O cartão e as condições de parcelamento serão informados na próxima etapa."):null;})(),
+            h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setBaixaModal({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate() }) }, "Cancelar"), h('button', { type: 'button', className: 'primary', onClick: () => executarBaixaIndividual(baixaModal.type, baixaModal.id, baixaModal.bancoId, baixaModal.dataBaixa, baixaModal.tipoMovimentacaoId) }, "Confirmar Baixa"))
           )
         ),
 
