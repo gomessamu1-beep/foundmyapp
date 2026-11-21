@@ -4827,7 +4827,7 @@
                   calendarioPagarSelecionados.length ? h('div', null, calendarioPagarSelecionados.map(p => h('button', { key: p.id, type: 'button', onClick: () => { setPagarDataIni(''); setPagarDataFim(''); setPagarCategoriaId(''); setPagarSubcategoriaId(''); setPagarBuscaGeral(p.descricao || ''); setPagarConsultaExecutada(true); setPagarVisao('lancamentos'); setLancamentoTab('pagar'); }, style: { display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '11px 14px', border: 0, borderTop: '1px solid var(--line)', background: 'transparent', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' } },
                     h('span', { style: { minWidth: 0 } }, h('strong', { style: { display: 'block' } }, p.descricao || 'Sem descrição'), h('span', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, (p.recorrente ? 'Recorrente' : 'Parcela ' + p.index + '/' + p.parcelas) + ' • ' + (p.status || 'Em aberto'))),
                     h('strong', { className: 'num', style: { whiteSpace: 'nowrap' } }, showMoney(p.valorParcela))
-                  ))) : h('div', { style: { padding: 16, color: 'var(--ink-soft)', textAlign: 'center' } }, 'Não há contas em aberto com vencimento neste dia.')
+                  )))) : h('div', { style: { padding: 16, color: 'var(--ink-soft)', textAlign: 'center' } }, 'Não há contas em aberto com vencimento neste dia.')
                 )
               )
             ),
