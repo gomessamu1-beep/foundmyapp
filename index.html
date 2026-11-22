@@ -617,6 +617,32 @@
       async function salvarTipoMovimentacao(e){e.preventDefault();const descricao=paramDescricao.trim();if(!descricao)return alert("Informe a descrição.");if(paramTipo==="RECEBIMENTO"&&paramExigeCartao)return alert("Cartão só pode ser usado em pagamentos.");const payload={user_id:session.user.id,tipo:paramTipo,descricao,exige_banco:paramExigeBanco,exige_cartao:paramExigeCartao,updated_at:new Date().toISOString()};const q=paramEditId?supabaseClient.from("tipos_movimentacao").update(payload).eq("id",paramEditId).eq("user_id",session.user.id):supabaseClient.from("tipos_movimentacao").insert(payload);const {error}=await q;if(error)return alert(error.message);setParamDescricao("");setParamExigeBanco(false);setParamExigeCartao(false);setParamEditId("");carregarTiposMovimentacao();}
       async function alternarTipoMov(item){const {error}=await supabaseClient.from("tipos_movimentacao").update({ativo:!item.ativo,updated_at:new Date().toISOString()}).eq("id",item.id).eq("user_id",session.user.id);if(error)return alert(error.message);carregarTiposMovimentacao();}
       async function excluirTipoMov(item){if(!confirm("Excluir "+item.descricao+"?"))return;const {error}=await supabaseClient.from("tipos_movimentacao").delete().eq("id",item.id).eq("user_id",session.user.id);if(error)return alert(error.message);carregarTiposMovimentacao();}
+      function renderParametrosContabilidadePagar() {
+        return h(React.Fragment, null,
+        h('div', { className:'form-card', style:{padding:14,marginBottom:14,border:'1px solid var(--line)'} },
+          h('div', { style:{fontWeight:700,marginBottom:6} }, "Contas a Pagar"),
+          h('div', { style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10} }, "Selecione uma única conta analítica de despesa para todos os acréscimos e uma única conta analítica de receita para todos os descontos. Se não houver esses valores no pagamento, essas contas não serão movimentadas."),
+          h('div', { className:'field', style:{marginBottom:10} },
+            h('label', null, "Acréscimos - Despesas com Juros e Multas"),
+            h('select', { value:contabContaAcrescimoId, onChange:e=>setContabContaAcrescimoId(e.target.value) },
+              h('option',{value:""},"Selecione a conta de despesa..."),
+              contabPlano.filter(x=>x.natureza==="DESPESA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
+            )
+          ),
+          h('div', { className:'field', style:{marginBottom:10} },
+            h('label', null, "Descontos - Descontos Obtidos"),
+            h('select', { value:contabContaDescontoId, onChange:e=>setContabContaDescontoId(e.target.value) },
+              h('option',{value:""},"Selecione a conta de receita..."),
+              contabPlano.filter(x=>x.natureza==="RECEITA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
+            )
+          ),
+          h('div', { style:{display:'flex',justifyContent:'flex-end'} },
+            h('button',{type:'button',className:'primary',onClick:salvarConfiguracaoAjustesPagar},"Salvar vínculos contábeis")
+          )
+        ),
+        );
+      }
+
       function renderParametrosMovimentacao(){const lista=tiposMovimentacao.filter(x=>x.tipo===paramTipo);return h(React.Fragment,null,
         h("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},h("button",{type:"button",className:paramTipo==="PAGAMENTO"?"primary":"action-btn",onClick:()=>{setParamTipo("PAGAMENTO");setParamEditId("");}},"Tipos de Pagamento"),h("button",{type:"button",className:paramTipo==="RECEBIMENTO"?"primary":"action-btn",onClick:()=>{setParamTipo("RECEBIMENTO");setParamEditId("");}},"Tipos de Recebimento")),
         h("form",{onSubmit:salvarTipoMovimentacao,className:"form-card",style:{padding:14,marginBottom:14}},h("div",{className:"field"},h("label",null,"Descrição *"),h("input",{value:paramDescricao,onChange:e=>setParamDescricao(e.target.value),required:true,maxLength:80})),
@@ -4297,34 +4323,13 @@
               h('button', { className: contabTab === "relatorios" ? "active" : "", onClick: () => { setContabTab("relatorios"); carregarContabilidade(); } }, "Relatórios"),
               h('button',{className:contabTab==="parametros"?"active":"",onClick:()=>{setContabTab("parametros");setParamTipo("PAGAMENTO");}},"Parâmetros")
             ),
-            contabTab === "parametros" && renderParametrosMovimentacao(),
+            contabTab === "parametros" && renderParametrosContabilidadePagar(),
             contabErro && contabTab !== "parametros" && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, contabErro),
             contabLoading && h('div', { style: { padding: 12, color: 'var(--ink-soft)' } }, "Carregando dados contábeis..."),
             contabTab === "plano" && h(React.Fragment, null,
               h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
                 h('h3', { style: { margin: 0 } }, "Cadastro do Plano de Contas"),
                 h('button', { type: 'button', className: 'action-btn', onClick: () => { setContabMascaraEdit(contabMascara); setContabMascaraAberta(v => !v); } }, h(FolderTree, { size: 15 }), " Máscara contábil")
-              ),
-              h('div', { className:'form-card', style:{padding:14,marginBottom:14,border:'1px solid var(--line)'} },
-                h('div', { style:{fontWeight:700,marginBottom:6} }, "Contabilização de acréscimos e descontos - Contas a Pagar"),
-                h('div', { style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10} }, "Defina as contas usadas automaticamente na baixa de títulos com juros, multas ou descontos. A conta FORNECEDORES e a conta bancária vinculada serão usadas nas demais partidas."),
-                h('div', { className:'field', style:{marginBottom:10} },
-                  h('label', null, "Acréscimos - Despesas com Juros e Multas"),
-                  h('select', { value:contabContaAcrescimoId, onChange:e=>setContabContaAcrescimoId(e.target.value) },
-                    h('option',{value:""},"Selecione a conta de despesa..."),
-                    contabPlano.filter(x=>x.natureza==="DESPESA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
-                  )
-                ),
-                h('div', { className:'field', style:{marginBottom:10} },
-                  h('label', null, "Descontos - Descontos Obtidos"),
-                  h('select', { value:contabContaDescontoId, onChange:e=>setContabContaDescontoId(e.target.value) },
-                    h('option',{value:""},"Selecione a conta de receita..."),
-                    contabPlano.filter(x=>x.natureza==="RECEITA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
-                  )
-                ),
-                h('div', { style:{display:'flex',justifyContent:'flex-end'} },
-                  h('button',{type:'button',className:'primary',onClick:salvarConfiguracaoAjustesPagar},"Salvar vínculos contábeis")
-                )
               ),
               contabMascaraAberta && h('div', { className: 'form-card', style: { marginBottom: 14, padding: 14, border: '1px solid var(--line)' } },
                 h('div', { style: { fontWeight: 700, marginBottom: 6 } }, "Configurar máscara do código contábil"),
