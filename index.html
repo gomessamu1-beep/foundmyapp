@@ -838,7 +838,12 @@
             valorDaParcela = values[numeroDaParcela - 1];
           }
 
-          return { ...p, index: numeroDaParcela, valorParcela: valorDaParcela };
+          // Em despesas recorrentes, a data de entrada acompanha a ocorrência mensal,
+          // preservando o mesmo dia do lançamento original (com ajuste para o último dia do mês).
+          const dataEntradaOcorrencia = p.recorrente
+            ? adicionarMesesDataISO(p.dataCompra || p.dataVencimento || (p.inicio + "-01"), idx)
+            : p.dataCompra;
+          return { ...p, dataCompra: dataEntradaOcorrencia, index: numeroDaParcela, valorParcela: valorDaParcela };
         }).filter(Boolean);
 
         mapped.sort((a, b) => {
