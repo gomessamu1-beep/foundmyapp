@@ -3109,15 +3109,17 @@
         if (!purchaseEditChoice) return;
         const p = purchaseEditChoice.purchase;
         const parcela = Number(purchaseEditChoice.installment || 1);
-        const baseParcela = Number(p.valorParcelaBase ?? (Number(p.valorParcela || 0) - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1))));
+        const ajusteIndividual = !!p.ajusteParcelaIndividual;
+        const divisorAjuste = ajusteIndividual ? 1 : Math.max(1, Number(p.parcelas || 1));
+        const baseParcela = Number(p.valorParcelaBase ?? (Number(p.valorParcela || 0) - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / divisorAjuste));
         setEditingId(p.id);
         setEditingPurchaseInstallment({ purchaseId: p.id, installment: parcela, competence: purchaseEditChoice.competence, scope: escopo });
         setDescricao(p.descricao || "");
         setObservacao(p.observacao || "");
-        setValorTotal(Number(baseParcela + (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1))).toFixed(2).replace(".", ","));
+        setValorTotal(Number(baseParcela).toFixed(2).replace(".", ","));
         setValorParcelaInput(Number(baseParcela).toFixed(2).replace(".", ","));
-        setAcrescimoInput(Number(p.acrescimo || 0) ? (Number(p.acrescimo || 0) / Math.max(1, Number(p.parcelas || 1))).toFixed(2).replace(".", ",") : "");
-        setDescontoInput(Number(p.desconto || 0) ? (Number(p.desconto || 0) / Math.max(1, Number(p.parcelas || 1))).toFixed(2).replace(".", ",") : "");
+        setAcrescimoInput(Number(p.acrescimo || 0) ? (Number(p.acrescimo || 0) / divisorAjuste).toFixed(2).replace(".", ",") : "");
+        setDescontoInput(Number(p.desconto || 0) ? (Number(p.desconto || 0) / divisorAjuste).toFixed(2).replace(".", ",") : "");
         setDataLancamento(p.dataCompra || currentDate());
         setFaturaMes(purchaseEditChoice.competence);
         setParcelas("1"); setParcelaAtual("1");
@@ -3222,7 +3224,7 @@
         else {
             novoRegistro.cartaoId = cartaoId || null;
             if (editingId && editingPurchaseInstallment) {
-              const ajuste = { descricao: descricao.trim(), observacao: observacao.trim(), valorParcelaBase, valorParcela: valorParcelaFinal, acrescimo, desconto, dataCompra: dataLancamento || currentDate(), dataVencimento: dataLancamento || currentDate(), categoriaId, subcategoriaId: exigeSubcat ? subcategoriaId : null, cartaoId: cartaoId || null };
+              const ajuste = { ajusteParcelaIndividual: true, descricao: descricao.trim(), observacao: observacao.trim(), valorParcelaBase, valorParcela: valorParcelaFinal, acrescimo, desconto, dataCompra: dataLancamento || currentDate(), dataVencimento: dataLancamento || currentDate(), categoriaId, subcategoriaId: exigeSubcat ? subcategoriaId : null, cartaoId: cartaoId || null };
               const primeiro = editingPurchaseInstallment.installment;
               updatePurchases(prev => prev.map(p => {
                 if (p.id !== editingPurchaseInstallment.purchaseId) return p;
