@@ -623,14 +623,14 @@
           h('div', { style:{fontWeight:700,marginBottom:6} }, "Contas a Pagar"),
           h('div', { style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10} }, "Selecione uma única conta analítica de despesa para todos os acréscimos e uma única conta analítica de receita para todos os descontos. Se não houver esses valores no pagamento, essas contas não serão movimentadas."),
           h('div', { className:'field', style:{marginBottom:10} },
-            h('label', null, "Acréscimos - Despesas com Juros e Multas"),
+            h('label', null, "Acréscimos (juros, multas e taxas)"),
             h('select', { value:contabContaAcrescimoId, onChange:e=>setContabContaAcrescimoId(e.target.value) },
               h('option',{value:""},"Selecione a conta de despesa..."),
               contabPlano.filter(x=>x.natureza==="DESPESA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
             )
           ),
           h('div', { className:'field', style:{marginBottom:10} },
-            h('label', null, "Descontos - Descontos Obtidos"),
+            h('label', null, "Descontos (abatimentos e descontos obtidos)"),
             h('select', { value:contabContaDescontoId, onChange:e=>setContabContaDescontoId(e.target.value) },
               h('option',{value:""},"Selecione a conta de receita..."),
               contabPlano.filter(x=>x.natureza==="RECEITA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
