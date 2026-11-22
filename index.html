@@ -133,6 +133,7 @@
       const [session, setSession] = useState(null);
       const [authLoading, setAuthLoading] = useState(true);
       const [dataLoading, setDataLoading] = useState(false);
+      const [dadosFinanceirosCarregados, setDadosFinanceirosCarregados] = useState(false);
       const [authEmail, setAuthEmail] = useState("");
       const [authPassword, setAuthPassword] = useState("");
       const [authError, setAuthError] = useState("");
@@ -606,6 +607,7 @@
           setSession(session);
           if (session) loadDataFromSupabase(session.user.id);
           else {
+            setDadosFinanceirosCarregados(false);
             setPurchases([]); setContasPagar([]); setContasReceber([]); setCartoes([]); setContasBancarias([]);
             setCategorias([]); setDeparaList([]); setFaturasFechadas({}); setFaturasBaixadas({}); setDiasFechados({}); setMesesFechados({});
           }
@@ -668,6 +670,7 @@
           });
         }
         setDataLoading(false);
+        setDadosFinanceirosCarregados(true);
       }
 
       async function saveDataToSupabase(newPurchases, newPagar, newReceber, newCartoes, newContas, newCategorias, newDepara, newFechadas, newFaturasBaixadas, newDias, newMeses) {
@@ -690,6 +693,75 @@
       function updateFechadas(updater) { setFaturasFechadas(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, next, faturasBaixadas, diasFechados, mesesFechados); return next; }); }
       function updateFaturasBaixadas(updater) { setFaturasBaixadas(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, next, diasFechados, mesesFechados); return next; }); }
       function updateDiasFechados(updater) { setDiasFechados(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, next, mesesFechados); return next; }); }
+
+      useEffect(() => {
+        if (!dadosFinanceirosCarregados || !session?.user?.id) return;
+        const totais = {};
+        (purchases || []).forEach(p => {
+          if (!p.inicio) return;
+          const totalParcelas = Math.max(1, Number(p.parcelas || 1));
+          const parcelaInicial = Math.max(1, Number(p.parcelaInicial || 1));
+          const valores = splitInstallments(Number(p.total || 0), totalParcelas);
+          const quantidade = p.recorrente ? 24 : Math.max(0, totalParcelas - parcelaInicial + 1);
+          for (let i = 0; i < quantidade; i++) {
+            const comp = addMonths(p.inicio, i);
+            if (p.canceladoEm && comp >= p.canceladoEm) break;
+            if ((p.mesesExcluidos || []).includes(comp)) continue;
+            const numeroParcela = p.recorrente ? i + 1 : parcelaInicial + i;
+            const ajuste = p.ajustesParcelas?.[String(numeroParcela)] || null;
+            const cid = ajuste?.cartaoId || p.cartaoId;
+            if (!cid) continue;
+            const valor = Number(ajuste?.valorParcela != null ? ajuste.valorParcela : (p.recorrente ? p.total : valores[numeroParcela - 1]) || 0);
+            const chave = String(cid) + "|" + comp;
+            if (!totais[chave]) totais[chave] = { cartaoId: cid, competencia: comp, total: 0 };
+            totais[chave].total += valor;
+          }
+        });
+        const novasPrevias = Object.values(totais)
+          .filter(x => Math.abs(x.total) > 0.000001 && !faturasFechadas[x.competencia])
+          .map(x => {
+            const cartao = (cartoes || []).find(t => String(t.id) === String(x.cartaoId));
+            const dia = String(cartao?.vencimento || "10").padStart(2, "0");
+            const vencimento = x.competencia + "-" + dia;
+            return {
+              id: "PREVIA_FATURA_" + String(x.cartaoId) + "_" + x.competencia,
+              ehPreviaFatura: true,
+              origem: "FATURA_PREVIA",
+              cartaoId: x.cartaoId,
+              descricao: "Prévia da fatura " + (cartao?.nome || "Cartão") + " - " + formatMonthLabel(x.competencia),
+              observacao: "Lançamento provisório. Será substituído pelo lançamento oficial quando a fatura for fechada.",
+              total: Number(x.total.toFixed(2)),
+              valorParcela: Number(x.total.toFixed(2)),
+              dataCompra: vencimento,
+              dataVencimento: vencimento,
+              parcelas: 1,
+              parcelaInicial: 1,
+              inicio: x.competencia,
+              categoriaId: null,
+              subcategoriaId: null,
+              status: "Em aberto",
+              bancoBaixaId: null,
+              dataBaixa: null,
+              criadoEm: Date.now(),
+              linkFatura: x.competencia
+            };
+          });
+        const atuais = (contasPagar || []).filter(p => !p.ehPreviaFatura);
+        const idsPrevias = new Set(novasPrevias.map(p => String(p.id)));
+        const previasAntigas = (contasPagar || []).filter(p => p.ehPreviaFatura && idsPrevias.has(String(p.id)));
+        const semAlteracao = previasAntigas.length === novasPrevias.length &&
+          novasPrevias.every(n => {
+            const a = previasAntigas.find(p => String(p.id) === String(n.id));
+            return a && Number(a.total || 0) === Number(n.total || 0) &&
+              a.descricao === n.descricao && a.dataVencimento === n.dataVencimento;
+          }) &&
+          (contasPagar || []).filter(p => p.ehPreviaFatura).length === novasPrevias.length;
+        if (semAlteracao) return;
+        const novaLista = atuais.concat(novasPrevias);
+        setContasPagar(novaLista);
+        saveDataToSupabase(purchases, novaLista, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
+      }, [dadosFinanceirosCarregados, session?.user?.id, purchases, cartoes, faturasFechadas, contasPagar]);
+
       function updateMesesFechados(updater) { setMesesFechados(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, next); return next; }); }
 
       async function carregarConferenciaFaturas() {
@@ -1090,7 +1162,7 @@
             subcategoriaId: fecharFaturaSubId, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now(), linkFatura: comp
           };
         });
-        updateContasPagar(prev => [...prev, ...newPagar]);
+        updateContasPagar(prev => [...prev.filter(p => !(p.ehPreviaFatura && p.linkFatura === comp)), ...newPagar]);
         updateFechadas(prev => ({ ...prev, [comp]: { fechada: true, pagarIds: generatedIds } }));
         setFecharFaturaModal({ open: false, comp: "", totais: [], vencimentos: {} });
       }
@@ -3418,6 +3490,8 @@
         alert("Conta baixada e compra parcelada criada na fatura do cartão.");
       }
       async function executarBaixaIndividual(type, id, bancoId, dataBaixaStr, tipoMovimentacaoId) {
+        const tituloPrevia = type === "pagar" ? contasPagar.find(p => String(p.id) === String(id)) : null;
+        if (tituloPrevia?.ehPreviaFatura) return alert("A prévia da fatura não pode ser baixada. Feche a fatura para gerar o lançamento oficial.");
         const tipoMov = tiposMovimentacao.find(x => String(x.id) === String(tipoMovimentacaoId) && x.tipo === (type === "pagar" ? "PAGAMENTO" : "RECEBIMENTO") && x.ativo);
         if (!tipoMov) return alert("Selecione um tipo de " + (type === "pagar" ? "pagamento" : "recebimento") + " ativo.");
         if (tipoMov.exige_cartao && type === "pagar") {
@@ -3442,6 +3516,7 @@
         if (tipoMov.exige_cartao) return alert("Este tipo exige cartão de crédito. Para informar cartão, juros, parcelas e competência da fatura, faça a baixa individual de cada conta.");
         if (tipoMov.exige_banco && !bancoId) return alert("Selecione o banco/conta.");
         if (!ids || ids.length === 0 || !dataBaixaStr) return alert("Preencha todos os campos.");
+        if (type === "pagar" && contasPagar.some(p => ids.includes(p.id) && p.ehPreviaFatura)) return alert("A prévia da fatura não pode ser baixada em lote. Feche a fatura para gerar o lançamento oficial.");
         if (isDiaFechado(dataBaixaStr) || isMesFechado(dataBaixaStr.substring(0, 7))) return alert("Dia ou mês bloqueado.");
         if (type === "pagar") {
           const titulosComAjuste = contasPagar.filter(p => ids.includes(p.id) && (Number(p.acrescimo || 0) > 0 || Number(p.desconto || 0) > 0));
@@ -5005,19 +5080,19 @@
                 h('table', null,
                   h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: contasPagarConsulta.length > 0 && batchPagarIds.length === contasPagarConsulta.length, onChange: toggleSelectAllPagar })), h('th', null, "Data de Emissão"), h('th', null, "Vencimento"), h('th', null, "Data da Baixa"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'right' }, "Acréscimo"), h('th', { className: 'right' }, "Desconto"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'center' }, "Status"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
                   h('tbody', null, !pagarConsultaExecutada ? h('tr', null, h('td', { colSpan: 14, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Informe as datas, se desejar, e clique em Consultar.")) : contasPagarConsulta.length === 0 ? h('tr', null, h('td', { colSpan: 14, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta a pagar encontrada.")) : contasPagarConsulta.map((p) => {
-                    const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const bancoBaixa = getConta(p.bancoBaixaId); const isChecked = batchPagarIds.includes(p.id); const isBaixado = p.status === "Baixado";
+                    const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const bancoBaixa = getConta(p.bancoBaixaId); const isChecked = batchPagarIds.includes(p.id); const isBaixado = p.status === "Baixado"; const isPrevia = !!p.ehPreviaFatura;
                     return h('tr', { key: `pagar-tab-${p.id}`, style: { background: isChecked ? 'var(--paper)' : 'transparent' } },
-                      h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isChecked, onChange: () => toggleSelectPagarItem(p.id) })),
+                      h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isChecked, disabled: isPrevia, title: isPrevia ? 'Prévia não pode ser baixada' : '', onChange: () => toggleSelectPagarItem(p.id) })),
                       h('td', null, formatDateBR(p.dataCompra)),
                       h('td', null, formatDateBR(p.dataVencimento || p.dataCompra)),
                       h('td', { style: { whiteSpace: 'nowrap', color: isBaixado ? '#065F46' : 'var(--ink-soft)', fontWeight: isBaixado ? 600 : 400 } }, p.dataBaixa ? formatDateBR(p.dataBaixa) : '-'),
                       h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('details', { style: { marginTop: 4, fontSize: 11, color: 'var(--ink-soft)' } }, h('summary', { style: { cursor: 'pointer', width: 'fit-content' } }, 'Exibir detalhes'), h('div', { style: { marginTop: 4, whiteSpace: 'normal' } }, `📝 ${p.observacao}`)), p.linkFatura && h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', fontSize: 10, marginTop: 6, display: 'inline-flex', gap: 4 }, onClick: () => { setLancamentoTab('cartao'); setMonth(p.linkFatura); } }, h(FileText, { size: 10 }), "Ver Fatura do Cartão")),
                       h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.acrescimo || 0) ? showMoney(p.acrescimo) : '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.desconto || 0) ? showMoney(p.desconto) : '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)),
-                      h('td', { className: 'center' }, h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3}},h('span', { className: `badge ${isBaixado ? 'baixado' : 'aberto'}`, style: isBaixado ? { background:'#D1FAE5', color:'#065F46', borderColor:'#A7F3D0', fontWeight:700 } : {} }, isBaixado ? 'Baixado' : 'Aberto'),p.formaBaixa === 'CARTAO' && h('span',{className:'badge',style:{fontSize:10,background:'#FEF3C7',color:'#92400E',borderColor:'#FDE68A'}},'Pago com cartão'))),
+                      h('td', { className: 'center' }, h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:3}},h('span', { className: `badge ${isBaixado ? 'baixado' : 'aberto'}`, style: isBaixado ? { background:'#D1FAE5', color:'#065F46', borderColor:'#A7F3D0', fontWeight:700 } : {} }, isPrevia ? 'Prévia' : (isBaixado ? 'Baixado' : 'Aberto')), isPrevia && h('span',{className:'badge',style:{fontSize:10,background:'#FEF3C7',color:'#92400E',borderColor:'#FDE68A'}},'Aguardando fechamento'),p.formaBaixa === 'CARTAO' && h('span',{className:'badge',style:{fontSize:10,background:'#FEF3C7',color:'#92400E',borderColor:'#FDE68A'}},'Pago com cartão'))),
                       h('td', { className: 'right num' }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)),
                       h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, 
-                        !isBaixado ? h('button', { type: 'button', className: 'primary', style: { padding: '4px' }, onClick: () => setBaixaModal({ open: true, type: 'pagar', id: p.id, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }), title: 'Baixar Lançamento' }, h(CheckCircle, { size: 14 })) : h('button', { type: 'button', className: 'danger', style: { padding: '4px' }, onClick: () => executarEstornoBaixa('pagar', p.id, p.dataBaixa), title: 'Estornar Baixa' }, h(RefreshCw, { size: 14 })),
-                        !isBaixado && h('button',{type:'button',className:'action-btn',style:{padding:'4px'},onClick:()=>{const tp=tiposMovimentacao.find(t=>t.tipo==='PAGAMENTO'&&t.ativo&&t.exige_cartao);if(!tp)return alert('Cadastre um tipo de pagamento com a opção Exige cartão de crédito.');setBaixaModal({open:true,type:'pagar',id:p.id,bancoId:'',dataBaixa:currentDate(),tipoMovimentacaoId:tp.id});},title:'Pagar com cartão'},h(CreditCard,{size:14})), 
+                        !isBaixado && !isPrevia ? h('button', { type: 'button', className: 'primary', style: { padding: '4px' }, onClick: () => setBaixaModal({ open: true, type: 'pagar', id: p.id, bancoId: contasBancarias[0]?.id || "", dataBaixa: currentDate() }), title: 'Baixar Lançamento' }, h(CheckCircle, { size: 14 })) : isPrevia ? h('span',{style:{fontSize:10,color:'#92400E',fontWeight:600}},'Não baixável') : h('button', { type: 'button', className: 'danger', style: { padding: '4px' }, onClick: () => executarEstornoBaixa('pagar', p.id, p.dataBaixa), title: 'Estornar Baixa' }, h(RefreshCw, { size: 14 })),
+                        !isBaixado && !isPrevia && h('button',{type:'button',className:'action-btn',style:{padding:'4px'},onClick:()=>{const tp=tiposMovimentacao.find(t=>t.tipo==='PAGAMENTO'&&t.ativo&&t.exige_cartao);if(!tp)return alert('Cadastre um tipo de pagamento com a opção Exige cartão de crédito.');setBaixaModal({open:true,type:'pagar',id:p.id,bancoId:'',dataBaixa:currentDate(),tipoMovimentacaoId:tp.id});},title:'Pagar com cartão'},h(CreditCard,{size:14})), 
                         !isBaixado && h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? (p.valorParcela - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setDataVencimento(p.dataVencimento || ''); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('pagar'); setModalOpen(true); }, title: 'Editar' }, h(Pencil, { size: 14 })), 
                         h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? ((p.recorrente ? p.valorParcela : p.total) - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setDataVencimento(p.dataVencimento || ''); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('pagar'); setModalOpen(true); }, title: 'Duplicar' }, h(Copy, { size: 14 })),
                         h('button', { type: 'button', className: 'action-btn delete', title: isBaixado ? 'Baixado: Exclusão bloqueada' : 'Excluir', onClick: () => setDeleteModal({ open: true, type: 'pagar', id: p.id, purchase: p, title: 'Excluir Conta', message: isBaixado ? 'ERRO: Este lançamento já está baixado e não pode ser excluído.' : ``, option: 'current' }) }, h(Trash2, { size: 14 }))
