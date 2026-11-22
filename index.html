@@ -522,6 +522,8 @@
       const fileInputRef = useRef(null);
       const planilhaInputRef = useRef(null);
       const [editingId, setEditingId] = useState(null);
+      const [editingPurchaseInstallment, setEditingPurchaseInstallment] = useState(null);
+      const [purchaseEditChoice, setPurchaseEditChoice] = useState(null);
 
       const [txtCategoriasContent, setTxtCategoriasContent] = useState("");
       const [formSuccess, setFormSuccess] = useState("");
@@ -798,7 +800,8 @@
             valorDaParcela = values[numeroDaParcela - 1];
           }
 
-          return { ...p, index: numeroDaParcela, valorParcela: valorDaParcela };
+          const ajusteParcela = p.ajustesParcelas && p.ajustesParcelas[String(numeroDaParcela)] ? p.ajustesParcelas[String(numeroDaParcela)] : null;
+          return { ...p, ...(ajusteParcela || {}), index: numeroDaParcela, valorParcela: ajusteParcela && ajusteParcela.valorParcela != null ? Number(ajusteParcela.valorParcela) : valorDaParcela };
         }).filter(Boolean);
 
         mapped.sort((a, b) => {
@@ -3097,6 +3100,31 @@
         return alvo.getFullYear() + "-" + String(alvo.getMonth() + 1).padStart(2, "0") + "-" + String(Math.min(dia, ultimoDia)).padStart(2, "0");
       }
 
+      function abrirEdicaoParcelaCartao(p) {
+        if (fechadaAtual) return;
+        setPurchaseEditChoice({ purchase: p, installment: Number(p.index || 1), competence: month });
+      }
+
+      function confirmarEscopoEdicaoParcela(escopo) {
+        if (!purchaseEditChoice) return;
+        const p = purchaseEditChoice.purchase;
+        const parcela = Number(purchaseEditChoice.installment || 1);
+        const baseParcela = Number(p.valorParcelaBase ?? (Number(p.valorParcela || 0) - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1))));
+        setEditingId(p.id);
+        setEditingPurchaseInstallment({ purchaseId: p.id, installment: parcela, competence: purchaseEditChoice.competence, scope: escopo });
+        setDescricao(p.descricao || "");
+        setObservacao(p.observacao || "");
+        setValorTotal(Number(baseParcela + (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1))).toFixed(2).replace(".", ","));
+        setValorParcelaInput(Number(baseParcela).toFixed(2).replace(".", ","));
+        setAcrescimoInput(Number(p.acrescimo || 0) ? (Number(p.acrescimo || 0) / Math.max(1, Number(p.parcelas || 1))).toFixed(2).replace(".", ",") : "");
+        setDescontoInput(Number(p.desconto || 0) ? (Number(p.desconto || 0) / Math.max(1, Number(p.parcelas || 1))).toFixed(2).replace(".", ",") : "");
+        setDataLancamento(p.dataCompra || currentDate());
+        setFaturaMes(purchaseEditChoice.competence);
+        setParcelas("1"); setParcelaAtual("1");
+        setCartaoId(p.cartaoId || ""); setCategoriaId(p.categoriaId || ""); setSubcategoriaId(p.subcategoriaId || "");
+        setIsRecorrente(false); setLancamentoTab("cartao"); setPurchaseEditChoice(null); setModalOpen(true);
+      }
+
       function handleSaveLancamento(e) {
         e.preventDefault(); setFormError(""); setFormSuccess("");
         if (editingId) { const itemExistente = lancamentoTab === "pagar" ? contasPagar.find(p => p.id === editingId) : lancamentoTab === "receber" ? contasReceber.find(p => p.id === editingId) : null; if (itemExistente && itemExistente.status === "Baixado") return setFormError("Não é permitido alterar lançamentos baixados."); }
@@ -3105,10 +3133,12 @@
             if (!cartaoId) return setFormError("É obrigatório selecionar um cartão.");
             const itemExistente = editingId ? purchases.find(p => p.id === editingId) : null;
             const isCorrigindoFaltaDeCartao = itemExistente && !itemExistente.cartaoId && cartaoId;
-            if (isFaturaFechada(faturaMes) && !isCorrigindoFaltaDeCartao) return setFormError(`A fatura inicial deste lançamento (${formatMonthLabel(faturaMes)}) está fechada. Reabra-a para poder editar.`);
+            if (editingPurchaseInstallment) {
+              if (isFaturaFechada(editingPurchaseInstallment.competence)) return setFormError("Esta fatura está fechada. Reabra-a para poder editar.");
+            } else if (isFaturaFechada(faturaMes) && !isCorrigindoFaltaDeCartao) return setFormError(`A fatura inicial deste lançamento (${formatMonthLabel(faturaMes)}) está fechada. Reabra-a para poder editar.`);
         }
 
-        if (isDiaFechado(dataLancamento)) return setFormError("Este dia está fechado."); 
+        if (!(lancamentoTab === "cartao" && editingPurchaseInstallment) && isDiaFechado(dataLancamento)) return setFormError("Este dia está fechado."); 
         if (lancamentoTab === "cartao" && isMesFechado(faturaMes)) return setFormError("Mês de competência fechado.");
 
         const valorBase = parseValorInput(valorTotal); const acrescimo = acrescimoInput.trim() ? parseValorInput(acrescimoInput) : 0; const desconto = descontoInput.trim() ? parseValorInput(descontoInput) : 0; const total = valorBase + acrescimo - desconto; const valorParcelaBase = valorParcelaInput.trim() ? parseValorInput(valorParcelaInput) : (isRecorrente ? valorBase : valorBase / Math.max(1, Number(parcelas || 1))); const valorParcelaFinal = valorParcelaBase + (isRecorrente ? acrescimo - desconto : (acrescimo - desconto) / Math.max(1, Number(parcelas || 1))); const n = parseInt(parcelas, 10); const atual = parseInt(parcelaAtual, 10);
@@ -3189,9 +3219,21 @@
               resetFormAfterSave();
             }
         }
-        else { 
-            novoRegistro.cartaoId = cartaoId || null; 
-            if (editingId) { updatePurchases(prev => prev.map(p => p.id === editingId ? { ...novoRegistro, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm } : p)); sincronizarCompraFaturaContabil(novoRegistro).catch(e => { console.error("Contabilidade da fatura:", e); alert("A compra foi salva, mas houve erro ao contabilizar: " + (e.message || "erro desconhecido")); }); setModalOpen(false); } 
+        else {
+            novoRegistro.cartaoId = cartaoId || null;
+            if (editingId && editingPurchaseInstallment) {
+              const ajuste = { descricao: descricao.trim(), observacao: observacao.trim(), valorParcelaBase, valorParcela: valorParcelaFinal, acrescimo, desconto, dataCompra: dataLancamento || currentDate(), dataVencimento: dataLancamento || currentDate(), categoriaId, subcategoriaId: exigeSubcat ? subcategoriaId : null, cartaoId: cartaoId || null };
+              const primeiro = editingPurchaseInstallment.installment;
+              updatePurchases(prev => prev.map(p => {
+                if (p.id !== editingPurchaseInstallment.purchaseId) return p;
+                const ajustesParcelas = { ...(p.ajustesParcelas || {}) };
+                const limite = editingPurchaseInstallment.scope === "future" ? Number(p.parcelas || primeiro) : primeiro;
+                for (let numero = primeiro; numero <= limite; numero++) ajustesParcelas[String(numero)] = { ...ajuste };
+                return { ...p, ajustesParcelas };
+              }));
+              setEditingPurchaseInstallment(null); setModalOpen(false);
+            }
+            else if (editingId) { updatePurchases(prev => prev.map(p => p.id === editingId ? { ...novoRegistro, mesesExcluidos: p.mesesExcluidos, canceladoEm: p.canceladoEm, ajustesParcelas: p.ajustesParcelas || {} } : p)); sincronizarCompraFaturaContabil(novoRegistro).catch(e => { console.error("Contabilidade da fatura:", e); alert("A compra foi salva, mas houve erro ao contabilizar: " + (e.message || "erro desconhecido")); }); setModalOpen(false); } 
             else {
               updatePurchases(prev => [...prev, novoRegistro]);
               sincronizarCompraFaturaContabil(novoRegistro).catch(e => { console.error("Contabilidade da fatura:", e); alert("A compra foi salva, mas houve erro ao contabilizar: " + (e.message || "erro desconhecido")); });
@@ -4908,7 +4950,7 @@
                             h('div', null, h('strong', null, 'Valor total: '), showMoney(p.recorrente ? p.valorParcela : p.total)),
                             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } },
                               h('label', { style: { display: 'flex', alignItems: 'center', gap: 6 } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual, style: { width: 16 } }), 'Selecionar'),
-                              h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? (p.valorParcela - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Pencil, { size: 14 }), ' Editar'),
+                              h('button', { type: 'button', className: 'action-btn', onClick: () => abrirEdicaoParcelaCartao(p), disabled: fechadaAtual }, h(Pencil, { size: 14 }), ' Editar'),
                               h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? ((p.recorrente ? p.valorParcela : p.total) - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Copy, { size: 14 }), ' Duplicar'),
                               h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: '', option: 'current' }), disabled: fechadaAtual }, h(Trash2, { size: 14 }), ' Excluir')
                             )
@@ -4918,7 +4960,7 @@
                       h('td', { className: 'cartao-category-cell' }, cat?.nome || '-'), h('td', { className: 'cartao-subcategory-cell' }, sub?.nome || '-'), h('td', { className: 'center cartao-installment-cell' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)),
                       h('td', { className: 'right num cartao-value-cell' }, showMoney(p.valorParcela)), h('td', { className: 'right num cartao-total-cell' }, showMoney(p.recorrente ? p.valorParcela : p.total)),
                       h('td', { className: 'center cartao-actions-cell' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } },
-                        h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? (p.valorParcela - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })),
+                        h('button', { type: 'button', className: 'action-btn', onClick: () => abrirEdicaoParcelaCartao(p), disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })),
                         h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? ((p.recorrente ? p.valorParcela : p.total) - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Duplicar' }, h(Copy, { size: 14 })),
                         h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: '', option: 'current' }), disabled: fechadaAtual, title: 'Excluir' }, h(Trash2, { size: 14 }))
                       )),
@@ -5154,7 +5196,7 @@
                 h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonth.length > 0 && selectedCartaoIds.length === installmentsForMonth.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'right' }, "Acréscimo"), h('th', { className: 'right' }, "Desconto"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
                 h('tbody', null, installmentsForMonth.map((p) => {
                   const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const isSelected = selectedCartaoIds.includes(p.id); const cartao = getCartao(p.cartaoId);
-                  return h('tr', { key: `fat-det-${p.id}-${p.index}`, style: { background: isSelected ? 'var(--paper)' : 'transparent' } }, h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual })), h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('details', { style: { marginTop: 4, fontSize: 11, color: 'var(--ink-soft)' } }, h('summary', { style: { cursor: 'pointer', width: 'fit-content' } }, 'Exibir detalhes'), h('div', { style: { marginTop: 4, whiteSpace: 'normal' } }, `📝 ${p.observacao}`)), cartao ? h('div', { style: { fontSize: 11, color: '#6B6355' } }, cartao.nome) : h('div', { style: { fontSize: 11, color: 'var(--red)', fontWeight: 'bold' } }, '⚠️ SEM CARTÃO')), h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.acrescimo || 0) ? showMoney(p.acrescimo) : '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.desconto || 0) ? showMoney(p.desconto) : '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'right num' }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)), h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(p.id); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? (p.valorParcela - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: ``, option: 'current' }), disabled: fechadaAtual, title: 'Excluir' }, h(Trash2, { size: 14 })))));
+                  return h('tr', { key: `fat-det-${p.id}-${p.index}`, style: { background: isSelected ? 'var(--paper)' : 'transparent' } }, h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual })), h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('details', { style: { marginTop: 4, fontSize: 11, color: 'var(--ink-soft)' } }, h('summary', { style: { cursor: 'pointer', width: 'fit-content' } }, 'Exibir detalhes'), h('div', { style: { marginTop: 4, whiteSpace: 'normal' } }, `📝 ${p.observacao}`)), cartao ? h('div', { style: { fontSize: 11, color: '#6B6355' } }, cartao.nome) : h('div', { style: { fontSize: 11, color: 'var(--red)', fontWeight: 'bold' } }, '⚠️ SEM CARTÃO')), h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.acrescimo || 0) ? showMoney(p.acrescimo) : '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.desconto || 0) ? showMoney(p.desconto) : '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'right num' }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)), h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, h('button', { type: 'button', className: 'action-btn', onClick: () => abrirEdicaoParcelaCartao(p), disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: ``, option: 'current' }), disabled: fechadaAtual, title: 'Excluir' }, h(Trash2, { size: 14 })))));
                 })),
                 h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '8', style: { textAlign: 'right', padding: '10px 6px' } }, "Total da Fatura:"), h('td', { className: 'right num' }, showMoney(totalValorParcelaTabela)), h('td', { className: 'right num' }, showMoney(totalValorTotalTabela)), h('td', null)))
               )
@@ -5475,6 +5517,16 @@
               h('button', { type: 'button', className: 'action-btn', onClick: () => setBatchCompetenciaModalOpen(false) }, "Cancelar"),
               h('button', { type: 'button', className: 'primary', onClick: confirmarAlteracaoCompetenciaLote }, h(FileText, { size: 15 }), " Alterar Competência")
             )
+          )
+        ),
+
+        purchaseEditChoice && h('div', { className: 'modal-overlay', style: { zIndex: 1200 } },
+          h('div', { className: 'modal-content', style: { maxWidth: 420, padding: 20 }, onClick: e => e.stopPropagation() },
+            h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 } }, "Como deseja aplicar a alteração?"),
+            h('div', { style: { fontSize: 13, color: 'var(--muted)', marginBottom: 16 } }, "Parcela " + purchaseEditChoice.installment + " da fatura " + formatMonthLabel(purchaseEditChoice.competence) + "."),
+            h('button', { type: 'button', className: 'action-btn', style: { width: '100%', justifyContent: 'center', marginBottom: 8 }, onClick: () => confirmarEscopoEdicaoParcela("only") }, "Somente esta parcela"),
+            h('button', { type: 'button', className: 'primary', style: { width: '100%', justifyContent: 'center' }, onClick: () => confirmarEscopoEdicaoParcela("future") }, "Esta e as demais parcelas"),
+            h('button', { type: 'button', className: 'action-btn', style: { width: '100%', justifyContent: 'center', marginTop: 8 }, onClick: () => setPurchaseEditChoice(null) }, "Cancelar")
           )
         ),
 
