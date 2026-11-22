@@ -3590,11 +3590,30 @@
           .floating-new-launch:active { transform: translateY(0); }
           .floating-new-launch:disabled { opacity: .55; cursor: not-allowed; transform: none; }
           .floating-new-launch svg { flex-shrink: 0; }
+          .floating-check-launch {
+            position: fixed; right: 24px;
+            bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+            z-index: 80; display: inline-flex; align-items: center; justify-content: center;
+            gap: 9px; min-height: 50px; padding: 0 18px;
+            border: 1px solid #244328; border-radius: 999px; background: #fff; color: #244328;
+            box-shadow: 0 5px 18px rgba(0,0,0,.20); font-size: 14px; font-weight: 700; cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease;
+          }
+          .floating-check-launch:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,0,0,.25); }
+          .floating-check-launch:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+          .floating-check-launch svg { flex-shrink: 0; }
           @media (max-width: 850px) {
             .floating-new-launch {
               right: 16px;
               bottom: calc(18px + env(safe-area-inset-bottom, 0px));
               min-height: 48px;
+              padding: 0 16px;
+              font-size: 13px;
+            }
+            .floating-check-launch {
+              right: 16px;
+              bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+              min-height: 46px;
               padding: 0 16px;
               font-size: 13px;
             }
@@ -4236,6 +4255,26 @@
 
         screen === 'lancamentos' && lancamentoTab === 'cartao' && h('button', {
           type: 'button',
+          className: 'floating-check-launch',
+          title: 'Marcar os lançamentos selecionados como conferidos',
+          'aria-label': 'Conferir lançamentos selecionados',
+          disabled: selectedCartaoIds.length === 0,
+          onClick: () => {
+            const selecionados = installmentsForMonth.filter(p => selectedCartaoIds.includes(p.id));
+            if (!selecionados.length) return;
+            const chavesPorId = new Map(selecionados.map(p => [p.id, `${month}:${p.index}`]));
+            updatePurchases(prev => prev.map(p => {
+              const chave = chavesPorId.get(p.id);
+              if (!chave) return p;
+              const conferidoFaturas = Array.isArray(p.conferidoFaturas) ? p.conferidoFaturas : [];
+              return conferidoFaturas.includes(chave) ? p : { ...p, conferidoFaturas: [...conferidoFaturas, chave] };
+            }));
+            setSelectedCartaoIds([]);
+          }
+        }, h(CheckCircle, { size: 18 }), ' Conferir'),
+
+        screen === 'lancamentos' && lancamentoTab === 'cartao' && h('button', {
+          type: 'button',
           className: 'floating-new-launch',
           title: 'Novo Lançamento',
           'aria-label': 'Novo Lançamento',
@@ -4796,11 +4835,21 @@
                 h('table', { className: 'cartao-installments-table' },
                   h('thead', null, h('tr', null, h('th', { className: 'cartao-select-cell', style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonth.length > 0 && selectedCartaoIds.length === installmentsForMonth.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', { className: 'cartao-date-cell' }, "Data"), h('th', { className: 'cartao-description-cell' }, "Descrição"), h('th', { className: 'cartao-category-cell' }, "Categoria"), h('th', { className: 'cartao-subcategory-cell' }, "Subcategoria"), h('th', { className: 'center cartao-installment-cell' }, "Parcela"), h('th', { className: 'right cartao-value-cell' }, "Valor Parcela"), h('th', { className: 'right cartao-total-cell' }, "Valor Total"), h('th', { className: 'center cartao-actions-cell' }, "Ações"))),
                   h('tbody', null, installmentsForMonth.length === 0 ? h('tr', null, h('td', { colSpan: 9, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum lançamento no cartão nesta fatura.")) : installmentsForMonth.map((p) => {
-                    const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const cartao = getCartao(p.cartaoId); const isSelected = selectedCartaoIds.includes(p.id);
-                    return h('tr', { key: `${p.id}-${p.index}`, style: { background: isSelected ? 'var(--paper)' : 'transparent' } },
+                    const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const cartao = getCartao(p.cartaoId); const isSelected = selectedCartaoIds.includes(p.id); const isConferido = (p.conferidoFaturas || []).includes(`${month}:${p.index}`);
+                    return h('tr', {
+                      key: `${p.id}-${p.index}`,
+                      onClick: e => { if (e.target.closest('button,input,select,a,label')) return; toggleSelectCartaoItem(p.id); },
+                      title: 'Clique para selecionar ou desmarcar este lançamento',
+                      style: {
+                        background: isConferido ? 'rgba(34,197,94,.12)' : isSelected ? 'var(--paper)' : 'transparent',
+                        outline: isSelected ? '2px solid rgba(47,82,51,.45)' : 'none',
+                        outlineOffset: '-2px',
+                        cursor: 'pointer'
+                      }
+                    },
                       h('td', { className: 'cartao-select-cell', style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual })),
                       h('td', { className: 'cartao-date-cell' }, formatDateBR(p.dataCompra)),
-                      h('td', { className: 'cartao-description-cell' }, h('div', { style: { fontWeight: '500', overflowWrap: 'anywhere' } }, p.descricao),
+                      h('td', { className: 'cartao-description-cell' }, h('div', { style: { fontWeight: '500', overflowWrap: 'anywhere', display: 'flex', alignItems: 'center', gap: 6 } }, p.descricao, isConferido && h('span', { title: 'Lançamento conferido', style: { color: 'var(--green)', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' } }, '✓ Conferido')),
                         
                         cartao ? h('div', { className: 'cartao-name-desktop', style: { fontSize: 11, color: '#6B6355' } }, cartao.nome) : h('div', { className: 'cartao-name-desktop', style: { fontSize: 11, color: 'var(--red)', fontWeight: 'bold' } }, '⚠️ SEM CARTÃO VINCULADO'),
                         h('button', { type: 'button', className: 'action-btn cartao-details-toggle', style: { display: 'inline-flex', marginTop: 6, padding: '5px 8px', fontSize: 12 }, onClick: () => setExpandedCartaoDetailsIds(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]) }, expandedCartaoDetailsIds.includes(p.id) ? 'Ocultar detalhes' : 'Exibir detalhes'),
