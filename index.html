@@ -3590,6 +3590,17 @@
           .floating-new-launch:active { transform: translateY(0); }
           .floating-new-launch:disabled { opacity: .55; cursor: not-allowed; transform: none; }
           .floating-new-launch svg { flex-shrink: 0; }
+          .floating-uncheck-launch {
+            position: fixed; right: 24px;
+            bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+            z-index: 80; display: inline-flex; align-items: center; justify-content: center;
+            gap: 9px; min-height: 50px; padding: 0 18px;
+            border: 1px solid #8C3B2E; border-radius: 999px; background: #fff; color: #8C3B2E;
+            box-shadow: 0 5px 18px rgba(0,0,0,.20); font-size: 14px; font-weight: 700; cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease;
+          }
+          .floating-uncheck-launch:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,0,0,.25); }
+          .floating-uncheck-launch svg { flex-shrink: 0; }
           .floating-check-launch {
             position: fixed; right: 24px;
             bottom: calc(82px + env(safe-area-inset-bottom, 0px));
@@ -3609,6 +3620,13 @@
               min-height: 48px;
               padding: 0 16px;
               font-size: 13px;
+            }
+            .floating-uncheck-launch {
+              right: 16px;
+              bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+              min-height: 46px;
+              padding: 0 14px;
+              font-size: 12px;
             }
             .floating-check-launch {
               right: 16px;
@@ -4272,6 +4290,28 @@
             setSelectedCartaoIds([]);
           }
         }, h(CheckCircle, { size: 18 }), ' Conferir'),
+
+        screen === 'lancamentos' && lancamentoTab === 'cartao' && selectedCartaoIds.some(id => {
+          const p = installmentsForMonth.find(item => item.id === id);
+          return p && (p.conferidoFaturas || []).includes(`${month}:${p.index}`);
+        }) && h('button', {
+          type: 'button',
+          className: 'floating-uncheck-launch',
+          title: 'Remover a conferência dos lançamentos selecionados que já estão conferidos',
+          'aria-label': 'Remover conferência',
+          onClick: () => {
+            const chavesPorId = new Map(installmentsForMonth
+              .filter(p => selectedCartaoIds.includes(p.id) && (p.conferidoFaturas || []).includes(`${month}:${p.index}`))
+              .map(p => [p.id, `${month}:${p.index}`]));
+            if (!chavesPorId.size) return;
+            updatePurchases(prev => prev.map(p => {
+              const chave = chavesPorId.get(p.id);
+              if (!chave) return p;
+              return { ...p, conferidoFaturas: (Array.isArray(p.conferidoFaturas) ? p.conferidoFaturas : []).filter(item => item !== chave) };
+            }));
+            setSelectedCartaoIds([]);
+          }
+        }, h(XCircle, { size: 18 }), ' Remover conferência'),
 
         screen === 'lancamentos' && lancamentoTab === 'cartao' && h('button', {
           type: 'button',
