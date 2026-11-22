@@ -315,23 +315,65 @@
       const [lrError, setLrError] = useState('');
 
       useEffect(() => {
-        if (!session?.user?.id || !contabPlano.length) return;
-        const chave = "foundmyapp-contas-ajustes-pagar-" + session.user.id;
-        let config = null;
-        try { config = JSON.parse(localStorage.getItem(chave) || "null"); } catch (e) {}
-        const normalizar = v => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-        const contaJurosPadrao = contabPlano.find(x => normalizar(x.descricao) === "JUROS SOBRE TITULOS PAGOS EM ATRASO" && x.natureza === "DESPESA" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
-        const contaDescontoPadrao = contabPlano.find(x => normalizar(x.descricao) === "DESCONTOS OBTIDOS" && x.natureza === "RECEITA" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
-        setContabContaAcrescimoId(config?.acrescimo || contaJurosPadrao?.id || "");
-        setContabContaDescontoId(config?.desconto || contaDescontoPadrao?.id || "");
+        let ativo = true;
+        async function carregarParametrosPagar() {
+          if (!session?.user?.id || !contabPlano.length) return;
+          const { data, error } = await supabaseClient
+            .from("contabilidade_parametros_pagar")
+            .select("conta_acrescimo_id,conta_desconto_id")
+            .eq("user_id", session.user.id)
+            .maybeSingle();
+          if (error) {
+            console.error("Parâmetros contábeis de Contas a Pagar:", error);
+            if (ativo) alert("Não foi possível carregar os parâmetros contábeis: " + error.message);
+            return;
+          }
+          if (!ativo) return;
+          if (data) {
+            setContabContaAcrescimoId(data.conta_acrescimo_id || "");
+            setContabContaDescontoId(data.conta_desconto_id || "");
+            return;
+          }
+          // Migra automaticamente uma configuração antiga deste navegador, se existir.
+          let legado = null;
+          try { legado = JSON.parse(localStorage.getItem("foundmyapp-contas-ajustes-pagar-" + session.user.id) || "null"); } catch (e) {}
+          if (legado?.acrescimo || legado?.desconto) {
+            const { error: erroMigracao } = await supabaseClient.from("contabilidade_parametros_pagar").upsert({
+              user_id: session.user.id,
+              conta_acrescimo_id: legado.acrescimo || null,
+              conta_desconto_id: legado.desconto || null,
+              updated_at: new Date().toISOString()
+            }, { onConflict: "user_id" });
+            if (erroMigracao) {
+              console.error("Migração dos parâmetros contábeis:", erroMigracao);
+              return;
+            }
+            if (ativo) {
+              setContabContaAcrescimoId(legado.acrescimo || "");
+              setContabContaDescontoId(legado.desconto || "");
+            }
+          } else {
+            setContabContaAcrescimoId("");
+            setContabContaDescontoId("");
+          }
+        }
+        carregarParametrosPagar();
+        return () => { ativo = false; };
       }, [session?.user?.id, contabPlano]);
 
-      function salvarConfiguracaoAjustesPagar() {
+      async function salvarConfiguracaoAjustesPagar() {
+        if (!session?.user?.id) return alert("Sua sessão expirou. Entre novamente.");
         const elegiveisDespesa = contabPlano.some(x => String(x.id) === String(contabContaAcrescimoId) && x.natureza === "DESPESA" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
         const elegiveisReceita = contabPlano.some(x => String(x.id) === String(contabContaDescontoId) && x.natureza === "RECEITA" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
         if (!elegiveisDespesa || !elegiveisReceita) return alert("Selecione uma conta analítica ativa de Despesa para acréscimos e uma conta analítica ativa de Receita para descontos.");
-        localStorage.setItem("foundmyapp-contas-ajustes-pagar-" + (session?.user?.id || "default"), JSON.stringify({ acrescimo:String(contabContaAcrescimoId), desconto:String(contabContaDescontoId) }));
-        alert("Vínculos contábeis de acréscimos e descontos salvos.");
+        const { error } = await supabaseClient.from("contabilidade_parametros_pagar").upsert({
+          user_id: session.user.id,
+          conta_acrescimo_id: String(contabContaAcrescimoId),
+          conta_desconto_id: String(contabContaDescontoId),
+          updated_at: new Date().toISOString()
+        }, { onConflict: "user_id" });
+        if (error) return alert("Não foi possível salvar os parâmetros no Supabase: " + error.message);
+        alert("Parâmetros contábeis de Contas a Pagar salvos no Supabase.");
       }
 
       useEffect(() => {
