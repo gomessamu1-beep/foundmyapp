@@ -5656,9 +5656,14 @@
             h('div', { className: 'modal-content', style: { maxWidth: 430, width: '92%', padding: 20 }, onClick: e => e.stopPropagation() },
               h('div', { style: { fontSize: 18, fontWeight: 700, marginBottom: 8 } }, 'Notificação do Santander'),
               h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, santanderNotificationPrompt.total + ' notificação(ões) pendente(s). Confira os dados antes de lançar.'),
-              h('div', { style: { border: '1px solid var(--line)', borderRadius: 8, padding: 12, marginBottom: 16 } },
-                h('strong', null, santanderNotificationPrompt.item.merchant || santanderNotificationPrompt.item.title || 'Compra Santander'),
-                h('div', { style: { fontSize: 13, marginTop: 5 } }, 'Valor: R$ ' + String(santanderNotificationPrompt.item.amount || '').replace('.', ',') + (santanderNotificationPrompt.item.date ? ' • Data: ' + santanderNotificationPrompt.item.date : ''))
+              h('div', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--surface, #ffffff)', color: 'var(--ink, #111827)', textAlign: 'left', minHeight: 112 } },
+                h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: .5, color: 'var(--ink-soft, #64748b)', marginBottom: 5 } }, 'COMPRA IDENTIFICADA'),
+                h('div', { style: { fontSize: 17, fontWeight: 700, lineHeight: 1.35, overflowWrap: 'anywhere' } }, santanderNotificationPrompt.item.merchant || santanderNotificationPrompt.item.title || 'Estabelecimento não identificado'),
+                h('div', { style: { display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 12 } },
+                  h('div', null, h('div', { style: { fontSize: 11, color: 'var(--ink-soft, #64748b)' } }, 'VALOR'), h('div', { style: { fontSize: 16, fontWeight: 700 } }, santanderNotificationPrompt.item.amount ? ('R$ ' + String(santanderNotificationPrompt.item.amount).replace('.', ',')) : 'Não identificado')),
+                  h('div', null, h('div', { style: { fontSize: 11, color: 'var(--ink-soft, #64748b)' } }, 'DATA'), h('div', { style: { fontSize: 16, fontWeight: 700 } }, santanderNotificationPrompt.item.date || 'Não identificada'))
+                ),
+                santanderNotificationPrompt.item.text && h('div', { style: { fontSize: 12, color: 'var(--ink-soft, #64748b)', marginTop: 10, overflowWrap: 'anywhere' } }, santanderNotificationPrompt.item.text)
               ),
               h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' } },
                 h('button', { type: 'button', className: 'action-btn', onClick: () => {
