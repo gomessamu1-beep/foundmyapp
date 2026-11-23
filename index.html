@@ -5285,7 +5285,7 @@
             ),
             conferenciaSelecionada && h(React.Fragment, null,
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
-                h('div', null, h('strong', null, conferenciaSelecionada.nome_arquivo), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Selecione o lançamento correspondente e marque como conferido.')),
+                h('div', null, h('strong', null, conferenciaSelecionada.nome_arquivo), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Confira todos os registros do PDF. Use Lançar para preparar uma compra na importação habitual; créditos e estornos ficam visíveis, mas não entram como compra.')),
                 h('button', { type: 'button', className: 'action-btn', onClick: () => setConferenciaSelecionada(null) }, 'Voltar às faturas')
               ),
               h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(135px,1fr))', gap: 8, marginBottom: 12 } },
