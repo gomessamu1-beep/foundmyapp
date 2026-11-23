@@ -53,6 +53,24 @@ class MainActivity : Activity() {
         }
 
         @JavascriptInterface
+        fun ignoreNotification(id: String) {
+            val prefs = getSharedPreferences("foundmyapp_santander_notifications", MODE_PRIVATE)
+            val ignored = try { JSONArray(prefs.getString("ignored", "[]")) } catch (_: Exception) { JSONArray() }
+            val ids = (0 until ignored.length()).map { ignored.optString(it) }.toMutableSet()
+            if (id.isNotBlank()) ids.add(id)
+            val saved = JSONArray()
+            ids.takeLast(500).forEach { saved.put(it) }
+
+            val current = try { JSONArray(prefs.getString("pending", "[]")) } catch (_: Exception) { JSONArray() }
+            val next = JSONArray()
+            for (i in 0 until current.length()) {
+                val item = current.optJSONObject(i) ?: continue
+                if (item.optString("id") != id) next.put(item)
+            }
+            prefs.edit().putString("ignored", saved.toString()).putString("pending", next.toString()).apply()
+        }
+
+        @JavascriptInterface
         fun hasNotificationAccess(): Boolean {
             val enabled = Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty()
             val component = ComponentName(this@MainActivity, SantanderNotificationListener::class.java).flattenToString()
