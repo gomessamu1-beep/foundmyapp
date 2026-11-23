@@ -56,8 +56,10 @@ class SantanderNotificationListener : NotificationListenerService() {
             val compactText = listOf("R$ $amount", date).filter { it.isNotBlank() }.joinToString(" • ")
 
             val prefs = getSharedPreferences("foundmyapp_santander_notifications", MODE_PRIVATE)
-            val list = try { JSONArray(prefs.getString("pending", "[]")) } catch (_: Exception) { JSONArray() }
             val uniqueId = sha256("$packageName|${sbn.key}|${sbn.postTime}|$combined")
+            val ignored = try { JSONArray(prefs.getString("ignored", "[]")) } catch (_: Exception) { JSONArray() }
+            if ((0 until ignored.length()).any { ignored.optString(it) == uniqueId }) return
+            val list = try { JSONArray(prefs.getString("pending", "[]")) } catch (_: Exception) { JSONArray() }
             // Guarda somente os campos úteis para o lançamento; a mensagem completa não é exibida.
             val record = JSONObject()
                 .put("id", uniqueId)
