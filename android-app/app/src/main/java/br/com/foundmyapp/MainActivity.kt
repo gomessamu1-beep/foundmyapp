@@ -59,7 +59,7 @@ class MainActivity : Activity() {
             val ids = (0 until ignored.length()).map { ignored.optString(it) }.toMutableSet()
             if (id.isNotBlank()) ids.add(id)
             val saved = JSONArray()
-            ids.takeLast(500).forEach { saved.put(it) }
+            ids.toList().takeLast(500).forEach { saved.put(it) }
 
             val current = try { JSONArray(prefs.getString("pending", "[]")) } catch (_: Exception) { JSONArray() }
             val next = JSONArray()
