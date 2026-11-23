@@ -798,6 +798,37 @@
         setConferenciaSelecionada(atualizada);
       }
 
+      function prepararLancamentoConferencia(item) {
+        if (Number(item?.valor || 0) <= 0) {
+          setConferenciaErro("Este registro é um crédito/estorno ou possui valor zero. Ele fica disponível para conferência, mas não será lançado como compra.");
+          return;
+        }
+        const cartao = item.cartaoUltimos4
+          ? localizarCartaoPDF(item.cartaoUltimos4)
+          : (cartoes || []).find(c => String(c.nome || "").toUpperCase() === String(item.cartao || "").toUpperCase()) || null;
+        const classificacao = encontrarClassificacaoDeParaPDF(item.descricao || "");
+        const novoItem = {
+          id: uid(), data: item.data || "", descricao: item.descricao || "",
+          valor: Number(item.valor || 0), tipo: "FATURA", cartao,
+          cartaoUltimos4: item.cartaoUltimos4 || "", competencia: item.competencia || conferenciaSelecionada?.competencia || "",
+          parcela: item.parcela || "1/1", numeroParcela: Number(item.numeroParcela || 1),
+          totalParcelas: Number(item.totalParcelas || 1),
+          categoria: classificacao?.categoria || null, subcategoria: classificacao?.subcategoria || null,
+          deparaId: classificacao?.regra?.id || null, classificacaoAutomaticaDePara: !!classificacao,
+          natureza: item.natureza || "COMPRA", duplicado: false, duplicadoId: null, selecionado: true
+        };
+        const duplicado = encontrarDuplicadoPDF(novoItem);
+        if (duplicado) {
+          novoItem.duplicado = true;
+          novoItem.duplicadoId = duplicado.id;
+          novoItem.selecionado = false;
+        }
+        setPdfPreview([novoItem]);
+        setPdfArquivo(conferenciaSelecionada?.nome_arquivo || "Fatura arquivada");
+        setPdfError(duplicado ? "Este lançamento já consta no sistema. A importação ficará bloqueada para evitar duplicidade." : "");
+        setPdfModalOpen(true);
+      }
+
       async function salvarPDFNaConferencia(file, itens, competencia) {
         try {
           if (!session?.user?.id || !supabaseClient) return;
@@ -5269,14 +5300,18 @@
                     return dataOk && Math.abs(valor - Number(item.valor || 0)) < 0.011;
                   });
                   return h('tr', { key: item.id, style: { borderTop: '1px solid var(--line)' } },
-                    h('td', { style: { padding: 8, verticalAlign: 'top' } }, h('div', { style: { fontWeight: 600 } }, item.descricao), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, (item.data ? formatDateBR(item.data) : '') + ' • ' + formatBRL(Number(item.valor || 0)) + (item.parcela ? ' • ' + item.parcela : '')), h('span', { style: { display: 'inline-block', marginTop: 4, fontSize: 10, fontWeight: 700, color: Number(item.valor || 0) < 0 ? 'var(--red)' : 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 4, padding: '2px 5px' } }, item.natureza || (Number(item.valor || 0) < 0 ? 'ESTORNO' : 'COMPRA'))),
+                    h('td', { style: { padding: 8, verticalAlign: 'top' } }, h('div', { style: { fontWeight: 600 } }, item.descricao), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, (item.data ? formatDateBR(item.data) : '') + ' • ' + formatBRL(Number(item.valor || 0)) + (item.parcela ? ' • ' + item.parcela : '') + (item.cartao ? ' • Cartão ' + item.cartao : '') + (item.secao ? ' • ' + item.secao : '')), h('span', { style: { display: 'inline-block', marginTop: 4, fontSize: 10, fontWeight: 700, color: Number(item.valor || 0) < 0 ? 'var(--red)' : 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 4, padding: '2px 5px' } }, item.natureza || (Number(item.valor || 0) < 0 ? 'ESTORNO' : 'COMPRA'))),
                     h('td', { style: { padding: 8, minWidth: 250 } }, h('select', { value: item.lancamentoId || '', disabled: !!item.conferido, style: { width: '100%', padding: 8 }, onChange: e => atualizarConferenciaItem(conferenciaSelecionada, item.id, { lancamentoId: e.target.value }) },
                       h('option', { value: '' }, 'Selecione um lançamento'),
                       purchases.map(p => h('option', { key: p.id, value: p.id }, (p.dataCompra ? formatDateBR(p.dataCompra) : 'Sem data') + ' • ' + p.descricao + ' • ' + formatBRL(Number(p.valorParcela ?? p.total ?? 0))))
                     )),
-                    h('td', { style: { padding: 8, textAlign: 'center', whiteSpace: 'nowrap' } }, item.conferido
-                      ? h('button', { type: 'button', className: 'action-btn', style: { color: 'var(--green)', borderColor: 'var(--green)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, item.id, { conferido: false }) }, '✓ Conferido · Desmarcar')
-                      : h('button', { type: 'button', className: 'action-btn', onClick: () => atualizarConferenciaItem(conferenciaSelecionada, item.id, { conferido: true }) }, 'Marcar conferido'))
+                    h('td', { style: { padding: 8, textAlign: 'center', whiteSpace: 'nowrap' } },
+                      Number(item.valor || 0) > 0
+                        ? h('button', { type: 'button', className: 'primary', style: { padding: '6px 9px', fontSize: 11, marginBottom: 5 }, onClick: () => prepararLancamentoConferencia(item) }, 'Lançar')
+                        : h('span', { style: { display: 'block', fontSize: 11, color: 'var(--red)', marginBottom: 5 } }, Number(item.valor || 0) < 0 ? 'Crédito/estorno' : 'Valor zero'),
+                      item.conferido
+                        ? h('button', { type: 'button', className: 'action-btn', style: { color: 'var(--green)', borderColor: 'var(--green)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, item.id, { conferido: false }) }, '✓ Conferido · Desmarcar')
+                        : h('button', { type: 'button', className: 'action-btn', onClick: () => atualizarConferenciaItem(conferenciaSelecionada, item.id, { conferido: true }) }, 'Marcar conferido'))
                   );
                 }))
               ))
