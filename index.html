@@ -801,10 +801,8 @@
       async function salvarPDFNaConferencia(file, itens, competencia) {
         try {
           if (!session?.user?.id || !supabaseClient) return;
-          if (file.size > 6 * 1024 * 1024) {
-            console.warn("[FoundMyApp] PDF maior que 6 MB: não foi arquivado na conferência para evitar exceder o limite do banco.");
-            return;
-          }
+          // O registro extraído será salvo mesmo quando o PDF for grande demais para
+          // guardar também os bytes originais no banco.
           // Não reutiliza nenhum ArrayBuffer entregue ao PDF.js. O hash é calculado
           // sobre uma leitura nova e os bytes do arquivo são convertidos via FileReader.
           const bufferHash = await file.arrayBuffer();
@@ -815,17 +813,22 @@
           const { data: existente, error: erroBusca } = await supabaseClient.from("conferencia_faturas_pdf").select("id").eq("user_id", session.user.id).eq("hash_pdf", hash).maybeSingle();
           if (erroBusca) throw erroBusca;
           if (existente) return;
-          const pdfBase64 = await new Promise((resolve, reject) => {
-            const leitor = new FileReader();
-            leitor.onload = () => {
-              const resultado = String(leitor.result || "");
-              const separador = resultado.indexOf(",");
-              if (separador < 0) return reject(new Error("Não foi possível converter o PDF para armazenamento."));
-              resolve(resultado.slice(separador + 1));
-            };
-            leitor.onerror = () => reject(leitor.error || new Error("Falha ao ler o arquivo PDF."));
-            leitor.readAsDataURL(file);
-          });
+          let pdfBase64 = "";
+          if (file.size <= 6 * 1024 * 1024) {
+            pdfBase64 = await new Promise((resolve, reject) => {
+              const leitor = new FileReader();
+              leitor.onload = () => {
+                const resultado = String(leitor.result || "");
+                const separador = resultado.indexOf(",");
+                if (separador < 0) return reject(new Error("Não foi possível converter o PDF para armazenamento."));
+                resolve(resultado.slice(separador + 1));
+              };
+              leitor.onerror = () => reject(leitor.error || new Error("Falha ao ler o arquivo PDF."));
+              leitor.readAsDataURL(file);
+            });
+          } else {
+            console.info("[FoundMyApp] PDF maior que 6 MB: os registros foram salvos sem armazenar uma cópia binária do arquivo.");
+          }
           const itensConferencia = itens.map((item, i) => ({
             id: String(item.id || (i + 1)), data: item.data || "", descricao: item.descricao || "",
             valor: Number(item.valor || 0), natureza: item.natureza || (Number(item.valor || 0) < 0 ? "ESTORNO" : "COMPRA"), parcela: item.parcela || "", numeroParcela: item.numeroParcela || 1,
@@ -2409,14 +2412,9 @@
             }
           }
 
-          const unicos = [];
-          const chaves = new Set();
-          for (const item of resultado) {
-            const chave = [item.data, normalizarDescricaoPDF(item.descricao), item.valor.toFixed(2), item.cartao?.id || item.cartaoUltimos4 || "", item.numeroParcela, item.totalParcelas].join("|");
-            if (chaves.has(chave)) continue;
-            chaves.add(chave);
-            unicos.push(item);
-          }
+          // Não eliminar linhas idênticas: duas compras podem ter mesma data,
+          // descrição, parcela e valor e ainda assim serem dois registros distintos.
+          const unicos = resultado;
 
           if (!unicos.length) {
             throw new Error("Não encontrei lançamentos nas seções Parcelamentos/Despesas deste PDF. Verifique se a fatura está em formato de texto.");
