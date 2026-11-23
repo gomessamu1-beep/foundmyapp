@@ -58,6 +58,7 @@ class MainActivity : Activity() {
             val ignored = try { JSONArray(prefs.getString("ignored", "[]")) } catch (_: Exception) { JSONArray() }
             val ids = (0 until ignored.length()).map { ignored.optString(it) }.toMutableSet()
             if (id.isNotBlank()) ids.add(id)
+            // Guarda no aparelho as notificações que o usuário decidiu ignorar.
             val saved = JSONArray()
             ids.toList().takeLast(500).forEach { saved.put(it) }
 
