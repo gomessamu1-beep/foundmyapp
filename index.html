@@ -2263,6 +2263,11 @@
         const file = event.target.files?.[0];
         if (!file) return;
         setPdfError("");
+        if (!pdfCompetenciaSelecionada) {
+          setPdfError("Selecione a competência da fatura antes de escolher o PDF.");
+          event.target.value = "";
+          return;
+        }
         const layoutSelecionado = pdfLayouts.find(x => String(x.id) === String(pdfLayoutSelecionado));
         if (!layoutSelecionado) {
           setPdfError("Selecione um layout de fatura antes de escolher o PDF.");
@@ -5361,10 +5366,10 @@
                   pdfLayouts.map(layout => h('option', { key: layout.id, value: layout.id }, layout.banco + ' — ' + layout.nome))
                 )
               ),
-              h('button', { type: 'button', className: 'primary', onClick: () => { if (pdfInputRef.current && pdfLayoutSelecionado && !pdfImportando && !pdfLayoutsCarregando) pdfInputRef.current.click(); }, disabled: pdfImportando || pdfLayoutsCarregando || !pdfLayoutSelecionado, style: { display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', fontWeight: 700, padding: '10px 14px', borderRadius: 6 } },
+              h('button', { type: 'button', className: 'primary', onClick: () => { if (pdfInputRef.current && pdfLayoutSelecionado && !pdfImportando && !pdfLayoutsCarregando) pdfInputRef.current.click(); }, disabled: pdfImportando || pdfLayoutsCarregando || !pdfLayoutSelecionado || !pdfCompetenciaSelecionada, style: { display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', fontWeight: 700, padding: '10px 14px', borderRadius: 6 } },
                 h(FileText, { size: 16 }), pdfImportando ? 'Lendo PDF...' : 'Importar PDF da fatura'
               ),
-              h('input', { ref: pdfInputRef, type: 'file', accept: 'application/pdf,.pdf', disabled: pdfLayoutsCarregando || !pdfLayoutSelecionado || pdfImportando, style: { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }, onChange: lerFaturaPDF })
+              h('input', { ref: pdfInputRef, type: 'file', accept: 'application/pdf,.pdf', disabled: pdfLayoutsCarregando || !pdfLayoutSelecionado || !pdfCompetenciaSelecionada || pdfImportando, style: { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }, onChange: lerFaturaPDF })
             ),
             pdfError && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, pdfError),
             pdfLayoutsCarregando && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginBottom: 8 } }, 'Carregando layouts de fatura...'),
