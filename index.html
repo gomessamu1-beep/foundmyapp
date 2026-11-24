@@ -5308,6 +5308,24 @@
               ),
               h('button', { type: 'button', className: 'action-btn', onClick: carregarConferenciaFaturas, disabled: conferenciaCarregando }, h(RefreshCw, { size: 15 }), ' Atualizar')
             ),
+            h('div', { style: { display: 'flex', alignItems: 'end', gap: 10, flexWrap: 'wrap', marginBottom: 14, padding: 12, border: '1px solid var(--line)', borderRadius: 7, background: 'var(--card)' } },
+              h('div', { className: 'field', style: { margin: 0, minWidth: 220, flex: '1 1 240px' } },
+                h('label', null, 'Layout da fatura'),
+                h('select', {
+                  value: pdfLayoutSelecionado,
+                  disabled: pdfLayoutsCarregando || pdfImportando || !pdfLayouts.length,
+                  onChange: e => { setPdfLayoutSelecionado(e.target.value); setPdfError(''); },
+                  style: { width: '100%' }
+                },
+                  h('option', { value: '' }, pdfLayoutsCarregando ? 'Carregando layouts...' : 'Selecione o banco / layout'),
+                  pdfLayouts.map(layout => h('option', { key: layout.id, value: layout.id }, layout.banco + ' — ' + layout.nome))
+                )
+              ),
+              h('button', { type: 'button', className: 'primary', onClick: () => { if (pdfInputRef.current && pdfLayoutSelecionado && !pdfImportando && !pdfLayoutsCarregando) pdfInputRef.current.click(); }, disabled: pdfImportando || pdfLayoutsCarregando || !pdfLayoutSelecionado, style: { display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', fontWeight: 700, padding: '10px 14px', borderRadius: 6 } },
+                h(FileText, { size: 16 }), pdfImportando ? 'Lendo PDF...' : 'Importar PDF da fatura'
+              ),
+              h('input', { ref: pdfInputRef, type: 'file', accept: 'application/pdf,.pdf', disabled: pdfLayoutsCarregando || !pdfLayoutSelecionado || pdfImportando, style: { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }, onChange: lerFaturaPDF })
+            ),
             conferenciaErro && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, conferenciaErro),
             conferenciaCarregando && h('div', { style: { padding: 18, color: 'var(--ink-soft)' } }, 'Carregando faturas...'),
             !conferenciaCarregando && !conferenciaSelecionada && h(React.Fragment, null,
