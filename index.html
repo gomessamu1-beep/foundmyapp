@@ -2382,7 +2382,11 @@
       while ((mp = reP.exec(resto)) !== null) {
         const n = Number(mp[1]);
         const total = Number(mp[2]);
-        if (n >= 1 && total >= n && total <= 60) {
+        // Regra do Santander: qualquer lançamento com denominador maior que 1
+        // (ex.: 01/03, 02/02, 03/04) é uma compra parcelada.
+        // Não exigir que o número atual seja menor/igual ao total, pois a
+        // identificação da compra parcelada depende do número após a barra.
+        if (n >= 1 && total > 1 && total <= 60) {
           parcelaInfo = { numero: n, total, index: mp.index, length: mp[0].length };
         }
       }
