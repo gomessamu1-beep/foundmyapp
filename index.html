@@ -757,6 +757,37 @@
         }
       }
 
+      async function abrirConferenciaFatura(fatura) {
+        setConferenciaErro("");
+        setConferenciaCarregando(true);
+        try {
+          if (!supabaseClient) throw new Error("Conexão com o Supabase indisponível.");
+          const usuarioId = fatura?.user_id || session?.user?.id;
+          if (!usuarioId) throw new Error("Sessão não identificada. Entre novamente no aplicativo.");
+          const { data, error } = await supabaseClient
+            .from("conferencia_faturas_pdf")
+            .select("id,user_id,hash_pdf,nome_arquivo,competencia,cartao_nome,itens,criado_em,atualizado_em")
+            .eq("id", fatura.id)
+            .eq("user_id", usuarioId)
+            .single();
+          if (error) throw error;
+          let itens = data?.itens;
+          if (typeof itens === "string") {
+            try { itens = JSON.parse(itens); } catch (_) { itens = []; }
+          }
+          if (!Array.isArray(itens)) {
+            throw new Error("A fatura foi encontrada, mas os registros não vieram em formato de lista.");
+          }
+          setConferenciaSelecionada({ ...data, itens });
+        } catch (error) {
+          console.error("[FoundMyApp] Erro ao abrir detalhes da conferência:", error);
+          setConferenciaSelecionada(null);
+          setConferenciaErro("Não foi possível abrir os registros desta fatura: " + (error?.message || "erro desconhecido"));
+        } finally {
+          setConferenciaCarregando(false);
+        }
+      }
+
       async function atualizarConferenciaItem(fatura, itemId, patch) {
         const itens = (fatura.itens || []).map(item => String(item.id) === String(itemId) ? { ...item, ...patch } : item);
         const { error } = await supabaseClient.from("conferencia_faturas_pdf").update({ itens, atualizado_em: new Date().toISOString() }).eq("id", fatura.id).eq("user_id", session.user.id);
@@ -5256,7 +5287,7 @@
                   h('div', { className: 'list-item-main' }, h('div', { style: { fontWeight: 700 } }, f.nome_arquivo || 'Fatura PDF'),
                     h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (f.competencia || 'Competência não identificada') + (f.cartao_nome ? ' • ' + f.cartao_nome : '')),
                     h('div', { style: { fontSize: 12, marginTop: 4 } }, feitos + ' de ' + total + ' lançamentos conferidos')),
-                  h('button', { type: 'button', className: 'primary', onClick: () => setConferenciaSelecionada(f) }, 'Abrir conferência')
+                  h('button', { type: 'button', className: 'primary', onClick: () => abrirConferenciaFatura(f) }, 'Abrir conferência')
                 );
               })
             ),
