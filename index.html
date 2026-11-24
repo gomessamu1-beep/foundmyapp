@@ -5239,6 +5239,15 @@
             ),
             conferenciaErro && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, conferenciaErro),
             conferenciaCarregando && h('div', { style: { padding: 18, color: 'var(--ink-soft)' } }, 'Carregando faturas...'),
+            !conferenciaCarregando && h('div', { style: { padding: '14px 16px', marginBottom: 12, border: '1px solid var(--line)', borderRadius: 7, background: 'var(--paper)', color: 'var(--ink)', fontSize: 13 } },
+              conferenciaErro
+                ? conferenciaErro
+                : conferenciaSelecionada
+                  ? 'Fatura aberta: ' + (conferenciaSelecionada.nome_arquivo || 'PDF')
+                  : (Array.isArray(conferenciaFaturas) && conferenciaFaturas.length > 0
+                    ? conferenciaFaturas.length + ' fatura(s) encontrada(s).'
+                    : 'Nenhuma fatura arquivada ainda. Importe novamente o PDF pela tela habitual para criar o arquivo de conferência.')
+            ),
             !conferenciaCarregando && !conferenciaSelecionada && h(React.Fragment, null,
               conferenciaFaturas.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, 'Nenhuma fatura arquivada ainda. Ao importar um PDF pela tela habitual, uma cópia será guardada aqui automaticamente.') :
               h('div', { className: 'list-vertical' }, conferenciaFaturas.map(f => {
