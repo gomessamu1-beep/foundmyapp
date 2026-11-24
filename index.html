@@ -5265,39 +5265,37 @@
 
           screen === "faturas" && faturaViewTab === "conferencia" && h('div', { className: 'form-card' },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 } },
-              h('div', null, h('h3', { style: { margin: 0 } }, 'Conferência de Faturas'), h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, marginTop: 5 } }, 'Compare cada compra do PDF com um lançamento já cadastrado. Esta tela não cria nem altera lançamentos.')),
+              h('div', null,
+                h('h3', { style: { margin: 0 } }, 'Conferência de Faturas'),
+                h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, marginTop: 5 } }, 'Abra uma fatura arquivada para conferir os registros extraídos do PDF.')
+              ),
               h('button', { type: 'button', className: 'action-btn', onClick: carregarConferenciaFaturas, disabled: conferenciaCarregando }, h(RefreshCw, { size: 15 }), ' Atualizar')
             ),
             conferenciaErro && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, conferenciaErro),
             conferenciaCarregando && h('div', { style: { padding: 18, color: 'var(--ink-soft)' } }, 'Carregando faturas...'),
-            !conferenciaCarregando && h('div', { style: { padding: '14px 16px', marginBottom: 12, border: '1px solid var(--line)', borderRadius: 7, background: 'var(--paper)', color: 'var(--ink)', fontSize: 13 } },
-              conferenciaErro
-                ? conferenciaErro
-                : conferenciaSelecionada
-                  ? 'Fatura aberta: ' + (conferenciaSelecionada.nome_arquivo || 'PDF')
-                  : (Array.isArray(conferenciaFaturas) && conferenciaFaturas.length > 0
-                    ? conferenciaFaturas.length + ' fatura(s) encontrada(s).'
-                    : 'Nenhuma fatura arquivada ainda. Importe novamente o PDF pela tela habitual para criar o arquivo de conferência.')
-            ),
             !conferenciaCarregando && !conferenciaSelecionada && h(React.Fragment, null,
-              conferenciaFaturas.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, 'Nenhuma fatura arquivada ainda. Ao importar um PDF pela tela habitual, uma cópia será guardada aqui automaticamente.') :
-              h('div', { className: 'list-vertical' }, conferenciaFaturas.map(f => {
-                const total = (f.itens || []).length, feitos = (f.itens || []).filter(x => x.conferido).length;
-                return h('div', { className: 'list-item', key: f.id, style: { alignItems: 'center', gap: 12 } },
-                  h('div', { className: 'list-item-main' }, h('div', { style: { fontWeight: 700 } }, f.nome_arquivo || 'Fatura PDF'),
-                    h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (f.competencia || 'Competência não identificada') + (f.cartao_nome ? ' • ' + f.cartao_nome : '')),
-                    h('div', { style: { fontSize: 12, marginTop: 4 } }, feitos + ' de ' + total + ' lançamentos conferidos')),
-                  h('button', { type: 'button', className: 'primary', onClick: () => abrirConferenciaFatura(f) }, 'Abrir conferência')
-                );
-              })
+              conferenciaFaturas.length === 0
+                ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, 'Nenhuma fatura arquivada ainda. Importe um PDF pela tela habitual para guardar seus registros aqui.')
+                : h('div', { className: 'list-vertical' }, conferenciaFaturas.map(f => {
+                    const registros = Array.isArray(f.itens) ? f.itens : [];
+                    const feitos = registros.filter(x => x && x.conferido).length;
+                    return h('div', { className: 'list-item', key: f.id, style: { alignItems: 'center', gap: 12 } },
+                      h('div', { className: 'list-item-main' },
+                        h('div', { style: { fontWeight: 700 } }, f.nome_arquivo || 'Fatura PDF'),
+                        h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (f.competencia || 'Competência não identificada') + (f.cartao_nome ? ' • ' + f.cartao_nome : '')),
+                        h('div', { style: { fontSize: 12, marginTop: 4 } }, feitos + ' de ' + registros.length + ' lançamentos conferidos')
+                      ),
+                      h('button', { type: 'button', className: 'primary', onClick: () => abrirConferenciaFatura(f) }, 'Abrir conferência')
+                    );
+                  }))
             ),
-            conferenciaSelecionada && h(React.Fragment, null,
+            !conferenciaCarregando && conferenciaSelecionada && h(React.Fragment, null,
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
                 h('div', null,
-                  h('strong', null, String(conferenciaSelecionada.nome_arquivo || 'Fatura PDF')),
-                  h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Registros extraídos do PDF para conferência.')
+                  h('strong', { style: { fontSize: 16 } }, String(conferenciaSelecionada.nome_arquivo || 'Fatura PDF')),
+                  h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (conferenciaSelecionada.competencia || 'Competência não identificada') + (conferenciaSelecionada.cartao_nome ? ' • ' + conferenciaSelecionada.cartao_nome : ''))
                 ),
-                h('button', { type: 'button', className: 'action-btn', onClick: () => setConferenciaSelecionada(null) }, 'Voltar às faturas')
+                h('button', { type: 'button', className: 'action-btn', onClick: () => { setConferenciaSelecionada(null); setConferenciaErro(''); } }, 'Voltar às faturas')
               ),
               (() => {
                 const itens = Array.isArray(conferenciaSelecionada.itens) ? conferenciaSelecionada.itens : [];
@@ -5315,36 +5313,39 @@
                       h('strong', { style: { display: 'block', marginTop: 4 } }, d[1])
                     ))
                   ),
-                  itens.length
+                  itens.length > 0
                     ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
                         itens.map((item, index) => {
                           const registro = item || {};
                           const valor = Number(registro.valor) || 0;
-                          const dataTexto = String(registro.data || 'Data não informada');
                           const descricao = String(registro.descricao || 'Registro sem descrição');
-                          const parcela = registro.parcela ? ' • ' + String(registro.parcela) : '';
+                          const dataTexto = String(registro.data || 'Data não informada');
+                          const parcela = registro.parcela ? ' • Parcela ' + String(registro.parcela) : '';
                           const cartao = registro.cartao ? ' • ' + String(registro.cartao) : '';
-                          return h('div', { key: String(registro.id || index), style: { border: '1px solid var(--line)', borderRadius: 7, padding: 12, background: 'var(--card)' } },
-                            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 } },
-                              h('div', { style: { minWidth: 0, flex: 1 } },
-                                h('div', { style: { fontWeight: 700, overflowWrap: 'anywhere' } }, descricao),
-                                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, dataTexto + parcela + cartao)
+                          const itemId = registro.id != null ? registro.id : index;
+                          return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, background: 'var(--card)', opacity: registro.conferido ? 0.72 : 1 } },
+                            h('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, alignItems: 'start' } },
+                              h('div', { style: { minWidth: 0 } },
+                                h('strong', { style: { display: 'block', overflowWrap: 'anywhere' } }, descricao),
+                                h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 } }, dataTexto + parcela + cartao)
                               ),
-                              h('strong', { style: { whiteSpace: 'nowrap' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
+                              h('strong', { className: 'num', style: { whiteSpace: 'nowrap' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
                             ),
-                            h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 9 } },
-                              h('span', { style: { fontSize: 10, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 6px' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO' : 'COMPRA'))),
-                              valor > 0 ? h('button', { type: 'button', className: 'primary', style: { padding: '6px 9px', fontSize: 11 }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar') : h('span', { style: { fontSize: 11, color: 'var(--red)' } }, 'Crédito/estorno — não lançar como compra'),
-                              h('button', { type: 'button', className: 'action-btn', style: { color: registro.conferido ? 'var(--green)' : 'var(--ink)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, registro.id, { conferido: !registro.conferido }) }, registro.conferido ? '✓ Conferido · Desmarcar' : 'Marcar conferido')
+                            h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 } },
+                              h('span', { style: { fontSize: 10, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 6px' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO/CRÉDITO' : 'COMPRA'))),
+                              valor > 0
+                                ? h('button', { type: 'button', className: 'primary', style: { padding: '7px 10px', fontSize: 12 }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar')
+                                : h('span', { style: { fontSize: 11, color: 'var(--red)' } }, 'Crédito/estorno — não lançar como compra'),
+                              h('button', { type: 'button', className: 'action-btn', style: { padding: '7px 10px', fontSize: 12, color: registro.conferido ? 'var(--green)' : 'var(--ink)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { conferido: !registro.conferido }) }, registro.conferido ? '✓ Conferido · Desmarcar' : 'Marcar conferido')
                             )
                           );
                         })
                       )
-                    : h('div', { style: { padding: 20, textAlign: 'center', border: '1px solid var(--line)', borderRadius: 7 } }, 'O arquivo foi aberto, mas o campo de registros não chegou como uma lista. Atualize a tela e tente novamente.')
+                    : h('div', { style: { padding: 20, textAlign: 'center', border: '1px solid var(--line)', borderRadius: 7, color: 'var(--ink-soft)' } }, 'Esta fatura não possui registros salvos para exibir.')
                 );
               })()
             )
-          )),
+          ),
 
           screen === "faturas" && faturaViewTab === "lancamentos" && h('div', { className: 'form-card' },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } }, h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Resumo de Faturas por Ano"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setAcrescimoInput(''); setDescontoInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")),
