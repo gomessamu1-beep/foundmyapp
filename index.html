@@ -5262,36 +5262,61 @@
             ),
             conferenciaSelecionada && h(React.Fragment, null,
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
-                h('div', null, h('strong', null, conferenciaSelecionada.nome_arquivo), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Confira todos os registros do PDF. Use Lançar para preparar uma compra na importação habitual; créditos e estornos ficam visíveis, mas não entram como compra.')),
+                h('div', null,
+                  h('strong', null, conferenciaSelecionada.nome_arquivo || 'Fatura PDF'),
+                  h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Confira os registros extraídos do PDF. Créditos e estornos ficam visíveis, mas não são lançados como compras.')
+                ),
                 h('button', { type: 'button', className: 'action-btn', onClick: () => setConferenciaSelecionada(null) }, 'Voltar às faturas')
               ),
-              h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(135px,1fr))', gap: 8, marginBottom: 12 } },
-                (() => { const itens = conferenciaSelecionada.itens || []; const feitos = itens.filter(x => x.conferido); const pendentes = itens.filter(x => !x.conferido); const soma = lista => lista.reduce((total, x) => total + Number(x.valor || 0), 0); const resumo = [{ rotulo: "Registros", valor: itens.length }, { rotulo: "Conferidos", valor: feitos.length }, { rotulo: "Pendentes", valor: pendentes.length }, { rotulo: "Valor total", valor: formatBRL(soma(itens)) }, { rotulo: "Valor conferido", valor: formatBRL(soma(feitos)) }, { rotulo: "Valor pendente", valor: formatBRL(soma(pendentes)) }]; return resumo.map((r, i) => h('div', { key: r.rotulo, style: { border: '1px solid var(--line)', borderRadius: 7, padding: '9px 11px', background: 'var(--card)' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, r.rotulo), h('div', { style: { fontSize: 15, fontWeight: 700, marginTop: 3, color: i === 1 ? 'var(--green)' : i === 2 ? 'var(--red)' : 'var(--ink)' } }, r.valor))); })()
-              ),
-              h('div', { style: { overflowX: 'auto' } }, h('table', { style: { width: '100%', borderCollapse: 'collapse', minWidth: 650 } },
-                h('thead', null, h('tr', null, h('th', { style: { textAlign: 'left', padding: 8 } }, 'Compra no PDF'), h('th', { style: { textAlign: 'left', padding: 8 } }, 'Lançamento existente'), h('th', { style: { textAlign: 'center', padding: 8 } }, 'Status'))),
-                h('tbody', null, (conferenciaSelecionada.itens || []).map(item => {
-                  const candidatos = purchases.filter(p => {
-                    const dataOk = !item.data || p.dataCompra === item.data;
-                    const valor = Number(p.valorParcela ?? p.total ?? 0);
-                    return dataOk && Math.abs(valor - Number(item.valor || 0)) < 0.011;
-                  });
-                  return h('tr', { key: item.id, style: { borderTop: '1px solid var(--line)' } },
-                    h('td', { style: { padding: 8, verticalAlign: 'top' } }, h('div', { style: { fontWeight: 600 } }, item.descricao), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, (item.data ? formatDateBR(item.data) : '') + ' • ' + formatBRL(Number(item.valor || 0)) + (item.parcela ? ' • ' + item.parcela : '') + (item.cartao ? ' • Cartão ' + item.cartao : '') + (item.secao ? ' • ' + item.secao : '')), h('span', { style: { display: 'inline-block', marginTop: 4, fontSize: 10, fontWeight: 700, color: Number(item.valor || 0) < 0 ? 'var(--red)' : 'var(--ink-soft)', border: '1px solid var(--line)', borderRadius: 4, padding: '2px 5px' } }, item.natureza || (Number(item.valor || 0) < 0 ? 'ESTORNO' : 'COMPRA'))),
-                    h('td', { style: { padding: 8, minWidth: 250 } }, h('select', { value: item.lancamentoId || '', disabled: !!item.conferido, style: { width: '100%', padding: 8 }, onChange: e => atualizarConferenciaItem(conferenciaSelecionada, item.id, { lancamentoId: e.target.value }) },
-                      h('option', { value: '' }, 'Selecione um lançamento'),
-                      purchases.map(p => h('option', { key: p.id, value: p.id }, (p.dataCompra ? formatDateBR(p.dataCompra) : 'Sem data') + ' • ' + p.descricao + ' • ' + formatBRL(Number(p.valorParcela ?? p.total ?? 0))))
-                    )),
-                    h('td', { style: { padding: 8, textAlign: 'center', whiteSpace: 'nowrap' } },
-                      Number(item.valor || 0) > 0
-                        ? h('button', { type: 'button', className: 'primary', style: { padding: '6px 9px', fontSize: 11, marginBottom: 5 }, onClick: () => prepararLancamentoConferencia(item) }, 'Lançar')
-                        : h('span', { style: { display: 'block', fontSize: 11, color: 'var(--red)', marginBottom: 5 } }, Number(item.valor || 0) < 0 ? 'Crédito/estorno' : 'Valor zero'),
-                      item.conferido
-                        ? h('button', { type: 'button', className: 'action-btn', style: { color: 'var(--green)', borderColor: 'var(--green)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, item.id, { conferido: false }) }, '✓ Conferido · Desmarcar')
-                        : h('button', { type: 'button', className: 'action-btn', onClick: () => atualizarConferenciaItem(conferenciaSelecionada, item.id, { conferido: true }) }, 'Marcar conferido'))
-                  );
-                }))
-              ))
+              (() => {
+                const itens = Array.isArray(conferenciaSelecionada.itens) ? conferenciaSelecionada.itens : [];
+                const feitos = itens.filter(x => x && x.conferido);
+                const pendentes = itens.filter(x => x && !x.conferido);
+                const soma = lista => lista.reduce((total, x) => total + (Number(x?.valor) || 0), 0);
+                return h(React.Fragment, null,
+                  h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 8, marginBottom: 12 } },
+                    [
+                      { rotulo: 'Registros', valor: itens.length },
+                      { rotulo: 'Conferidos', valor: feitos.length },
+                      { rotulo: 'Pendentes', valor: pendentes.length },
+                      { rotulo: 'Valor total', valor: formatBRL(soma(itens)) }
+                    ].map(r => h('div', { key: r.rotulo, style: { border: '1px solid var(--line)', borderRadius: 7, padding: '9px 11px', background: 'var(--card)' } },
+                      h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, r.rotulo),
+                      h('div', { style: { fontSize: 15, fontWeight: 700, marginTop: 3 } }, String(r.valor))
+                    ))
+                  ),
+                  itens.length === 0
+                    ? h('div', { style: { padding: 20, textAlign: 'center', border: '1px solid var(--line)', borderRadius: 7 } }, 'Esta fatura foi arquivada sem registros. Importe o PDF novamente para extrair os lançamentos.')
+                    : h('div', { className: 'list-vertical', style: { gap: 8 } }, itens.map((item, index) => {
+                        const registro = item || {};
+                        const valor = Number(registro.valor) || 0;
+                        return h('div', { key: String(registro.id || index), className: 'list-item', style: { display: 'block', padding: 12 } },
+                          h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' } },
+                            h('div', { style: { minWidth: 0, flex: 1 } },
+                              h('div', { style: { fontWeight: 700, overflowWrap: 'anywhere' } }, registro.descricao || 'Registro sem descrição'),
+                              h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } },
+                                (registro.data ? formatDateBR(registro.data) : 'Data não informada') +
+                                (registro.parcela ? ' • ' + registro.parcela : '') +
+                                (registro.cartao ? ' • ' + registro.cartao : '')
+                              )
+                            ),
+                            h('strong', { style: { whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--ink)' } }, formatBRL(valor))
+                          ),
+                          h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 9 } },
+                            h('span', { style: { fontSize: 10, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 6px' } }, registro.natureza || (valor < 0 ? 'ESTORNO' : 'COMPRA')),
+                            valor > 0
+                              ? h('button', { type: 'button', className: 'primary', style: { padding: '6px 9px', fontSize: 11 }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar')
+                              : h('span', { style: { fontSize: 11, color: 'var(--red)' } }, 'Crédito/estorno — não lançar como compra'),
+                            h('select', { value: registro.lancamentoId || '', disabled: !!registro.conferido, style: { flex: '1 1 220px', minWidth: 180, padding: 7 }, onChange: e => atualizarConferenciaItem(conferenciaSelecionada, registro.id, { lancamentoId: e.target.value }) },
+                              h('option', { value: '' }, 'Vincular lançamento existente'),
+                              (Array.isArray(purchases) ? purchases : []).map(p => h('option', { key: p.id, value: p.id }, (p.dataCompra ? formatDateBR(p.dataCompra) : 'Sem data') + ' • ' + (p.descricao || '') + ' • ' + formatBRL(Number(p.valorParcela ?? p.total ?? 0))))
+                            ),
+                            h('button', { type: 'button', className: 'action-btn', style: { color: registro.conferido ? 'var(--green)' : 'var(--ink)', borderColor: registro.conferido ? 'var(--green)' : 'var(--line)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, registro.id, { conferido: !registro.conferido }) }, registro.conferido ? '✓ Conferido · Desmarcar' : 'Marcar conferido')
+                          )
+                        );
+                      }))
+                );
+              })()
             )
           )),
 
