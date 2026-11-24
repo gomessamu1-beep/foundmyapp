@@ -5383,7 +5383,7 @@
                     const feitos = registros.filter(x => x && x.conferido).length;
                     return h('div', { className: 'list-item', key: f.id, style: { alignItems: 'center', gap: 12 } },
                       h('div', { className: 'list-item-main' },
-                        h('div', { style: { fontWeight: 700 } }, f.nome_arquivo || 'Fatura PDF'),
+                        h('div', { style: { fontWeight: 700 } }, f.competencia || 'Competência não informada'),
                         h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (f.competencia || 'Competência não identificada') + (f.cartao_nome ? ' • ' + f.cartao_nome : '')),
                         h('div', { style: { fontSize: 12, marginTop: 4 } }, feitos + ' de ' + registros.length + ' lançamentos conferidos')
                       ),
