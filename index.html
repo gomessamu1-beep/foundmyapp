@@ -237,6 +237,7 @@
       const [conferenciaSelecionada, setConferenciaSelecionada] = useState(null);
       const [conferenciaCarregando, setConferenciaCarregando] = useState(false);
       const [conferenciaConsultada, setConferenciaConsultada] = useState(false);
+      const [conferenciaItensSelecionados, setConferenciaItensSelecionados] = useState([]);
       const [conferenciaErro, setConferenciaErro] = useState("");
       const [menuMobileOpen, setMenuMobileOpen] = useState(false);
       const [cadastroTab, setCadastroTab] = useState(() => sessionStorage.getItem('fatura-cadtab-v1') || "cartoes");
@@ -819,6 +820,31 @@
           console.error("[FoundMyApp] Erro ao abrir detalhes da conferência:", error);
           setConferenciaSelecionada(null);
           setConferenciaErro("Não foi possível abrir os registros desta fatura: " + (error?.message || "erro desconhecido"));
+        } finally {
+          setConferenciaCarregando(false);
+        }
+      }
+
+      async function atualizarConferenciaItensEmLote(fatura, ids, patch) {
+        if (!fatura || !Array.isArray(ids) || !ids.length) return;
+        setConferenciaCarregando(true);
+        setConferenciaErro("");
+        try {
+          const selecionados = new Set(ids.map(String));
+          const itens = (fatura.itens || []).map((item, index) => {
+            const itemId = item && item.id != null ? item.id : index;
+            return selecionados.has(String(itemId)) ? { ...item, ...patch } : item;
+          });
+          const { error } = await supabaseClient.from("conferencia_faturas_pdf")
+            .update({ itens, atualizado_em: new Date().toISOString() })
+            .eq("id", fatura.id).eq("user_id", session.user.id);
+          if (error) throw error;
+          const atualizada = { ...fatura, itens };
+          setConferenciaFaturas(prev => prev.map(x => x.id === fatura.id ? atualizada : x));
+          setConferenciaSelecionada(atualizada);
+          setConferenciaItensSelecionados([]);
+        } catch (error) {
+          setConferenciaErro("Não foi possível atualizar os registros selecionados: " + (error?.message || "erro desconhecido"));
         } finally {
           setConferenciaCarregando(false);
         }
@@ -5338,7 +5364,7 @@
           screen === "faturas" && h('div', { className: 'form-card', style: { paddingBottom: 8 } },
             h('div', { className: 'sub-nav', style: { marginBottom: 0 } },
               h('button', { className: faturaViewTab === "lancamentos" ? "active" : "", onClick: () => setFaturaViewTab("lancamentos") }, "Lançamentos"),
-              h('button', { className: faturaViewTab === "conferencia" ? "active" : "", onClick: () => { setFaturaViewTab("conferencia"); setConferenciaSelecionada(null); setConferenciaFaturas([]); setConferenciaConsultada(false); setConferenciaErro(""); carregarLayoutsFaturaPDF(); } }, "Conferência da Fatura")
+              h('button', { className: faturaViewTab === "conferencia" ? "active" : "", onClick: () => { setFaturaViewTab("conferencia"); setConferenciaSelecionada(null); setConferenciaItensSelecionados([]); setConferenciaFaturas([]); setConferenciaConsultada(false); setConferenciaErro(""); carregarLayoutsFaturaPDF(); } }, "Conferência da Fatura")
             )
           ),
 
@@ -5403,7 +5429,7 @@
                 ),
                 h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
                   h('button', { type: 'button', className: 'action-btn delete', onClick: () => excluirConferenciaFatura(conferenciaSelecionada), disabled: conferenciaCarregando }, h(Trash2, { size: 14 }), ' Excluir fatura'),
-                  h('button', { type: 'button', className: 'action-btn', onClick: () => { setConferenciaSelecionada(null); setConferenciaErro(''); } }, 'Voltar às faturas')
+                  h('button', { type: 'button', className: 'action-btn', onClick: () => { setConferenciaSelecionada(null); setConferenciaItensSelecionados([]); setConferenciaErro(''); } }, 'Voltar às faturas')
                 )
               ),
               (() => {
@@ -5426,7 +5452,19 @@
                     ))
                   ),
                   itens.length > 0
-                    ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+                    ? h(React.Fragment, null,
+                        h('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 10, marginBottom: 8, border: '1px solid var(--line)', borderRadius: 7, background: 'var(--card)' } },
+                          h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer' } },
+                            h('input', { type: 'checkbox', checked: itens.length > 0 && conferenciaItensSelecionados.length === itens.length, onChange: e => setConferenciaItensSelecionados(e.target.checked ? itens.map((item, index) => String(item && item.id != null ? item.id : index)) : []), disabled: conferenciaCarregando }),
+                            'Selecionar todos'
+                          ),
+                          h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaItensSelecionados.length + ' selecionado(s)'),
+                          h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                            h('button', { type: 'button', className: 'primary', disabled: !conferenciaItensSelecionados.length || conferenciaCarregando, onClick: () => atualizarConferenciaItensEmLote(conferenciaSelecionada, conferenciaItensSelecionados, { conferido: true, ignorado: false }), style: { padding: '7px 10px', fontSize: 12 } }, 'Conferir selecionados'),
+                            h('button', { type: 'button', className: 'action-btn', disabled: !conferenciaItensSelecionados.length || conferenciaCarregando, onClick: () => atualizarConferenciaItensEmLote(conferenciaSelecionada, conferenciaItensSelecionados, { ignorado: true, conferido: false }), style: { padding: '7px 10px', fontSize: 12, color: 'var(--red)' } }, 'Ignorar selecionados')
+                          )
+                        ),
+                        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
                         itens.map((item, index) => {
                           const registro = item || {};
                           const valor = Number(registro.valor) || 0;
@@ -5435,8 +5473,9 @@
                           const parcela = registro.parcela ? ' • Parcela ' + String(registro.parcela) : '';
                           const cartao = registro.cartao ? ' • ' + String(registro.cartao) : '';
                           const itemId = registro.id != null ? registro.id : index;
-                          return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, background: 'var(--card)', opacity: registro.ignorado ? 0.48 : (registro.conferido ? 0.72 : 1) } },
-                            h('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, alignItems: 'start' } },
+                          return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, background: conferenciaItensSelecionados.includes(String(itemId)) ? 'var(--paper)' : 'var(--card)', opacity: registro.ignorado ? 0.48 : (registro.conferido ? 0.72 : 1) } },
+                            h('div', { style: { display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto', gap: 8, alignItems: 'start' } },
+                              h('input', { type: 'checkbox', checked: conferenciaItensSelecionados.includes(String(itemId)), onChange: e => setConferenciaItensSelecionados(prev => e.target.checked ? [...prev, String(itemId)] : prev.filter(id => id !== String(itemId))), disabled: conferenciaCarregando, style: { marginTop: 3 } }),
                               h('div', { style: { minWidth: 0 } },
                                 h('strong', { style: { display: 'block', overflowWrap: 'anywhere' } }, descricao),
                                 h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 } }, dataTexto + parcela + cartao)
@@ -5453,6 +5492,7 @@
                             )
                           );
                         })
+                        )
                       )
                     : h('div', { style: { padding: 20, textAlign: 'center', border: '1px solid var(--line)', borderRadius: 7, color: 'var(--ink-soft)' } }, 'Esta fatura não possui registros salvos para exibir.')
                 );
