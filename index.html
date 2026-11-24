@@ -840,9 +840,8 @@
           const vistaDigest = new DataView(digest);
           let hash = "";
           for (let i = 0; i < vistaDigest.byteLength; i++) hash += vistaDigest.getUint8(i).toString(16).padStart(2, "0");
-          const { data: existente, error: erroBusca } = await supabaseClient.from("conferencia_faturas_pdf").select("id").eq("user_id", session.user.id).eq("hash_pdf", hash).maybeSingle();
+          const { data: existente, error: erroBusca } = await supabaseClient.from("conferencia_faturas_pdf").select("id,itens").eq("user_id", session.user.id).eq("hash_pdf", hash).maybeSingle();
           if (erroBusca) throw erroBusca;
-          if (existente) return;
           let pdfBase64 = "";
           if (file.size <= 6 * 1024 * 1024) {
             pdfBase64 = await new Promise((resolve, reject) => {
@@ -867,11 +866,30 @@
             secao: item.secao || "", competencia: item.competencia || competencia || "",
             conferido: false, lancamentoId: ""
           }));
-          const { error } = await supabaseClient.from("conferencia_faturas_pdf").insert({
-            user_id: session.user.id, hash_pdf: hash, nome_arquivo: file.name, competencia,
-            cartao_nome: itensConferencia.find(x => x.cartao)?.cartao || "", pdf_base64: pdfBase64, itens: itensConferencia
-          });
-          if (error && error.code !== "23505") throw error;
+          if (existente) {
+            // Reimportar o mesmo PDF atualiza a leitura arquivada com correções do leitor,
+            // preservando o que já foi conferido/ignorado pelo usuário.
+            let itensAntigos = existente.itens;
+            if (typeof itensAntigos === "string") {
+              try { itensAntigos = JSON.parse(itensAntigos); } catch (_) { itensAntigos = []; }
+            }
+            const chaveItem = x => [x.data || "", String(x.descricao || "").trim().toUpperCase(), Number(x.valor || 0).toFixed(2), x.parcela || "", x.cartaoUltimos4 || x.cartao || ""].join("|");
+            const anteriores = new Map((Array.isArray(itensAntigos) ? itensAntigos : []).map(x => [chaveItem(x), x]));
+            const itensAtualizados = itensConferencia.map(x => {
+              const anterior = anteriores.get(chaveItem(x));
+              return anterior ? { ...x, conferido: !!anterior.conferido, ignorado: !!anterior.ignorado, lancamentoId: anterior.lancamentoId || "" } : x;
+            });
+            const { error } = await supabaseClient.from("conferencia_faturas_pdf")
+              .update({ itens: itensAtualizados, atualizado_em: new Date().toISOString() })
+              .eq("id", existente.id).eq("user_id", session.user.id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabaseClient.from("conferencia_faturas_pdf").insert({
+              user_id: session.user.id, hash_pdf: hash, nome_arquivo: file.name, competencia,
+              cartao_nome: itensConferencia.find(x => x.cartao)?.cartao || "", pdf_base64: pdfBase64, itens: itensConferencia
+            });
+            if (error && error.code !== "23505") throw error;
+          }
         } catch (e) { console.warn("[FoundMyApp] Não foi possível arquivar o PDF para conferência:", e); }
       }
 
@@ -2309,10 +2327,25 @@
               else if (normal.includes("despesas")) contextoAtual.secao = "Despesas";
               else if (normal.includes("pagamento e demais creditos")) contextoAtual.secao = "Pagamento e Demais Créditos";
 
-              const datas = [];
+              const datasEncontradas = [];
               const reData = /\b\d{2}\/\d{2}\b/g;
               let dm;
-              while ((dm = reData.exec(linha)) !== null) datas.push(dm.index);
+              while ((dm = reData.exec(linha)) !== null) datasEncontradas.push(dm.index);
+
+              // Em compras parceladas, o PDF traz a data da compra e depois a parcela
+              // (ex.: 10/08 LOJA 03/04 112,51). Não podemos tratar 03/04 como outra data.
+              // Uma nova compra na mesma linha só começa quando o trecho anterior já
+              // contém um valor monetário.
+              const datas = [];
+              if (datasEncontradas.length) {
+                datas.push(datasEncontradas[0]);
+                for (let i = 1; i < datasEncontradas.length; i++) {
+                  const inicioAnterior = datas[datas.length - 1];
+                  const trechoAnterior = linha.slice(inicioAnterior, datasEncontradas[i]);
+                  const possuiValor = /(?:R\$\s*)?-?\d{1,3}(?:\.\d{3})*,\d{2}|(?:R\$\s*)?-?\d+,\d{2}/.test(trechoAnterior);
+                  if (possuiValor) datas.push(datasEncontradas[i]);
+                }
+              }
 
               if (datas.length) {
                 guardarAtual();
@@ -5300,13 +5333,16 @@
               (() => {
                 const itens = Array.isArray(conferenciaSelecionada.itens) ? conferenciaSelecionada.itens : [];
                 const quantidadeConferida = itens.filter(item => item && item.conferido).length;
+                const quantidadeIgnorada = itens.filter(item => item && item.ignorado).length;
+                const quantidadePendente = itens.filter(item => item && !item.conferido && !item.ignorado).length;
                 const total = itens.reduce((soma, item) => soma + (Number(item && item.valor) || 0), 0);
                 return h(React.Fragment, null,
                   h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(115px,1fr))', gap: 8, marginBottom: 12 } },
                     [
                       ['Registros', String(itens.length)],
                       ['Conferidos', String(quantidadeConferida)],
-                      ['Pendentes', String(itens.length - quantidadeConferida)],
+                      ['Pendentes', String(quantidadePendente)],
+                      ['Ignorados', String(quantidadeIgnorada)],
                       ['Valor total', total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })]
                     ].map((d, i) => h('div', { key: i, style: { border: '1px solid var(--line)', borderRadius: 7, padding: 10 } },
                       h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, d[0]),
@@ -5323,7 +5359,7 @@
                           const parcela = registro.parcela ? ' • Parcela ' + String(registro.parcela) : '';
                           const cartao = registro.cartao ? ' • ' + String(registro.cartao) : '';
                           const itemId = registro.id != null ? registro.id : index;
-                          return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, background: 'var(--card)', opacity: registro.conferido ? 0.72 : 1 } },
+                          return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: 10, borderRadius: 6, background: 'var(--card)', opacity: registro.ignorado ? 0.48 : (registro.conferido ? 0.72 : 1) } },
                             h('div', { style: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, alignItems: 'start' } },
                               h('div', { style: { minWidth: 0 } },
                                 h('strong', { style: { display: 'block', overflowWrap: 'anywhere' } }, descricao),
@@ -5333,10 +5369,11 @@
                             ),
                             h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 } },
                               h('span', { style: { fontSize: 10, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 6px' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO/CRÉDITO' : 'COMPRA'))),
-                              valor > 0
+                              valor > 0 && !registro.ignorado
                                 ? h('button', { type: 'button', className: 'primary', style: { padding: '7px 10px', fontSize: 12 }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar')
-                                : h('span', { style: { fontSize: 11, color: 'var(--red)' } }, 'Crédito/estorno — não lançar como compra'),
-                              h('button', { type: 'button', className: 'action-btn', style: { padding: '7px 10px', fontSize: 12, color: registro.conferido ? 'var(--green)' : 'var(--ink)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { conferido: !registro.conferido }) }, registro.conferido ? '✓ Conferido · Desmarcar' : 'Marcar conferido')
+                                : h('span', { style: { fontSize: 11, color: registro.ignorado ? 'var(--ink-soft)' : 'var(--red)' } }, registro.ignorado ? 'Ignorado — não será lançado' : 'Crédito/estorno — não lançar como compra'),
+                              h('button', { type: 'button', className: 'action-btn', style: { padding: '7px 10px', fontSize: 12, color: registro.conferido ? 'var(--green)' : 'var(--ink)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { conferido: !registro.conferido }) }, registro.conferido ? '✓ Conferido · Desmarcar' : 'Marcar conferido'),
+                              h('button', { type: 'button', className: 'action-btn', style: { padding: '7px 10px', fontSize: 12, color: registro.ignorado ? 'var(--green)' : 'var(--red)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { ignorado: !registro.ignorado, conferido: registro.ignorado ? registro.conferido : false }) }, registro.ignorado ? 'Restaurar' : 'Ignorar')
                             )
                           );
                         })
