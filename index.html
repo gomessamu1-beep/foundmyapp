@@ -5474,13 +5474,13 @@
                           const cartao = registro.cartao ? ' • ' + String(registro.cartao) : '';
                           const itemId = registro.id != null ? registro.id : index;
                           return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: '6px 8px', borderRadius: 6, background: conferenciaItensSelecionados.includes(String(itemId)) ? 'var(--paper)' : 'var(--card)', opacity: registro.ignorado ? 0.48 : (registro.conferido ? 0.72 : 1) } },
-                            h('div', { style: { display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap' } },
+                            h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', width: '100%', minWidth: 0, boxSizing: 'border-box' } },
                               h('input', { type: 'checkbox', checked: conferenciaItensSelecionados.includes(String(itemId)), onChange: e => setConferenciaItensSelecionados(prev => e.target.checked ? [...prev, String(itemId)] : prev.filter(id => id !== String(itemId))), disabled: conferenciaCarregando, style: { flex: '0 0 auto' } }),
-                              h('div', { style: { flex: '0 1 22%', width: '22%', maxWidth: '22%', minWidth: 70, lineHeight: 1.15 } },
+                              h('div', { style: { flex: '1 1 130px', width: 'auto', maxWidth: 'none', minWidth: 0, lineHeight: 1.15 } },
                                 h('strong', { style: { display: 'block', overflowWrap: 'anywhere' } }, descricao),
                                 h('div', { style: { fontSize: 9, color: 'var(--ink-soft)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, dataTexto + parcela + cartao)
                               ),
-                              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, flex: '0 0 auto', flexWrap: 'nowrap', marginLeft: 'auto' } },
+                              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, flex: '0 1 auto', flexWrap: 'wrap', marginLeft: 'auto', minWidth: 0, maxWidth: '100%' } },
                                 h('strong', { className: 'num', style: { whiteSpace: 'nowrap', marginRight: 4 } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })),
                                 h('span', { style: { fontSize: 10, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 6px' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO/CRÉDITO' : 'COMPRA'))),
                                 valor > 0 && !registro.ignorado
