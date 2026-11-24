@@ -757,6 +757,40 @@
         }
       }
 
+      async function excluirConferenciaFatura(fatura) {
+        if (!fatura?.id || !supabaseClient) {
+          setConferenciaErro("Não foi possível identificar a fatura para exclusão.");
+          return;
+        }
+        const nome = String(fatura.nome_arquivo || "esta fatura");
+        const confirmar = window.confirm(
+          "Excluir " + nome + " da Conferência da Fatura?\\n\\n" +
+          "Serão removidos somente o PDF arquivado e os registros desta conferência. " +
+          "Os lançamentos financeiros já importados no sistema NÃO serão excluídos."
+        );
+        if (!confirmar) return;
+        try {
+          setConferenciaCarregando(true);
+          setConferenciaErro("");
+          const { data: usuarioAtual, error: erroUsuario } = await supabaseClient.auth.getUser();
+          const usuarioId = usuarioAtual?.user?.id || session?.user?.id;
+          if (erroUsuario || !usuarioId) throw erroUsuario || new Error("Sessão não identificada. Entre novamente no aplicativo.");
+          const { error } = await supabaseClient
+            .from("conferencia_faturas_pdf")
+            .delete()
+            .eq("id", fatura.id)
+            .eq("user_id", usuarioId);
+          if (error) throw error;
+          setConferenciaFaturas(prev => prev.filter(x => String(x.id) !== String(fatura.id)));
+          setConferenciaSelecionada(prev => prev && String(prev.id) === String(fatura.id) ? null : prev);
+        } catch (error) {
+          console.error("[FoundMyApp] Erro ao excluir fatura arquivada:", error);
+          setConferenciaErro("Não foi possível excluir a fatura: " + (error?.message || "erro desconhecido"));
+        } finally {
+          setConferenciaCarregando(false);
+        }
+      }
+
       async function abrirConferenciaFatura(fatura) {
         setConferenciaErro("");
         setConferenciaCarregando(true);
@@ -5342,7 +5376,10 @@
                         h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (f.competencia || 'Competência não identificada') + (f.cartao_nome ? ' • ' + f.cartao_nome : '')),
                         h('div', { style: { fontSize: 12, marginTop: 4 } }, feitos + ' de ' + registros.length + ' lançamentos conferidos')
                       ),
-                      h('button', { type: 'button', className: 'primary', onClick: () => abrirConferenciaFatura(f) }, 'Abrir conferência')
+                      h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                        h('button', { type: 'button', className: 'primary', onClick: () => abrirConferenciaFatura(f) }, 'Abrir conferência'),
+                        h('button', { type: 'button', className: 'action-btn delete', onClick: () => excluirConferenciaFatura(f), disabled: conferenciaCarregando, title: 'Excluir somente o arquivo da conferência' }, h(Trash2, { size: 14 }), ' Excluir')
+                      )
                     );
                   }))
             ),
@@ -5352,7 +5389,10 @@
                   h('strong', { style: { fontSize: 16 } }, String(conferenciaSelecionada.nome_arquivo || 'Fatura PDF')),
                   h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (conferenciaSelecionada.competencia || 'Competência não identificada') + (conferenciaSelecionada.cartao_nome ? ' • ' + conferenciaSelecionada.cartao_nome : ''))
                 ),
-                h('button', { type: 'button', className: 'action-btn', onClick: () => { setConferenciaSelecionada(null); setConferenciaErro(''); } }, 'Voltar às faturas')
+                h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                  h('button', { type: 'button', className: 'action-btn delete', onClick: () => excluirConferenciaFatura(conferenciaSelecionada), disabled: conferenciaCarregando }, h(Trash2, { size: 14 }), ' Excluir fatura'),
+                  h('button', { type: 'button', className: 'action-btn', onClick: () => { setConferenciaSelecionada(null); setConferenciaErro(''); } }, 'Voltar às faturas')
+                )
               ),
               (() => {
                 const itens = Array.isArray(conferenciaSelecionada.itens) ? conferenciaSelecionada.itens : [];
