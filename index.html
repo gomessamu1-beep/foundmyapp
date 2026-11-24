@@ -433,6 +433,7 @@
       const [pdfModalOpen, setPdfModalOpen] = useState(false);
       const [pdfLayouts, setPdfLayouts] = useState([]);
       const [pdfLayoutSelecionado, setPdfLayoutSelecionado] = useState("");
+      const [pdfCompetenciaSelecionada, setPdfCompetenciaSelecionada] = useState("");
       const [pdfLayoutsCarregando, setPdfLayoutsCarregando] = useState(false);
       const [pdfPreview, setPdfPreview] = useState([]);
       const [pdfError, setPdfError] = useState("");
@@ -2325,7 +2326,8 @@
           const vencMatch = textoCompleto.match(/Vencimento\s+(\d{2}\/\d{2}\/(20\d{2}))/i);
           const vencimento = vencMatch ? vencMatch[1] : `01/01/${ano}`;
           const vm = vencimento.match(/^(\d{2})\/(\d{2})\/(20\d{2})$/);
-          const competencia = vm ? `${vm[3]}-${vm[2]}` : `${ano}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
+          const competenciaDetectada = vm ? `${vm[3]}-${vm[2]}` : `${ano}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
+          const competencia = pdfCompetenciaSelecionada || competenciaDetectada;
 
           const resultado = [];
           let secao = "";
@@ -5343,6 +5345,10 @@
               h('button', { type: 'button', className: 'action-btn', onClick: carregarConferenciaFaturas, disabled: conferenciaCarregando }, h(RefreshCw, { size: 15 }), ' Atualizar')
             ),
             h('div', { style: { display: 'flex', alignItems: 'end', gap: 10, flexWrap: 'wrap', marginBottom: 14, padding: 12, border: '1px solid var(--line)', borderRadius: 7, background: 'var(--card)' } },
+              h('div', { className: 'field', style: { margin: 0, minWidth: 180, flex: '1 1 200px' } },
+                h('label', null, 'Competência da fatura'),
+                h('input', { type: 'month', value: pdfCompetenciaSelecionada, onChange: e => setPdfCompetenciaSelecionada(e.target.value), style: { width: '100%' } })
+              ),
               h('div', { className: 'field', style: { margin: 0, minWidth: 220, flex: '1 1 240px' } },
                 h('label', null, 'Layout da fatura'),
                 h('select', {
@@ -5386,7 +5392,7 @@
             !conferenciaCarregando && conferenciaSelecionada && h(React.Fragment, null,
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
                 h('div', null,
-                  h('strong', { style: { fontSize: 16 } }, String(conferenciaSelecionada.nome_arquivo || 'Fatura PDF')),
+                  h('strong', { style: { fontSize: 16 } }, String(conferenciaSelecionada.competencia || 'Competência não informada')),
                   h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (conferenciaSelecionada.competencia || 'Competência não identificada') + (conferenciaSelecionada.cartao_nome ? ' • ' + conferenciaSelecionada.cartao_nome : ''))
                 ),
                 h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
