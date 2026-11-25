@@ -5616,21 +5616,24 @@
                           const registro = item || {};
                           const valor = Number(registro.valor) || 0;
                           const descricao = String(registro.descricao || 'Registro sem descrição');
-                          const dataTexto = String(registro.data || 'Data não informada');
+                          const dataBruta = String(registro.data || '');
+                          const dataTexto = dataBruta
+                            ? (dataBruta.match(/^(\d{4})-(\d{2})-(\d{2})/) ? dataBruta.replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3/$2/$1') : dataBruta)
+                            : 'Data não informada';
                           const parcela = registro.parcela ? ' • Parcela ' + String(registro.parcela) : '';
                           const cartao = registro.cartao ? ' • ' + String(registro.cartao) : '';
                           const itemId = registro.id != null ? registro.id : index;
                           return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: '7px 8px', borderRadius: 6, background: conferenciaItensSelecionados.includes(String(itemId)) ? 'var(--paper)' : 'var(--card)', opacity: registro.ignorado ? 0.48 : (registro.conferido ? 0.72 : 1), minWidth: 0 } },
-                            h('div', { style: { display: 'grid', gridTemplateColumns: '24px 62px minmax(0, 1fr) 88px', alignItems: 'center', columnGap: 6, width: '100%', minWidth: 0, boxSizing: 'border-box' } },
+                            h('div', { style: { display: 'grid', gridTemplateColumns: '24px 62px 104px minmax(0, 1fr)', alignItems: 'center', columnGap: 6, width: '100%', minWidth: 0, boxSizing: 'border-box' } },
                               h('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 0 } },
                                 h('input', { type: 'checkbox', checked: conferenciaItensSelecionados.includes(String(itemId)), onChange: e => setConferenciaItensSelecionados(prev => e.target.checked ? [...prev, String(itemId)] : prev.filter(id => id !== String(itemId))), disabled: conferenciaCarregando, style: { margin: 0, cursor: 'pointer' } })
                               ),
                               h('div', { style: { fontSize: 10, color: 'var(--ink-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' } }, dataTexto),
+                              h('strong', { className: 'num', style: { minWidth: 0, width: '100%', textAlign: 'center', justifySelf: 'center', whiteSpace: 'nowrap', fontSize: 11, fontVariantNumeric: 'tabular-nums' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })),
                               h('div', { style: { minWidth: 0, lineHeight: 1.15 } },
                                 h('strong', { style: { display: 'block', overflowWrap: 'anywhere', fontSize: 12 } }, descricao),
                                 h('div', { style: { fontSize: 9, color: 'var(--ink-soft)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, [parcela.replace(/^ • /, ''), cartao.replace(/^ • /, '')].filter(Boolean).join(' • '))
-                              ),
-                              h('strong', { className: 'num', style: { minWidth: 0, textAlign: 'center', justifySelf: 'center', whiteSpace: 'nowrap', fontSize: 11, fontVariantNumeric: 'tabular-nums' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
+                              )
                             ),
                             h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 5, marginTop: 6, paddingLeft: 30, minWidth: 0 } },
                               h('span', { style: { fontSize: 9, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 5px', marginRight: 'auto' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO/CRÉDITO' : 'COMPRA'))),
