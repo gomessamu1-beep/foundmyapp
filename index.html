@@ -5511,11 +5511,11 @@
                                 h('strong', { style: { display: 'block', overflowWrap: 'anywhere' } }, descricao),
                                 h('div', { style: { fontSize: 9, color: 'var(--ink-soft)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, dataTexto + parcela + cartao)
                               ),
-                              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, flex: '0 1 auto', flexWrap: 'wrap', marginLeft: 'auto', minWidth: 0, maxWidth: '100%' } },
-                                h('strong', { className: 'num', style: { whiteSpace: 'nowrap', marginRight: 4 } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })),
+                              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5, flex: '1 1 100%', width: '100%', boxSizing: 'border-box', flexWrap: 'wrap', marginLeft: 0, minWidth: 0, maxWidth: '100%', paddingLeft: 34 } },
+                                h('strong', { className: 'num', style: { flex: '0 0 88px', width: 88, boxSizing: 'border-box', textAlign: 'right', whiteSpace: 'nowrap', marginRight: 'auto' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })),
                                 h('span', { style: { fontSize: 10, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 6px' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO/CRÉDITO' : 'COMPRA'))),
                                 valor > 0 && !registro.ignorado
-                                  ? h('button', { type: 'button', className: 'primary', style: { padding: '4px 6px', fontSize: 9 }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar')
+                                  ? h('button', { type: 'button', className: 'primary', style: { padding: '4px 5px', fontSize: 9, whiteSpace: 'nowrap', flex: '0 0 auto' }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar')
                                   : h('span', { style: { fontSize: 11, color: registro.ignorado ? 'var(--ink-soft)' : 'var(--red)' } }, registro.ignorado ? 'Ignorado' : 'Crédito/estorno'),
                                 h('button', { type: 'button', className: 'action-btn', style: { padding: '4px 6px', fontSize: 9, color: registro.conferido ? 'var(--green)' : 'var(--ink)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { conferido: !registro.conferido }) }, registro.conferido ? '✓ Conferido' : 'Conferir'),
                                 h('button', { type: 'button', className: 'action-btn', style: { padding: '6px 9px', fontSize: 11, color: registro.ignorado ? 'var(--green)' : 'var(--red)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { ignorado: !registro.ignorado, conferido: registro.ignorado ? registro.conferido : false }) }, registro.ignorado ? 'Restaurar' : 'Ignorar')
