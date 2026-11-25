@@ -983,6 +983,33 @@
         } catch (e) { console.warn("[FoundMyApp] Não foi possível arquivar o PDF para conferência:", e); }
       }
 
+      function getResumoValoresConferencia(competencia, cartaoNome) {
+        const normalizar = valor => String(valor || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLowerCase();
+        const faturasCorrespondentes = (conferenciaFaturas || []).filter(f =>
+          String(f.competencia || '').slice(0, 7) === String(competencia || '').slice(0, 7) &&
+          normalizar(f.cartao_nome) === normalizar(cartaoNome)
+        );
+        const itens = faturasCorrespondentes.flatMap(f => Array.isArray(f.itens) ? f.itens : []);
+        const soma = filtro => itens.filter(filtro).reduce((total, item) => total + (Number(item && item.valor) || 0), 0);
+        return {
+          conferido: soma(item => item && item.conferido && !item.ignorado),
+          ignorado: soma(item => item && item.ignorado),
+          pendente: soma(item => item && !item.conferido && !item.ignorado),
+          quantidade: itens.length
+        };
+      }
+      function renderResumoValoresConferencia(resumo) {
+        const dinheiro = valor => Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        return h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(115px,1fr))', gap: 6, marginTop: 8 } },
+          [['Conferidos', resumo.conferido], ['Ignorados', resumo.ignorado], ['Não conferidos', resumo.pendente]].map((d, i) =>
+            h('div', { key: i, style: { border: '1px solid var(--line)', borderRadius: 6, padding: '6px 8px', background: 'var(--card)' } },
+              h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, d[0]),
+              h('strong', { style: { display: 'block', fontSize: 12, marginTop: 3 } }, dinheiro(d[1]))
+            )
+          )
+        );
+      }
+
       function getCartao(id) { return cartoes.find(c => c.id === id) || null; }
       function getConta(id) { return contasBancarias.find(c => c.id === id) || null; }
       function getCategoria(id) { return categorias.find(cat => cat.id === id) || null; }
@@ -4670,7 +4697,7 @@
             h('div', { className: 'sidebar-nav' },
               h('button', { className: screen === "cadastros" ? "active" : "", onClick: () => { setScreen("cadastros"); setMenuMobileOpen(false); } }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
               h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => { setScreen("lancamentos"); setLancamentoTab(""); setMenuMobileOpen(false); } }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
-              h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setFaturaViewTab("lancamentos"); setMenuMobileOpen(false); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
+              h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setFaturaViewTab("lancamentos"); setMenuMobileOpen(false); carregarConferenciaFaturas(); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
               h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => { setScreen("relatorios"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
               h('button', { className: screen === "conciliacao" ? "active" : "", onClick: () => { setScreen("conciliacao"); setMenuMobileOpen(false); } }, h(RefreshCw, { size: 18 }), h('span', { className: 'nav-text' }, "Conciliação Bancária")),
               h('button', { className: screen === "contabilidade" ? "active" : "", onClick: () => { setScreen("contabilidade"); setContabTab("plano"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Contabilidade")),
@@ -5440,7 +5467,8 @@
                       h('div', { className: 'list-item-main' },
                         h('div', { style: { fontWeight: 700 } }, f.competencia || 'Competência não informada'),
                         h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 } }, (f.competencia || 'Competência não identificada') + (f.cartao_nome ? ' • ' + f.cartao_nome : '')),
-                        h('div', { style: { fontSize: 12, marginTop: 4 } }, feitos + ' de ' + registros.length + ' lançamentos conferidos')
+                        h('div', { style: { fontSize: 12, marginTop: 4 } }, feitos + ' de ' + registros.length + ' lançamentos conferidos'),
+                        renderResumoValoresConferencia(f.competencia, f.cartao_nome)
                       ),
                       h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
                         h('button', { type: 'button', className: 'primary', onClick: () => abrirConferenciaFatura(f) }, 'Abrir conferência'),
@@ -5471,8 +5499,11 @@
                     [
                       ['Registros', String(itens.length)],
                       ['Conferidos', String(quantidadeConferida)],
-                      ['Pendentes', String(quantidadePendente)],
+                      ['Valor conferido', itens.filter(item => item && item.conferido && !item.ignorado).reduce((soma, item) => soma + (Number(item.valor) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
                       ['Ignorados', String(quantidadeIgnorada)],
+                      ['Valor ignorado', itens.filter(item => item && item.ignorado).reduce((soma, item) => soma + (Number(item.valor) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                      ['Não conferidos', String(quantidadePendente)],
+                      ['Valor não conferido', itens.filter(item => item && !item.conferido && !item.ignorado).reduce((soma, item) => soma + (Number(item.valor) || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
                       ['Valor total', total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })]
                     ].map((d, i) => h('div', { key: i, style: { border: '1px solid var(--line)', borderRadius: 7, padding: 10 } },
                       h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, d[0]),
@@ -5537,7 +5568,20 @@
             h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 20 } }, h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) - 1).toString()) }, h(ChevronLeft)), h('div', { style: { fontSize: 22, fontWeight: 'bold' } }, faturaAno), h('button', { className: 'action-btn', onClick: () => setFaturaAno(a => (parseInt(a) + 1).toString()) }, h(ChevronRight))),
             h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' } }, Array.from({ length: 12 }).map((_, i) => {
               const mesNum = String(i + 1).padStart(2, "0"); const compStr = `${faturaAno}-${mesNum}`; const dataFat = faturasAgrupadas.find(f => f.competencia === compStr); const total = dataFat ? dataFat.total : 0; const qtd = dataFat ? dataFat.qtd : 0; const fechada = isFaturaFechada(compStr); const isSelectedComp = month === compStr; const dateParaNome = new Date(parseInt(faturaAno), i, 1); const nomeMes = dateParaNome.toLocaleDateString('pt-BR', { month: 'long' });
-              return h('div', { key: compStr, className: 'list-item clickable', onClick: () => setMonth(compStr), style: { borderColor: isSelectedComp ? 'var(--green)' : 'var(--line)', background: isSelectedComp ? 'var(--paper)' : '#fff', borderWidth: isSelectedComp ? '2px' : '1px', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 12px' } }, h('div', { style: { fontSize: 14, fontWeight: 'bold', textTransform: 'capitalize', marginBottom: 8 } }, nomeMes), h('div', { className: 'num', style: { fontSize: 18, fontWeight: 'bold', color: total > 0 ? 'var(--ink)' : 'var(--ink-soft)' } }, showMoney(total)), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, `${qtd} lançamento(s)`), h('div', { style: { display: 'flex', gap: 6, marginTop: 12, minHeight: 28 } }, h('button', { type: 'button', className: 'action-btn', style: { padding: '4px 8px', background: fechada ? 'var(--amber-soft)' : '#fff', borderColor: fechada ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => { e.stopPropagation(); toggleFaturaFechada(compStr, e); } }, fechada ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14, color: 'var(--green)' }))));
+              return h('div', { key: compStr, className: 'list-item clickable', onClick: () => setMonth(compStr), style: { borderColor: isSelectedComp ? 'var(--green)' : 'var(--line)', background: isSelectedComp ? 'var(--paper)' : '#fff', borderWidth: isSelectedComp ? '2px' : '1px', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 12px' } }, h('div', { style: { fontSize: 14, fontWeight: 'bold', textTransform: 'capitalize', marginBottom: 8 } }, nomeMes), h('div', { className: 'num', style: { fontSize: 18, fontWeight: 'bold', color: total > 0 ? 'var(--ink)' : 'var(--ink-soft)' } }, showMoney(total)), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, `${qtd} lançamento(s)`),
+                (() => {
+                  const resumosMes = (conferenciaFaturas || []).filter(f => String(f.competencia || '').slice(0, 7) === compStr && Array.isArray(f.itens) && f.itens.length)
+                    .map(f => ({ nome: f.cartao_nome || 'Cartão não identificado', resumo: getResumoValoresConferencia(compStr, f.cartao_nome) }));
+                  const unicos = [...new Map(resumosMes.map(x => [x.nome, x])).values()];
+                  return unicos.length ? h('div', { style: { width: '100%', marginTop: 8, textAlign: 'left' } },
+                    unicos.map(x => h('div', { key: x.nome, style: { fontSize: 10, marginTop: 4, borderTop: '1px solid var(--line)', paddingTop: 4 } },
+                      h('div', { style: { fontWeight: 600, marginBottom: 3 } }, x.nome),
+                      h('div', null, 'Conf.: ' + showMoney(x.resumo.conferido) + ' • Ign.: ' + showMoney(x.resumo.ignorado)),
+                      h('div', null, 'Pendente: ' + showMoney(x.resumo.pendente))
+                    ))
+                  ) : null;
+                })(),
+                h('div', { style: { display: 'flex', gap: 6, marginTop: 12, minHeight: 28 } }, h('button', { type: 'button', className: 'action-btn', style: { padding: '4px 8px', background: fechada ? 'var(--amber-soft)' : '#fff', borderColor: fechada ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => { e.stopPropagation(); toggleFaturaFechada(compStr, e); } }, fechada ? h(Lock, { size: 14, color: 'var(--amber)' }) : h(Unlock, { size: 14, color: 'var(--green)' }))));
             })),
             h('div', { style: { marginTop: 24, borderTop: '2px solid var(--line)', paddingTop: 16 } },
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
@@ -5558,6 +5602,17 @@
                   )
               ),
 
+              (() => {
+                const cartoesDaFatura = [...new Set(installmentsForMonth.map(p => getCartao(p.cartaoId)?.nome).filter(Boolean))];
+                const resumos = cartoesDaFatura.map(nome => ({ nome, resumo: getResumoValoresConferencia(month, nome) })).filter(x => x.resumo.quantidade > 0);
+                return resumos.length ? h('div', { style: { marginBottom: 12, padding: 10, border: '1px solid var(--line)', borderRadius: 7 } },
+                  h('strong', { style: { fontSize: 13 } }, 'Conferência do PDF por cartão'),
+                  resumos.map(x => h('div', { key: x.nome, style: { marginTop: 7 } },
+                    h('div', { style: { fontSize: 12, fontWeight: 600 } }, x.nome),
+                    renderResumoValoresConferencia(x.resumo)
+                  ))
+                ) : null;
+              })(),
               installmentsForMonth.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, padding: '16px 0' } }, "Nenhum lançamento para esta fatura.") : h('table', null,
                 h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonth.length > 0 && selectedCartaoIds.length === installmentsForMonth.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'right' }, "Acréscimo"), h('th', { className: 'right' }, "Desconto"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
                 h('tbody', null, installmentsForMonth.map((p) => {
