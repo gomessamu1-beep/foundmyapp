@@ -5617,7 +5617,9 @@
                                 valor > 0 && !registro.ignorado && !registro.conferido
                                   ? h('button', { type: 'button', className: 'primary', style: { padding: '4px 7px', minWidth: 84, boxSizing: 'border-box', textAlign: 'center', fontSize: 9, whiteSpace: 'nowrap', flex: '0 0 84px' }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar')
                                   : h('span', { style: { minWidth: 84, flex: '0 0 84px', boxSizing: 'border-box', textAlign: 'center', fontSize: 10, whiteSpace: 'nowrap', color: registro.ignorado || registro.conferido ? 'var(--ink-soft)' : 'var(--red)' } }, registro.ignorado ? 'Ignorado' : registro.conferido ? 'Conferido' : 'Crédito/estorno'),
-                                h('button', { type: 'button', className: 'action-btn', style: { padding: '4px 6px', fontSize: 9, color: registro.conferido ? 'var(--green)' : 'var(--ink)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { conferido: !registro.conferido }) }, registro.conferido ? '✓ Conferido' : 'Conferir'),
+                                !registro.conferido
+                                   ? h('button', { type: 'button', className: 'action-btn', style: { padding: '4px 6px', fontSize: 9 }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { conferido: true }) }, 'Conferir')
+                                   : h('span', { style: { minWidth: 66, textAlign: 'center', color: 'var(--green)', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' } }, '✓ Conferido'),
                                 h('button', { type: 'button', className: 'action-btn', style: { padding: '6px 9px', fontSize: 11, color: registro.ignorado ? 'var(--green)' : 'var(--red)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { ignorado: !registro.ignorado, conferido: registro.ignorado ? registro.conferido : false }) }, registro.ignorado ? 'Restaurar' : 'Ignorar')
                               )
                             )
