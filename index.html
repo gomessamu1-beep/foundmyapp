@@ -4732,15 +4732,6 @@
 
         screen === 'faturas' && faturaViewTab === 'conferencia' && conferenciaSelecionada && h('button', {
           type: 'button',
-          className: 'floating-conference-launch',
-          title: 'Lançar os registros selecionados',
-          'aria-label': 'Lançar selecionados',
-          disabled: conferenciaItensSelecionados.length === 0 || conferenciaCarregando,
-          onClick: prepararLancamentosConferenciaSelecionados
-        }, h(Plus, { size: 18 }), ' Lançar'),
-
-        screen === 'faturas' && faturaViewTab === 'conferencia' && conferenciaSelecionada && h('button', {
-          type: 'button',
           className: 'floating-conference-check',
           title: 'Marcar os registros selecionados como conferidos',
           'aria-label': 'Conferir selecionados',
