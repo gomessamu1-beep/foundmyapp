@@ -238,6 +238,7 @@
       const [conferenciaCarregando, setConferenciaCarregando] = useState(false);
       const [conferenciaConsultada, setConferenciaConsultada] = useState(false);
       const [conferenciaItensSelecionados, setConferenciaItensSelecionados] = useState([]);
+      const [conferenciaFiltroExibicao, setConferenciaFiltroExibicao] = useState("todos");
       const [conferenciaErro, setConferenciaErro] = useState("");
       const [menuMobileOpen, setMenuMobileOpen] = useState(false);
       const [cadastroTab, setCadastroTab] = useState(() => sessionStorage.getItem('fatura-cadtab-v1') || "cartoes");
@@ -5564,7 +5565,13 @@
               ),
               (() => {
                 const itens = Array.isArray(conferenciaSelecionada.itens) ? conferenciaSelecionada.itens : [];
-                const quantidadeConferida = itens.filter(item => item && item.conferido).length;
+                const itensExibidos = itens.map((item, index) => ({ item, index })).filter(({ item }) => {
+                  if (conferenciaFiltroExibicao === 'conferidos') return !!(item && item.conferido && !item.ignorado);
+                  if (conferenciaFiltroExibicao === 'nao_conferidos') return !(item && (item.conferido || item.ignorado));
+                  if (conferenciaFiltroExibicao === 'ignorados') return !!(item && item.ignorado);
+                  return true;
+                });
+                const quantidadeConferida = itens.filter(item => item && item.conferido && !item.ignorado).length;
                 const quantidadeIgnorada = itens.filter(item => item && item.ignorado).length;
                 const quantidadePendente = itens.filter(item => item && !item.conferido && !item.ignorado).length;
                 const total = itens.reduce((soma, item) => soma + (Number(item && item.valor) || 0), 0);
@@ -5587,14 +5594,25 @@
                   itens.length > 0
                     ? h(React.Fragment, null,
                         h('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 10, marginBottom: 8, border: '1px solid var(--line)', borderRadius: 7, background: 'var(--card)' } },
-                          h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer' } },
-                            h('input', { type: 'checkbox', checked: itens.length > 0 && conferenciaItensSelecionados.length === itens.length, onChange: e => setConferenciaItensSelecionados(e.target.checked ? itens.map((item, index) => String(item && item.id != null ? item.id : index)) : []), disabled: conferenciaCarregando }),
-                            'Selecionar todos'
+                          h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
+                            h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer' } },
+                              h('input', { type: 'checkbox', checked: itensExibidos.length > 0 && itensExibidos.every(({ item, index }) => conferenciaItensSelecionados.includes(String(item && item.id != null ? item.id : index))), onChange: e => setConferenciaItensSelecionados(prev => e.target.checked ? Array.from(new Set([...prev, ...itensExibidos.map(({ item, index }) => String(item && item.id != null ? item.id : index))])) : prev.filter(id => !itensExibidos.some(({ item, index }) => String(item && item.id != null ? item.id : index) === id))), disabled: conferenciaCarregando || itensExibidos.length === 0 }),
+                              'Selecionar exibidos'
+                            ),
+                            h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaItensSelecionados.length + ' selecionado(s)')
                           ),
-                          h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaItensSelecionados.length + ' selecionado(s)')
+                          h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ink-soft)' } },
+                            'Exibir:',
+                            h('select', { value: conferenciaFiltroExibicao, onChange: e => setConferenciaFiltroExibicao(e.target.value), style: { padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 5, background: 'var(--card)', color: 'var(--ink)', fontSize: 12 } },
+                              h('option', { value: 'todos' }, 'Todos'),
+                              h('option', { value: 'conferidos' }, 'Somente conferidos'),
+                              h('option', { value: 'nao_conferidos' }, 'Somente não conferidos'),
+                              h('option', { value: 'ignorados' }, 'Somente ignorados')
+                            )
+                          )
                         ),
                         h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-                        itens.map((item, index) => {
+                        itensExibidos.map(({ item, index }) => {
                           const registro = item || {};
                           const valor = Number(registro.valor) || 0;
                           const descricao = String(registro.descricao || 'Registro sem descrição');
