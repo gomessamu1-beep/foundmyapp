@@ -283,6 +283,7 @@
       const [fecharFaturaSubId, setFecharFaturaSubId] = useState("");
       
       const [selectedCartaoIds, setSelectedCartaoIds] = useState([]);
+      const [filtroConciliacaoFatura, setFiltroConciliacaoFatura] = useState("todos");
       const [expandedCartaoDetailsIds, setExpandedCartaoDetailsIds] = useState([]);
       const [batchPagarIds, setBatchPagarIds] = useState([]);
       const [pagarConsultaExecutada, setPagarConsultaExecutada] = useState(false);
@@ -1056,6 +1057,13 @@
         });
         return mapped;
       }, [purchases, month, faturaOrdem]);
+
+      const installmentsForMonthExibidos = useMemo(() => installmentsForMonth.filter(p => {
+        const conferido = (p.conferidoFaturas || []).includes(`${month}:${p.index}`);
+        if (filtroConciliacaoFatura === "conciliados") return conferido;
+        if (filtroConciliacaoFatura === "nao_conciliados") return !conferido;
+        return true;
+      }), [installmentsForMonth, filtroConciliacaoFatura, month]);
 
       const contasPagarForMonth = useMemo(() => {
         const mapped = contasPagar.map(p => {
@@ -5686,7 +5694,17 @@
                   h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 8px' }, onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setAcrescimoInput(''); setDescontoInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")
                 )
               ),
-              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 10, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos: Ordem cronológica")),
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10, marginBottom: 10, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } },
+                h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos: Ordem cronológica"),
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                  h('label', { htmlFor: 'filtro-conciliacao-fatura', style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Conciliação:'),
+                  h('select', { id: 'filtro-conciliacao-fatura', value: filtroConciliacaoFatura, onChange: e => setFiltroConciliacaoFatura(e.target.value), style: { minWidth: 145, padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 5, background: '#fff' } },
+                    h('option', { value: 'todos' }, 'Todos'),
+                    h('option', { value: 'conciliados' }, 'Conciliados'),
+                    h('option', { value: 'nao_conciliados' }, 'Não conciliados')
+                  )
+                )
+              ),
               
               terminandoCartao.length > 0 && h('div', { className: 'warning-box' }, 
                 h('div', { className: 'warning-box-title' }, h(Bell, { size: 16 }), `Atenção: ${terminandoCartao.length} lançamento(s) terminando`), 
@@ -5708,9 +5726,9 @@
                   ))
                 ) : null;
               })(),
-              installmentsForMonth.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, padding: '16px 0' } }, "Nenhum lançamento para esta fatura.") : h('table', null,
-                h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonth.length > 0 && selectedCartaoIds.length === installmentsForMonth.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'right' }, "Acréscimo"), h('th', { className: 'right' }, "Desconto"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
-                h('tbody', null, installmentsForMonth.map((p) => {
+              installmentsForMonthExibidos.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, padding: '16px 0' } }, "Nenhum lançamento encontrado para este filtro.") : h('table', null,
+                h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonthExibidos.length > 0 && selectedCartaoIds.length === installmentsForMonthExibidos.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'right' }, "Acréscimo"), h('th', { className: 'right' }, "Desconto"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
+                h('tbody', null, installmentsForMonthExibidos.map((p) => {
                   const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const isSelected = selectedCartaoIds.includes(p.id); const cartao = getCartao(p.cartaoId);
                   return h('tr', { key: `fat-det-${p.id}-${p.index}`, style: { background: isSelected ? 'var(--paper)' : 'transparent' } }, h('td', { style: { textAlign: 'center' } }, h('input', { type: 'checkbox', checked: isSelected, onChange: () => toggleSelectCartaoItem(p.id), disabled: fechadaAtual })), h('td', null, formatDateBR(p.dataCompra)), h('td', null, h('div', { style: { fontWeight: '500' } }, p.descricao), p.observacao && h('details', { style: { marginTop: 4, fontSize: 11, color: 'var(--ink-soft)' } }, h('summary', { style: { cursor: 'pointer', width: 'fit-content' } }, 'Exibir detalhes'), h('div', { style: { marginTop: 4, whiteSpace: 'normal' } }, `📝 ${p.observacao}`)), cartao ? h('div', { style: { fontSize: 11, color: '#6B6355' } }, cartao.nome) : h('div', { style: { fontSize: 11, color: 'var(--red)', fontWeight: 'bold' } }, '⚠️ SEM CARTÃO')), h('td', null, cat?.nome || '-'), h('td', null, sub?.nome || '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.acrescimo || 0) ? showMoney(p.acrescimo) : '-'), h('td', { className: 'right num', style: { whiteSpace: 'nowrap' } }, Number(p.desconto || 0) ? showMoney(p.desconto) : '-'), h('td', { className: 'center' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)), h('td', { className: 'right num' }, showMoney(p.valorParcela)), h('td', { className: 'right num' }, showMoney(p.recorrente ? p.valorParcela : p.total)), h('td', { className: 'center' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } }, h('button', { type: 'button', className: 'action-btn', onClick: () => abrirEdicaoParcelaCartao(p), disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: ``, option: 'current' }), disabled: fechadaAtual, title: 'Excluir' }, h(Trash2, { size: 14 })))));
                 })),
