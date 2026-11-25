@@ -5630,7 +5630,7 @@
                                 h('strong', { style: { display: 'block', overflowWrap: 'anywhere', fontSize: 12 } }, descricao),
                                 h('div', { style: { fontSize: 9, color: 'var(--ink-soft)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, [parcela.replace(/^ • /, ''), cartao.replace(/^ • /, '')].filter(Boolean).join(' • '))
                               ),
-                              h('strong', { className: 'num', style: { minWidth: 0, textAlign: 'right', whiteSpace: 'nowrap', fontSize: 11, fontVariantNumeric: 'tabular-nums' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
+                              h('strong', { className: 'num', style: { minWidth: 0, textAlign: 'center', justifySelf: 'center', whiteSpace: 'nowrap', fontSize: 11, fontVariantNumeric: 'tabular-nums' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
                             ),
                             h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 5, marginTop: 6, paddingLeft: 30, minWidth: 0 } },
                               h('span', { style: { fontSize: 9, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 5px', marginRight: 'auto' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO/CRÉDITO' : 'COMPRA'))),
