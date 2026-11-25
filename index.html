@@ -3915,6 +3915,37 @@
       // A tela abre imediatamente e os dados são preenchidos assim que o Supabase responder.
       return h('div', { className: 'fatura-app-layout' },
         h('style', null, `
+          .floating-conference-launch,
+          .floating-conference-check,
+          .floating-conference-ignore {
+            position: fixed;
+            right: 24px;
+            z-index: 80;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            min-height: 50px;
+            padding: 0 18px;
+            border-radius: 999px;
+            box-shadow: 0 5px 18px rgba(0,0,0,.20);
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform .15s ease, box-shadow .15s ease;
+          }
+          .floating-conference-launch { bottom: calc(22px + env(safe-area-inset-bottom, 0px)); border: 1px solid #244328; background: #2F5233; color: #fff; }
+          .floating-conference-check { bottom: calc(82px + env(safe-area-inset-bottom, 0px)); border: 1px solid #244328; background: #fff; color: #244328; }
+          .floating-conference-ignore { bottom: calc(142px + env(safe-area-inset-bottom, 0px)); border: 1px solid #8C3B2E; background: #fff; color: #8C3B2E; }
+          .floating-conference-launch:hover,
+          .floating-conference-check:hover,
+          .floating-conference-ignore:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,0,0,.25); }
+          .floating-conference-launch:disabled,
+          .floating-conference-check:disabled,
+          .floating-conference-ignore:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+          .floating-conference-launch svg,
+          .floating-conference-check svg,
+          .floating-conference-ignore svg { flex-shrink: 0; }
           .floating-new-launch {
             position: fixed;
             right: 24px;
@@ -3964,6 +3995,17 @@
           .floating-check-launch:disabled { opacity: .5; cursor: not-allowed; transform: none; }
           .floating-check-launch svg { flex-shrink: 0; }
           @media (max-width: 850px) {
+            .floating-conference-launch,
+            .floating-conference-check,
+            .floating-conference-ignore {
+              right: 16px;
+              min-height: 46px;
+              padding: 0 14px;
+              font-size: 12px;
+            }
+            .floating-conference-launch { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+            .floating-conference-check { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+            .floating-conference-ignore { bottom: calc(126px + env(safe-area-inset-bottom, 0px)); }
             .floating-new-launch {
               right: 16px;
               bottom: calc(18px + env(safe-area-inset-bottom, 0px));
@@ -4687,6 +4729,33 @@
             setModalOpen(true);
           }
         }, h(Plus, { size: 19 }), ' Novo Lançamento'),
+
+        screen === 'faturas' && faturaViewTab === 'conferencia' && conferenciaSelecionada && h('button', {
+          type: 'button',
+          className: 'floating-conference-launch',
+          title: 'Lançar os registros selecionados',
+          'aria-label': 'Lançar selecionados',
+          disabled: conferenciaItensSelecionados.length === 0 || conferenciaCarregando,
+          onClick: prepararLancamentosConferenciaSelecionados
+        }, h(Plus, { size: 18 }), ' Lançar'),
+
+        screen === 'faturas' && faturaViewTab === 'conferencia' && conferenciaSelecionada && h('button', {
+          type: 'button',
+          className: 'floating-conference-check',
+          title: 'Marcar os registros selecionados como conferidos',
+          'aria-label': 'Conferir selecionados',
+          disabled: conferenciaItensSelecionados.length === 0 || conferenciaCarregando,
+          onClick: () => atualizarConferenciaItensEmLote(conferenciaSelecionada, conferenciaItensSelecionados, { conferido: true, ignorado: false })
+        }, h(CheckCircle, { size: 18 }), ' Conferir'),
+
+        screen === 'faturas' && faturaViewTab === 'conferencia' && conferenciaSelecionada && h('button', {
+          type: 'button',
+          className: 'floating-conference-ignore',
+          title: 'Ignorar os registros selecionados',
+          'aria-label': 'Ignorar selecionados',
+          disabled: conferenciaItensSelecionados.length === 0 || conferenciaCarregando,
+          onClick: () => atualizarConferenciaItensEmLote(conferenciaSelecionada, conferenciaItensSelecionados, { ignorado: true, conferido: false })
+        }, h(XIcon, { size: 18 }), ' Ignorar'),
 
         menuMobileOpen && h('div', { className: 'mobile-menu-backdrop', onClick: () => setMenuMobileOpen(false), 'aria-hidden': 'true' }),
         h('div', { className: 'sidebar' + (menuMobileOpen ? ' mobile-open' : '') },
@@ -5517,12 +5586,7 @@
                             h('input', { type: 'checkbox', checked: itens.length > 0 && conferenciaItensSelecionados.length === itens.length, onChange: e => setConferenciaItensSelecionados(e.target.checked ? itens.map((item, index) => String(item && item.id != null ? item.id : index)) : []), disabled: conferenciaCarregando }),
                             'Selecionar todos'
                           ),
-                          h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaItensSelecionados.length + ' selecionado(s)'),
-                          h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
-                            h('button', { type: 'button', className: 'primary', disabled: !conferenciaItensSelecionados.length || conferenciaCarregando, onClick: prepararLancamentosConferenciaSelecionados, style: { padding: '7px 10px', fontSize: 12 } }, 'Lançar selecionados'),
-                            h('button', { type: 'button', className: 'primary', disabled: !conferenciaItensSelecionados.length || conferenciaCarregando, onClick: () => atualizarConferenciaItensEmLote(conferenciaSelecionada, conferenciaItensSelecionados, { conferido: true, ignorado: false }), style: { padding: '7px 10px', fontSize: 12 } }, 'Conferir selecionados'),
-                            h('button', { type: 'button', className: 'action-btn', disabled: !conferenciaItensSelecionados.length || conferenciaCarregando, onClick: () => atualizarConferenciaItensEmLote(conferenciaSelecionada, conferenciaItensSelecionados, { ignorado: true, conferido: false }), style: { padding: '7px 10px', fontSize: 12, color: 'var(--red)' } }, 'Ignorar selecionados')
-                          )
+                          h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaItensSelecionados.length + ' selecionado(s)')
                         ),
                         h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
                         itens.map((item, index) => {
