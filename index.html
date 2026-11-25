@@ -5504,7 +5504,9 @@
                           const itemId = registro.id != null ? registro.id : index;
                           return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: '6px 8px', borderRadius: 6, background: conferenciaItensSelecionados.includes(String(itemId)) ? 'var(--paper)' : 'var(--card)', opacity: registro.ignorado ? 0.48 : (registro.conferido ? 0.72 : 1) } },
                             h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', width: '100%', minWidth: 0, boxSizing: 'border-box' } },
-                              h('input', { type: 'checkbox', checked: conferenciaItensSelecionados.includes(String(itemId)), onChange: e => setConferenciaItensSelecionados(prev => e.target.checked ? [...prev, String(itemId)] : prev.filter(id => id !== String(itemId))), disabled: conferenciaCarregando, style: { flex: '0 0 auto' } }),
+                              h('div', { style: { flex: '0 0 28px', width: 28, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 2, boxSizing: 'border-box' } },
+                                h('input', { type: 'checkbox', checked: conferenciaItensSelecionados.includes(String(itemId)), onChange: e => setConferenciaItensSelecionados(prev => e.target.checked ? [...prev, String(itemId)] : prev.filter(id => id !== String(itemId))), disabled: conferenciaCarregando, style: { margin: 0, cursor: 'pointer' } })
+                              ),
                               h('div', { style: { flex: '1 1 130px', width: 'auto', maxWidth: 'none', minWidth: 0, lineHeight: 1.15 } },
                                 h('strong', { style: { display: 'block', overflowWrap: 'anywhere' } }, descricao),
                                 h('div', { style: { fontSize: 9, color: 'var(--ink-soft)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, dataTexto + parcela + cartao)
