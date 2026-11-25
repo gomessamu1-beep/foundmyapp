@@ -859,11 +859,7 @@
         setConferenciaSelecionada(atualizada);
       }
 
-      function prepararLancamentoConferencia(item) {
-        if (Number(item?.valor || 0) <= 0) {
-          setConferenciaErro("Este registro é um crédito/estorno ou possui valor zero. Ele fica disponível para conferência, mas não será lançado como compra.");
-          return;
-        }
+      function montarLancamentoPreviewConferencia(item) {
         const cartao = item.cartaoUltimos4
           ? localizarCartaoPDF(item.cartaoUltimos4)
           : (cartoes || []).find(c => String(c.nome || "").toUpperCase() === String(item.cartao || "").toUpperCase()) || null;
@@ -884,9 +880,41 @@
           novoItem.duplicadoId = duplicado.id;
           novoItem.selecionado = false;
         }
+        return novoItem;
+      }
+
+      function prepararLancamentoConferencia(item) {
+        if (Number(item?.valor || 0) <= 0) {
+          setConferenciaErro("Este registro é um crédito/estorno ou possui valor zero. Ele fica disponível para conferência, mas não será lançado como compra.");
+          return;
+        }
+        const novoItem = montarLancamentoPreviewConferencia(item);
         setPdfPreview([novoItem]);
         setPdfArquivo(conferenciaSelecionada?.nome_arquivo || "Fatura arquivada");
-        setPdfError(duplicado ? "Este lançamento já consta no sistema. A importação ficará bloqueada para evitar duplicidade." : "");
+        setPdfError(novoItem.duplicado ? "Este lançamento já consta no sistema. A importação ficará bloqueada para evitar duplicidade." : "");
+        setPdfModalOpen(true);
+      }
+
+      function prepararLancamentosConferenciaSelecionados() {
+        const ids = new Set(conferenciaItensSelecionados.map(String));
+        const registros = (conferenciaSelecionada?.itens || []).filter((item, index) => {
+          const id = String(item && item.id != null ? item.id : index);
+          return ids.has(id) && Number(item?.valor || 0) > 0 && !item?.ignorado;
+        });
+        if (!registros.length) {
+          setConferenciaErro("Selecione pelo menos uma compra positiva e não ignorada para lançar.");
+          return;
+        }
+        const previews = registros.map(montarLancamentoPreviewConferencia);
+        const prontos = previews.filter(item => item.selecionado && !item.duplicado);
+        if (!prontos.length) {
+          setConferenciaErro("Os lançamentos selecionados já constam no sistema. Nenhum novo lançamento foi aberto.");
+          return;
+        }
+        setConferenciaErro("");
+        setPdfPreview(previews);
+        setPdfArquivo(conferenciaSelecionada?.nome_arquivo || "Fatura arquivada");
+        setPdfError("");
         setPdfModalOpen(true);
       }
 
@@ -5460,6 +5488,7 @@
                           ),
                           h('span', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaItensSelecionados.length + ' selecionado(s)'),
                           h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                            h('button', { type: 'button', className: 'primary', disabled: !conferenciaItensSelecionados.length || conferenciaCarregando, onClick: prepararLancamentosConferenciaSelecionados, style: { padding: '7px 10px', fontSize: 12 } }, 'Lançar selecionados'),
                             h('button', { type: 'button', className: 'primary', disabled: !conferenciaItensSelecionados.length || conferenciaCarregando, onClick: () => atualizarConferenciaItensEmLote(conferenciaSelecionada, conferenciaItensSelecionados, { conferido: true, ignorado: false }), style: { padding: '7px 10px', fontSize: 12 } }, 'Conferir selecionados'),
                             h('button', { type: 'button', className: 'action-btn', disabled: !conferenciaItensSelecionados.length || conferenciaCarregando, onClick: () => atualizarConferenciaItensEmLote(conferenciaSelecionada, conferenciaItensSelecionados, { ignorado: true, conferido: false }), style: { padding: '7px 10px', fontSize: 12, color: 'var(--red)' } }, 'Ignorar selecionados')
                           )
