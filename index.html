@@ -5332,6 +5332,20 @@
                       h('td', { className: 'cartao-category-cell' }, cat?.nome || '-'), h('td', { className: 'cartao-subcategory-cell' }, sub?.nome || '-'), h('td', { className: 'center cartao-installment-cell' }, h('span', { className: 'badge' }, p.recorrente ? 'Recorrente' : `${p.index}/${p.parcelas}`)),
                       h('td', { className: 'right num cartao-value-cell' }, showMoney(p.valorParcela)), h('td', { className: 'right num cartao-total-cell' }, showMoney(p.recorrente ? p.valorParcela : p.total)),
                       h('td', { className: 'center cartao-actions-cell' }, h('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' } },
+                        h('button', {
+                          type: 'button',
+                          className: 'action-btn',
+                          onClick: () => updatePurchases(prev => prev.map(item => item.id !== p.id ? item : {
+                            ...item,
+                            conferidoFaturas: isConferido
+                              ? (Array.isArray(item.conferidoFaturas) ? item.conferidoFaturas : []).filter(chave => chave !== `${month}:${p.index}`)
+                              : [...(Array.isArray(item.conferidoFaturas) ? item.conferidoFaturas : []), `${month}:${p.index}`]
+                          })),
+                          disabled: fechadaAtual,
+                          title: isConferido ? 'Remover conferência' : 'Conferir lançamento',
+                          'aria-label': isConferido ? 'Remover conferência' : 'Conferir lançamento',
+                          style: { color: isConferido ? 'var(--green)' : 'var(--ink-soft)' }
+                        }, h(CheckCircle, { size: 14 })),
                         h('button', { type: 'button', className: 'action-btn', onClick: () => abrirEdicaoParcelaCartao(p), disabled: fechadaAtual, title: 'Editar' }, h(Pencil, { size: 14 })),
                         h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingId(null); setDescricao(p.descricao); setObservacao(p.observacao || ''); setValorTotal(Number(p.valorBase ?? (p.total - Number(p.acrescimo || 0) + Number(p.desconto || 0))).toFixed(2).replace('.', ',')); setValorParcelaInput(Number(p.valorParcelaBase ?? ((p.recorrente ? p.valorParcela : p.total) - (Number(p.acrescimo || 0) - Number(p.desconto || 0)) / Math.max(1, Number(p.parcelas || 1)))).toFixed(2).replace('.', ',')); setAcrescimoInput(Number(p.acrescimo || 0) ? Number(p.acrescimo).toFixed(2).replace('.', ',') : ''); setDescontoInput(Number(p.desconto || 0) ? Number(p.desconto).toFixed(2).replace('.', ',') : ''); setDataLancamento(p.dataCompra || currentDate()); setFaturaMes(p.inicio || month); setParcelas(p.parcelas.toString()); setParcelaAtual((p.parcelaInicial || 1).toString()); setCartaoId(p.cartaoId || ''); setCategoriaId(p.categoriaId || ''); setSubcategoriaId(p.subcategoriaId || ''); setIsRecorrente(!!p.recorrente); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual, title: 'Duplicar' }, h(Copy, { size: 14 })),
                         h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'purchase', id: p.id, purchase: p, title: 'Excluir Lançamento', message: '', option: 'current' }), disabled: fechadaAtual, title: 'Excluir' }, h(Trash2, { size: 14 }))
