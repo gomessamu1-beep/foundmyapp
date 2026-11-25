@@ -5602,28 +5602,29 @@
                           const parcela = registro.parcela ? ' • Parcela ' + String(registro.parcela) : '';
                           const cartao = registro.cartao ? ' • ' + String(registro.cartao) : '';
                           const itemId = registro.id != null ? registro.id : index;
-                          return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: '6px 8px', borderRadius: 6, background: conferenciaItensSelecionados.includes(String(itemId)) ? 'var(--paper)' : 'var(--card)', opacity: registro.ignorado ? 0.48 : (registro.conferido ? 0.72 : 1) } },
-                            h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', width: '100%', minWidth: 0, boxSizing: 'border-box' } },
-                              h('div', { style: { flex: '0 0 28px', width: 28, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 2, boxSizing: 'border-box' } },
+                          return h('div', { key: String(itemId), style: { border: '1px solid var(--line)', padding: '7px 8px', borderRadius: 6, background: conferenciaItensSelecionados.includes(String(itemId)) ? 'var(--paper)' : 'var(--card)', opacity: registro.ignorado ? 0.48 : (registro.conferido ? 0.72 : 1), minWidth: 0 } },
+                            h('div', { style: { display: 'grid', gridTemplateColumns: '24px 62px minmax(0, 1fr) 88px', alignItems: 'center', columnGap: 6, width: '100%', minWidth: 0, boxSizing: 'border-box' } },
+                              h('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 0 } },
                                 h('input', { type: 'checkbox', checked: conferenciaItensSelecionados.includes(String(itemId)), onChange: e => setConferenciaItensSelecionados(prev => e.target.checked ? [...prev, String(itemId)] : prev.filter(id => id !== String(itemId))), disabled: conferenciaCarregando, style: { margin: 0, cursor: 'pointer' } })
                               ),
-                              h('div', { style: { flex: '1 1 130px', width: 'auto', maxWidth: 'none', minWidth: 0, lineHeight: 1.15 } },
-                                h('strong', { style: { display: 'block', overflowWrap: 'anywhere' } }, descricao),
-                                h('div', { style: { fontSize: 9, color: 'var(--ink-soft)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, dataTexto + parcela + cartao)
+                              h('div', { style: { fontSize: 10, color: 'var(--ink-soft)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' } }, dataTexto),
+                              h('div', { style: { minWidth: 0, lineHeight: 1.15 } },
+                                h('strong', { style: { display: 'block', overflowWrap: 'anywhere', fontSize: 12 } }, descricao),
+                                h('div', { style: { fontSize: 9, color: 'var(--ink-soft)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, [parcela.replace(/^ • /, ''), cartao.replace(/^ • /, '')].filter(Boolean).join(' • '))
                               ),
-                              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5, flex: '1 1 100%', width: '100%', boxSizing: 'border-box', flexWrap: 'wrap', marginLeft: 0, minWidth: 0, maxWidth: '100%', paddingLeft: 34 } },
-                                h('strong', { className: 'num', style: { flex: '0 0 88px', width: 88, boxSizing: 'border-box', textAlign: 'right', whiteSpace: 'nowrap', marginRight: 'auto' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })),
-                                h('span', { style: { fontSize: 10, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 6px' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO/CRÉDITO' : 'COMPRA'))),
-                                registro.ignorado || registro.conferido
-                                  ? h('span', { style: { minWidth: 84, flex: '0 0 84px', boxSizing: 'border-box', textAlign: 'center', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', color: registro.ignorado ? 'var(--ink-soft)' : 'var(--green)' } }, registro.ignorado ? 'Ignorado' : 'Conferido')
-                                  : valor > 0
-                                    ? h('button', { type: 'button', className: 'primary', style: { padding: '4px 7px', minWidth: 84, boxSizing: 'border-box', textAlign: 'center', fontSize: 9, whiteSpace: 'nowrap', flex: '0 0 84px' }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar')
-                                    : h('span', { style: { minWidth: 84, flex: '0 0 84px', boxSizing: 'border-box', textAlign: 'center', fontSize: 10, whiteSpace: 'nowrap', color: 'var(--red)' } }, 'Crédito/estorno'),
-                                !registro.ignorado && !registro.conferido && valor > 0
-                                  ? h('button', { type: 'button', className: 'action-btn', style: { padding: '4px 6px', fontSize: 9 }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { conferido: true }) }, 'Conferir')
-                                  : null,
-                                h('button', { type: 'button', className: 'action-btn', style: { padding: '6px 9px', fontSize: 11, color: registro.ignorado || registro.conferido ? 'var(--green)' : 'var(--red)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, registro.ignorado || registro.conferido ? { ignorado: false, conferido: false } : { ignorado: true, conferido: false }) }, registro.ignorado || registro.conferido ? 'Restaurar' : 'Ignorar')
-                              )
+                              h('strong', { className: 'num', style: { minWidth: 0, textAlign: 'right', whiteSpace: 'nowrap', fontSize: 11, fontVariantNumeric: 'tabular-nums' } }, valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))
+                            ),
+                            h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 5, marginTop: 6, paddingLeft: 30, minWidth: 0 } },
+                              h('span', { style: { fontSize: 9, border: '1px solid var(--line)', borderRadius: 4, padding: '3px 5px', marginRight: 'auto' } }, String(registro.natureza || (valor < 0 ? 'ESTORNO/CRÉDITO' : 'COMPRA'))),
+                              registro.ignorado || registro.conferido
+                                ? h('span', { style: { minWidth: 76, textAlign: 'center', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', color: registro.ignorado ? 'var(--ink-soft)' : 'var(--green)' } }, registro.ignorado ? 'Ignorado' : 'Conferido')
+                                : valor > 0
+                                  ? h('button', { type: 'button', className: 'primary', style: { padding: '4px 7px', minWidth: 70, boxSizing: 'border-box', textAlign: 'center', fontSize: 9, whiteSpace: 'nowrap' }, onClick: () => prepararLancamentoConferencia(registro) }, 'Lançar')
+                                  : h('span', { style: { minWidth: 76, textAlign: 'center', fontSize: 9, whiteSpace: 'nowrap', color: 'var(--red)' } }, 'Crédito/estorno'),
+                              !registro.ignorado && !registro.conferido && valor > 0
+                                ? h('button', { type: 'button', className: 'action-btn', style: { padding: '4px 6px', fontSize: 9 }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, { conferido: true }) }, 'Conferir')
+                                : null,
+                              h('button', { type: 'button', className: 'action-btn', style: { padding: '5px 8px', fontSize: 10, color: registro.ignorado || registro.conferido ? 'var(--green)' : 'var(--red)' }, onClick: () => atualizarConferenciaItem(conferenciaSelecionada, itemId, registro.ignorado || registro.conferido ? { ignorado: false, conferido: false } : { ignorado: true, conferido: false }) }, registro.ignorado || registro.conferido ? 'Restaurar' : 'Ignorar')
                             )
                           );
                         })
