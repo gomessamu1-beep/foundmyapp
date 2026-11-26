@@ -5273,7 +5273,17 @@
                   )
                 ),
                 h('div', { className: 'nav-month' }, h('button', { onClick: () => setMonth((m) => addMonths(m, -1)) }, h(ChevronLeft)), h('div', { className: 'month-label' }, formatMonthLabel(month)), h('button', { onClick: () => setMonth((m) => addMonths(m, 1)) }, h(ChevronRight))),
-                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } }, h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos: Ordem cronológica")),
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12, marginBottom: 8, background: '#FAF8F2', padding: '8px 12px', borderRadius: 5, border: '1px solid var(--line)' } },
+                  h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Exibição dos lançamentos: Ordem cronológica"),
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                    h('label', { htmlFor: 'filtro-conciliacao-lancamentos', style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Conciliação:'),
+                    h('select', { id: 'filtro-conciliacao-lancamentos', value: filtroConciliacaoFatura, onChange: e => setFiltroConciliacaoFatura(e.target.value), style: { minWidth: 145, padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 5, background: '#fff' } },
+                      h('option', { value: 'todos' }, 'Todos'),
+                      h('option', { value: 'conciliados' }, 'Conciliados'),
+                      h('option', { value: 'nao_conciliados' }, 'Não conciliados')
+                    )
+                  )
+                ),
                 h('div', { className: 'total-mes num' }, showMoney(totalMes)),
                 h('div', { className: 'total-sub', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h('span', null, installmentsForMonth.length === 0 ? "Nenhum lançamento nesta fatura" : `${installmentsForMonth.length} lançamento(s)`), selectedCartaoIds.length > 0 && h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, h(Trash2, { size: 14 }), ` Excluir selecionados (${selectedCartaoIds.length})`)),
@@ -5293,7 +5303,7 @@
 
                 h('table', { className: 'cartao-installments-table' },
                   h('thead', null, h('tr', null, h('th', { className: 'cartao-select-cell', style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonth.length > 0 && selectedCartaoIds.length === installmentsForMonth.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', { className: 'cartao-date-cell' }, "Data"), h('th', { className: 'cartao-description-cell' }, "Descrição"), h('th', { className: 'cartao-category-cell' }, "Categoria"), h('th', { className: 'cartao-subcategory-cell' }, "Subcategoria"), h('th', { className: 'center cartao-installment-cell' }, "Parcela"), h('th', { className: 'right cartao-value-cell' }, "Valor Parcela"), h('th', { className: 'right cartao-total-cell' }, "Valor Total"), h('th', { className: 'center cartao-actions-cell' }, "Ações"))),
-                  h('tbody', null, installmentsForMonth.length === 0 ? h('tr', null, h('td', { colSpan: 9, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhum lançamento no cartão nesta fatura.")) : installmentsForMonth.map((p) => {
+                  h('tbody', null, installmentsForMonthExibidos.length === 0 ? h('tr', null, h('td', { colSpan: 9, style: { textAlign: 'center', color: 'var(--ink-soft)' } }, filtroConciliacaoFatura === 'todos' ? "Nenhum lançamento no cartão nesta fatura." : "Nenhum lançamento encontrado para este filtro.")) : installmentsForMonthExibidos.map((p) => {
                     const cat = getCategoria(p.categoriaId); const sub = getSubcategoria(p.categoriaId, p.subcategoriaId); const cartao = getCartao(p.cartaoId); const isSelected = selectedCartaoIds.includes(p.id); const isConferido = (p.conferidoFaturas || []).includes(`${month}:${p.index}`);
                     return h('tr', {
                       key: `${p.id}-${p.index}`,
