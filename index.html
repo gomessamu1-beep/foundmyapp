@@ -3871,50 +3871,62 @@
         setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate(), tipoMovimentacaoId: "" });
       }
 
-      async function removerLancamentoContabilBaixaPagar(itemPagar) {
-        // Não remove lançamentos manuais, de conciliação ou de pagamentos com cartão.
-        if (!itemPagar || itemPagar.origem === "CONCILIACAO BANCARIA" || itemPagar.isLancamentoDireto || itemPagar.formaBaixa === "CARTAO") return;
+      async function removerLancamentoContabilBaixaPagar(tituloId) {
+        // A exclusão é localizada pelo ID do título, sem depender do objeto estar carregado no estado do React.
+        const idTitulo = String(tituloId || "");
+        if (!idTitulo) throw new Error("Não foi possível identificar o título do Contas a Pagar para excluir a baixa contábil.");
         const userId = session?.user?.id;
         if (!userId || !supabaseClient) throw new Error("Não foi possível acessar a contabilidade. Faça login novamente.");
+
         const { data: vinculados, error: erroBusca } = await supabaseClient
           .from("contabilidade_lancamentos")
           .select("id")
           .eq("user_id", userId)
           .eq("origem", "CONTAS_PAGAR")
-          .eq("origem_id", String(itemPagar.id));
+          .eq("origem_id", idTitulo);
         if (erroBusca) throw erroBusca;
+
         const idsContabeis = (vinculados || []).map(x => x.id);
-        if (!idsContabeis.length) return;
-        const { data: itensExcluidos, error: erroItens } = await supabaseClient
-          .from("contabilidade_lancamento_itens")
-          .delete()
-          .eq("user_id", userId)
-          .in("lancamento_id", idsContabeis)
-          .select("id");
-        if (erroItens) throw erroItens;
-        const { data: cabecalhosExcluidos, error: erroCabecalhos } = await supabaseClient
-          .from("contabilidade_lancamentos")
-          .delete()
-          .eq("user_id", userId)
-          .eq("origem", "CONTAS_PAGAR")
-          .eq("origem_id", String(itemPagar.id))
-          .select("id");
-        if (erroCabecalhos) throw erroCabecalhos;
-        // Confirma no banco que os cabeçalhos e partidas realmente desapareceram.
-        const { data: cabecalhosRestantes, error: erroConferencia } = await supabaseClient
+        if (idsContabeis.length) {
+          const { error: erroItens } = await supabaseClient
+            .from("contabilidade_lancamento_itens")
+            .delete()
+            .eq("user_id", userId)
+            .in("lancamento_id", idsContabeis);
+          if (erroItens) throw erroItens;
+
+          const { error: erroCabecalhos } = await supabaseClient
+            .from("contabilidade_lancamentos")
+            .delete()
+            .eq("user_id", userId)
+            .eq("origem", "CONTAS_PAGAR")
+            .eq("origem_id", idTitulo);
+          if (erroCabecalhos) throw erroCabecalhos;
+        }
+
+        // Confirma cabeçalhos e partidas diretamente no banco antes de permitir a reabertura.
+        const { data: cabecalhosRestantes, error: erroConferenciaCab } = await supabaseClient
           .from("contabilidade_lancamentos")
           .select("id")
           .eq("user_id", userId)
           .eq("origem", "CONTAS_PAGAR")
-          .eq("origem_id", String(itemPagar.id));
-        if (erroConferencia) throw erroConferencia;
-        if (cabecalhosRestantes && cabecalhosRestantes.length) {
-          throw new Error("O banco não confirmou a exclusão do lançamento contábil da baixa. O título não será reaberto.");
+          .eq("origem_id", idTitulo);
+        if (erroConferenciaCab) throw erroConferenciaCab;
+
+        const { data: itensRestantes, error: erroConferenciaItens } = await supabaseClient
+          .from("contabilidade_lancamento_itens")
+          .select("id")
+          .eq("user_id", userId)
+          .in("lancamento_id", idsContabeis.length ? idsContabeis : ["__nenhum__"]);
+        if (erroConferenciaItens) throw erroConferenciaItens;
+
+        if ((cabecalhosRestantes || []).length || (itensRestantes || []).length) {
+          throw new Error("O Supabase ainda encontrou registros contábeis vinculados à baixa. O título não será reaberto.");
         }
+
         console.info("[FoundMyApp] Estorno contábil confirmado:", {
-          tituloId: String(itemPagar.id),
-          cabecalhosExcluidos: (cabecalhosExcluidos || []).length,
-          partidasExcluidas: (itensExcluidos || []).length
+          tituloId: idTitulo,
+          cabecalhosLocalizados: idsContabeis.length
         });
       }
 
@@ -3945,7 +3957,7 @@
         else if (type === "receber") { const item = contasReceber.find(p => p.id === id); transId = item && item.transferenciaId; }
 
         try {
-          if (type === "pagar") await removerLancamentoContabilBaixaPagar(itemPagar);
+          if (type === "pagar") await removerLancamentoContabilBaixaPagar(id);
 
           const estornoUpdater = prev => prev.map(p => (String(p.id) === String(id) || (transId && p.transferenciaId === transId)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p);
           if (type === "pagar") { updateContasPagar(estornoUpdater); if (transId) updateContasReceber(estornoUpdater); }
@@ -3970,7 +3982,7 @@
             // Primeiro exclui a contabilidade de cada título; só depois reabre os títulos.
             for (const id of ids) {
               const item = listaAlvo.find(i => String(i.id) === String(id));
-              await removerLancamentoContabilBaixaPagar(item);
+              await removerLancamentoContabilBaixaPagar(id);
             }
             updateContasPagar(prev => prev.map(p => ids.some(id => String(id) === String(p.id)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p));
             setBatchPagarIds([]);
