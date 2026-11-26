@@ -28,7 +28,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "contabil-fatura-conta-cartao-2026-11-26";
+    const APP_BUILD = "estorno-baixa-contabil-verificado-2026-11-26";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -3885,19 +3885,37 @@
         if (erroBusca) throw erroBusca;
         const idsContabeis = (vinculados || []).map(x => x.id);
         if (!idsContabeis.length) return;
-        const { error: erroItens } = await supabaseClient
+        const { data: itensExcluidos, error: erroItens } = await supabaseClient
           .from("contabilidade_lancamento_itens")
           .delete()
           .eq("user_id", userId)
-          .in("lancamento_id", idsContabeis);
+          .in("lancamento_id", idsContabeis)
+          .select("id");
         if (erroItens) throw erroItens;
-        const { error: erroCabecalhos } = await supabaseClient
+        const { data: cabecalhosExcluidos, error: erroCabecalhos } = await supabaseClient
           .from("contabilidade_lancamentos")
           .delete()
           .eq("user_id", userId)
           .eq("origem", "CONTAS_PAGAR")
-          .eq("origem_id", String(itemPagar.id));
+          .eq("origem_id", String(itemPagar.id))
+          .select("id");
         if (erroCabecalhos) throw erroCabecalhos;
+        // Confirma no banco que os cabeçalhos e partidas realmente desapareceram.
+        const { data: cabecalhosRestantes, error: erroConferencia } = await supabaseClient
+          .from("contabilidade_lancamentos")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("origem", "CONTAS_PAGAR")
+          .eq("origem_id", String(itemPagar.id));
+        if (erroConferencia) throw erroConferencia;
+        if (cabecalhosRestantes && cabecalhosRestantes.length) {
+          throw new Error("O banco não confirmou a exclusão do lançamento contábil da baixa. O título não será reaberto.");
+        }
+        console.info("[FoundMyApp] Estorno contábil confirmado:", {
+          tituloId: String(itemPagar.id),
+          cabecalhosExcluidos: (cabecalhosExcluidos || []).length,
+          partidasExcluidas: (itensExcluidos || []).length
+        });
       }
 
       async function executarEstornoBaixa(type, id, dataBaixa) {
