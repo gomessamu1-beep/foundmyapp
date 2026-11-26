@@ -28,7 +28,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "parametros-pagamento-2026-11-21";
+    const APP_BUILD = "contabil-fatura-conta-cartao-2026-11-26";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -1377,7 +1377,7 @@
           generatedIds.push(id);
           return {
             id, descricao: `Fatura ${t.nome} - ${formatMonthLabel(comp)}`, observacao: '', total: t.valor, dataCompra: vencimentos[t.cartaoId],
-            parcelas: 1, parcelaInicial: 1, inicio: vencimentos[t.cartaoId].substring(0, 7), cartaoId: null, categoriaId: fecharFaturaCatId,
+            parcelas: 1, parcelaInicial: 1, inicio: vencimentos[t.cartaoId].substring(0, 7), cartaoId: t.cartaoId, categoriaId: fecharFaturaCatId,
             subcategoriaId: fecharFaturaSubId, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now(), linkFatura: comp
           };
         });
@@ -3725,11 +3725,19 @@
         const userId = session?.user?.id;
         if (!userId || !supabaseClient) return { ok:false, mensagem:"Não foi possível acessar a contabilidade. Faça login novamente." };
         const contaBanco = contasBancarias.find(x => String(x.id) === String(bancoId))?.contaContabilId;
+        const cartaoDaFatura = titulo.linkFatura && titulo.cartaoId
+          ? (cartoes || []).find(x => String(x.id) === String(titulo.cartaoId))
+          : null;
+        const contaFatura = cartaoDaFatura
+          ? contabPlano.find(x => String(x.id) === String(cartaoDaFatura.contaContabilId) && x.natureza === "PASSIVO" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false)
+          : null;
         const contaFornecedores = contabPlano.find(x => String(x.descricao || "").trim().toUpperCase() === "FORNECEDORES" && x.natureza === "PASSIVO" && x.tipo === "ANALITICA" && x.ativa !== false && x.aceita_lancamento !== false);
+        const contaDebitoPrincipal = titulo.linkFatura ? contaFatura : contaFornecedores;
         const contaJuros = contabPlano.find(x => String(x.id) === String(contabContaAcrescimoId));
         const contaDesconto = contabPlano.find(x => String(x.id) === String(contabContaDescontoId));
         if (!contaBanco) return { ok:false, mensagem:"Vincule uma conta contábil à conta bancária selecionada antes de baixar este título." };
-        if (!contaFornecedores) return { ok:false, mensagem:"A conta analítica FORNECEDORES não foi encontrada no Plano de Contas." };
+        if (titulo.linkFatura && !contaFatura) return { ok:false, mensagem:"Vincule ao cartão uma conta contábil analítica de PASSIVO na configuração do cartão antes de baixar a fatura." };
+        if (!titulo.linkFatura && !contaFornecedores) return { ok:false, mensagem:"A conta analítica FORNECEDORES não foi encontrada no Plano de Contas." };
         if (acrescimo > 0 && (!contaJuros || contaJuros.natureza !== "DESPESA" || contaJuros.tipo !== "ANALITICA" || contaJuros.ativa === false || contaJuros.aceita_lancamento === false)) return { ok:false, mensagem:"Configure a conta contábil de acréscimos na aba Contabilidade > Plano de Contas." };
         if (desconto > 0 && (!contaDesconto || contaDesconto.natureza !== "RECEITA" || contaDesconto.tipo !== "ANALITICA" || contaDesconto.ativa === false || contaDesconto.aceita_lancamento === false)) return { ok:false, mensagem:"Configure a conta contábil de descontos na aba Contabilidade > Plano de Contas." };
         const valorBaseSalvo = titulo.valorParcelaBase ?? titulo.valorBase;
@@ -3743,7 +3751,7 @@
         const historico = "Baixa de " + (titulo.descricao || "conta a pagar") + (acrescimo > 0 ? " - com acréscimo" : "") + (desconto > 0 ? " - com desconto" : "");
         const partidas = [];
         let sequencia = 1;
-        if (valorBase > 0) partidas.push({ user_id:userId, conta_id:contaFornecedores.id, sequencia:sequencia++, historico, debito:valorBase, credito:0 });
+        if (valorBase > 0) partidas.push({ user_id:userId, conta_id:contaDebitoPrincipal.id, sequencia:sequencia++, historico, debito:valorBase, credito:0 });
         if (acrescimo > 0) partidas.push({ user_id:userId, conta_id:contaJuros.id, sequencia:sequencia++, historico:"Acréscimos pagos: " + (titulo.descricao || ""), debito:acrescimo, credito:0 });
         if (valorPago > 0) partidas.push({ user_id:userId, conta_id:contaBanco, sequencia:sequencia++, historico:"Valor efetivamente pago: " + (titulo.descricao || ""), debito:0, credito:valorPago });
         if (desconto > 0) partidas.push({ user_id:userId, conta_id:contaDesconto.id, sequencia:sequencia++, historico:"Descontos obtidos: " + (titulo.descricao || ""), debito:0, credito:desconto });
