@@ -993,13 +993,40 @@
         );
         const itens = faturasCorrespondentes.flatMap(f => Array.isArray(f.itens) ? f.itens : []);
         const soma = filtro => itens.filter(filtro).reduce((total, item) => total + (Number(item && item.valor) || 0), 0);
+        const conferidos = itens.filter(item => item && item.conferido && !item.ignorado);
+        const ignorados = itens.filter(item => item && item.ignorado);
+        const pendentes = itens.filter(item => item && !item.conferido && !item.ignorado);
         return {
           conferido: soma(item => item && item.conferido && !item.ignorado),
           ignorado: soma(item => item && item.ignorado),
           pendente: soma(item => item && !item.conferido && !item.ignorado),
-          quantidade: itens.length
+          quantidade: itens.length,
+          quantidadeConferidos: conferidos.length,
+          quantidadeIgnorados: ignorados.length,
+          quantidadePendentes: pendentes.length,
+          total: soma(() => true)
         };
       }
+      function renderResumoCompletoConferencia(resumo) {
+        const dinheiro = valor => Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const campos = [
+          ['Registros', resumo.quantidade, true],
+          ['Conferidos', resumo.quantidadeConferidos, true],
+          ['Valor conferido', resumo.conferido],
+          ['Ignorados', resumo.quantidadeIgnorados, true],
+          ['Valor ignorado', resumo.ignorado],
+          ['Não conferidos', resumo.quantidadePendentes, true],
+          ['Valor não conferido', resumo.pendente],
+          ['Valor total', resumo.total]
+        ];
+        return h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 8, marginTop: 8 } },
+          campos.map((campo, i) => h('div', { key: i, style: { border: '1px solid var(--line)', borderRadius: 6, padding: '7px 9px', background: 'var(--card)', minWidth: 0 } },
+            h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, campo[0]),
+            h('strong', { style: { display: 'block', fontSize: 14, marginTop: 3, overflowWrap: 'anywhere' } }, campo[2] ? Number(campo[1] || 0).toLocaleString('pt-BR') : dinheiro(campo[1]))
+          ))
+        );
+      }
+
       function renderResumoValoresConferencia(resumo) {
         const dinheiro = valor => Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         return h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(115px,1fr))', gap: 6, marginTop: 8 } },
@@ -5732,7 +5759,7 @@
                   h('strong', { style: { fontSize: 13 } }, 'Conferência do PDF por cartão'),
                   resumos.map(x => h('div', { key: x.nome, style: { marginTop: 7 } },
                     h('div', { style: { fontSize: 12, fontWeight: 600 } }, x.nome),
-                    renderResumoValoresConferencia(x.resumo)
+                    renderResumoCompletoConferencia(x.resumo)
                   ))
                 ) : null;
               })(),
