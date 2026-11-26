@@ -5364,14 +5364,41 @@
                   )
                 ),
                 (() => {
-                  const cartoesDaFatura = [...new Set(installmentsForMonth.map(p => getCartao(p.cartaoId)?.nome).filter(Boolean))];
-                  const resumos = cartoesDaFatura.map(nome => ({ nome, resumo: getResumoValoresConferencia(month, nome) })).filter(x => x.resumo.quantidade > 0);
+                  // Indicadores baseados nos PDFs arquivados, mesmo sem lançamentos financeiros no mês.
+                  const normalizarNomeCartao = valor => String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+                  const faturasDaCompetencia = (conferenciaFaturas || []).filter(f =>
+                    String(f.competencia || '').slice(0, 7) === String(month || '').slice(0, 7)
+                  );
+                  const grupos = new Map();
+                  faturasDaCompetencia.forEach(f => {
+                    const itens = Array.isArray(f.itens) ? f.itens : [];
+                    const nomeItem = itens.find(item => item && item.cartao)?.cartao || '';
+                    const nome = String(f.cartao_nome || nomeItem || 'Cartão não identificado');
+                    const chave = normalizarNomeCartao(nome);
+                    if (!grupos.has(chave)) grupos.set(chave, { nome, itens: [] });
+                    grupos.get(chave).itens.push(...itens);
+                  });
+                  const resumos = Array.from(grupos.values()).map(grupo => {
+                    const itens = grupo.itens;
+                    const soma = filtro => itens.filter(filtro).reduce((total, item) => total + (Number(item && item.valor) || 0), 0);
+                    const conferidos = itens.filter(item => item && item.conferido && !item.ignorado);
+                    const ignorados = itens.filter(item => item && item.ignorado);
+                    const pendentes = itens.filter(item => item && !item.conferido && !item.ignorado);
+                    return { nome: grupo.nome, resumo: {
+                      quantidade: itens.length, quantidadeConferidos: conferidos.length,
+                      quantidadeIgnorados: ignorados.length, quantidadePendentes: pendentes.length,
+                      conferido: soma(item => item && item.conferido && !item.ignorado),
+                      ignorado: soma(item => item && item.ignorado),
+                      pendente: soma(item => item && !item.conferido && !item.ignorado),
+                      total: soma(() => true)
+                    }};
+                  }).filter(x => x.resumo.quantidade > 0);
                   return h('div', { style: { marginTop: 10, marginBottom: 12, padding: 10, border: '1px solid var(--line)', borderRadius: 7 } },
                     h('strong', { style: { fontSize: 13 } }, 'Resumo da conferência da fatura'),
                     resumos.length ? resumos.map(x => h('div', { key: x.nome, style: { marginTop: 7 } },
                       h('div', { style: { fontSize: 12, fontWeight: 600 } }, x.nome),
                       renderResumoCompletoConferencia(x.resumo)
-                    )) : h('div', { style: { marginTop: 6, fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaCarregando ? 'Carregando indicadores da conferência...' : 'Não há registros de conferência para esta competência. Consulte ou importe a fatura na aba Faturas.')
+                    )) : h('div', { style: { marginTop: 6, fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaCarregando ? 'Carregando indicadores da conferência...' : 'Não há fatura arquivada para esta competência. Clique em atualizar na tela Faturas ou importe o PDF.')
                   );
                 })(),
                 h('div', { className: 'total-mes num' }, showMoney(totalMes)),
