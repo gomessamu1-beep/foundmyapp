@@ -446,6 +446,7 @@
       const [pdfImportando, setPdfImportando] = useState(false);
       const [pdfFiltro, setPdfFiltro] = useState('todos');
       const [pdfBusca, setPdfBusca] = useState('');
+      const [pdfTotalFatura, setPdfTotalFatura] = useState(null);
       // Mantém a última prévia da importação PDF para que o usuário possa fechar
       // a janela e voltar depois sem perder a classificação já feita.
       const PDF_PREVIEW_STORAGE_KEY = 'foundmyapp-pdf-preview-v1';
@@ -2410,6 +2411,7 @@
           return;
         }
         setPdfPreview([]);
+        setPdfTotalFatura(null);
         setPdfArquivo(file.name);
         setPdfImportando(true);
 
@@ -2463,6 +2465,18 @@
           const vm = vencimento.match(/^(\d{2})\/(\d{2})\/(20\d{2})$/);
           const competenciaDetectada = vm ? `${vm[3]}-${vm[2]}` : `${ano}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
           const competencia = pdfCompetenciaSelecionada || competenciaDetectada;
+
+          // O Santander informa o total no quadro de pagamento como "Total desta Fatura".
+          // Procura o valor próximo ao rótulo para suportar PDF com quebra de linha.
+          let totalFaturaDetectado = null;
+          const textoTotalFatura = textoCompleto.match(/Total\s+desta\s+Fatura([\s\S]{0,140})/i);
+          if (textoTotalFatura) {
+            const valorTotalMatch = textoTotalFatura[1].match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/);
+            if (valorTotalMatch) {
+              const valorConvertido = valorMoedaPDF(valorTotalMatch[1]);
+              if (Number.isFinite(valorConvertido)) totalFaturaDetectado = valorConvertido;
+            }
+          }
 
           const resultado = [];
           let secao = "";
@@ -2678,6 +2692,7 @@
           }
 
           setPdfPreview(unicos);
+          setPdfTotalFatura(totalFaturaDetectado);
           // Arquiva uma única cópia do PDF para a nova tela de conferência, sem interferir na importação atual.
           await salvarPDFNaConferencia(file, unicos, competencia);
       } catch (err) {
@@ -6033,6 +6048,22 @@
             pdfError && h('div', { style: { color: 'var(--red)', background: '#FEE2E2', padding: 10, marginBottom: 10, whiteSpace: 'pre-line' } }, pdfError),
             pdfPreview.length > 0 && h('div', null,
               h('div', { style: { fontWeight: 'bold', marginBottom: 8 } }, pdfPreview.length + ' lançamento(s) identificados. Novos: ' + pdfPreview.filter(r => !r.duplicado).length + ' | Já lançados: ' + pdfPreview.filter(r => r.duplicado).length),
+              (() => {
+                const somaLancamentosPDF = pdfPreview.reduce((soma, item) => soma + (Number(item && item.valor) || 0), 0);
+                const diferencaTotalPDF = pdfTotalFatura == null ? null : Math.round((somaLancamentosPDF - Number(pdfTotalFatura)) * 100) / 100;
+                const validacaoOK = diferencaTotalPDF != null && Math.abs(diferencaTotalPDF) < 0.01;
+                return h('div', { style: { padding: '10px 12px', marginBottom: 12, borderRadius: 6, border: '1px solid ' + (pdfTotalFatura == null ? 'var(--line)' : validacaoOK ? '#16A34A' : '#D97706'), background: pdfTotalFatura == null ? 'var(--card)' : validacaoOK ? '#F0FDF4' : '#FFFBEB', color: 'var(--ink)' } },
+                  h('div', { style: { fontWeight: 700, fontSize: 13, marginBottom: 5 } }, 'Validação do total da fatura'),
+                  pdfTotalFatura == null
+                    ? h('div', { style: { fontSize: 12 } }, 'Não foi possível localizar o campo “Total desta Fatura” neste PDF. Confira o total manualmente.')
+                    : h(React.Fragment, null,
+                        h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12 } }, h('span', null, 'Total informado pelo Santander:'), h('strong', null, formatBRL(pdfTotalFatura))),
+                        h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, marginTop: 3 } }, h('span', null, 'Soma dos lançamentos identificados:'), h('strong', null, formatBRL(somaLancamentosPDF))),
+                        h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, marginTop: 3 } }, h('span', null, 'Diferença:'), h('strong', null, formatBRL(Math.abs(diferencaTotalPDF)))),
+                        h('div', { style: { fontSize: 12, fontWeight: 700, marginTop: 6, color: validacaoOK ? '#15803D' : '#B45309' } }, validacaoOK ? '✓ Os valores identificados fecham com o total da fatura.' : '⚠ Os valores não conferem. Verifique lançamentos ausentes ou valores da fatura que não entram como compras (por exemplo, créditos, juros ou IOF).')
+                      )
+                );
+              })(),
               h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 } },
                 h('span', { style: { fontSize: 12, fontWeight: 'bold' } }, 'Mostrar:'),
                 h('select', { value: pdfFiltro, onChange: e => setPdfFiltro(e.target.value), style: { width: 190 } },
