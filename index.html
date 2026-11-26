@@ -1393,13 +1393,27 @@
 
       function reabrirFatura(comp) {
         const info = faturasFechadas[comp];
-        if (!info || info === true) { updateFechadas(prev => { const n = { ...prev }; delete n[comp]; return n; }); return; }
+        const faturasFechadasAtualizadas = { ...(faturasFechadas || {}) };
+        delete faturasFechadasAtualizadas[comp];
+
+        if (!info || info === true) {
+          setFaturasFechadas(faturasFechadasAtualizadas);
+          saveDataToSupabase(purchases, contasPagar, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadasAtualizadas, faturasBaixadas, diasFechados, mesesFechados);
+          return;
+        }
+
         const ids = info.pagarIds || [];
-        const baixados = contasPagar.filter(p => ids.includes(p.id) && p.status === 'Baixado');
+        const idsTexto = ids.map(id => String(id));
+        const baixados = contasPagar.filter(p => idsTexto.includes(String(p.id)) && p.status === 'Baixado');
         if (baixados.length > 0) return alert("Não é possível reabrir: O pagamento desta fatura já foi baixado no Contas a Pagar. Estorne o pagamento primeiro.");
         if (!window.confirm("Deseja reabrir a fatura? Os lançamentos gerados no Contas a Pagar serão excluídos.")) return;
-        updateContasPagar(prev => prev.filter(p => !ids.includes(p.id)));
-        updateFechadas(prev => { const n = { ...prev }; delete n[comp]; return n; });
+
+        // Exclui os títulos gerados e reabre a fatura na mesma gravação,
+        // evitando que uma atualização com estado antigo restaure o título.
+        const contasPagarAtualizadas = (contasPagar || []).filter(p => !idsTexto.includes(String(p.id)));
+        setContasPagar(contasPagarAtualizadas);
+        setFaturasFechadas(faturasFechadasAtualizadas);
+        saveDataToSupabase(purchases, contasPagarAtualizadas, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadasAtualizadas, faturasBaixadas, diasFechados, mesesFechados);
       }
 
       function toggleFaturaFechada(comp, e) {
