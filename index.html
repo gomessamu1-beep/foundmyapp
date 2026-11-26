@@ -2248,6 +2248,7 @@
         setPdfArquivo("");
         setPdfLayouts([]);
         setPdfLayoutSelecionado("");
+        setPdfCompetenciaSelecionada(currentMonth());
         setPdfModalOpen(true);
         await carregarLayoutsFaturaPDF();
       }
@@ -6043,7 +6044,17 @@
               h('strong', { style: { fontSize: 18 } }, 'Importar Fatura do Cartão — PDF'),
               h('button', { type: 'button', className: 'action-btn', onClick: () => setPdfModalOpen(false), disabled: pdfImportando }, h(XIcon, { size: 16 }))
             ),
-            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Primeiro escolha o layout do banco. Depois selecione o PDF. O sistema identifica os lançamentos, marca duplicados e permite informar categoria, subcategoria e parcelas dos novos. Faturas fechadas não aceitam novas importações.'),
+            h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, 'Selecione a competência da fatura e o layout do banco antes de escolher o PDF. O sistema identifica os lançamentos, marca duplicados e permite informar categoria, subcategoria e parcelas dos novos. Faturas fechadas não aceitam novas importações.'),
+            h('div', { className: 'field', style: { marginBottom: 12, maxWidth: 460 } },
+              h('label', null, 'Competência da fatura *'),
+              h('input', {
+                type: 'month',
+                value: pdfCompetenciaSelecionada,
+                disabled: pdfImportando,
+                onChange: e => { setPdfCompetenciaSelecionada(e.target.value); setPdfError(''); },
+                style: { width: '100%' }
+              })
+            ),
             h('div', { className: 'field', style: { marginBottom: 12, maxWidth: 460 } },
               h('label', null, 'Layout da fatura'),
               h('select', {
@@ -6061,10 +6072,10 @@
               )
             ),
             h('div', { style: { display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 12 } },
-              h('button', { type: 'button', className: 'primary', onClick: () => { if (pdfInputRef.current && pdfLayoutSelecionado && !pdfLayoutsCarregando) pdfInputRef.current.click(); }, disabled: pdfImportando || pdfLayoutsCarregando || !pdfLayoutSelecionado, style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: pdfImportando ? 'wait' : 'pointer', background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
+              h('button', { type: 'button', className: 'primary', onClick: () => { if (pdfInputRef.current && pdfLayoutSelecionado && pdfCompetenciaSelecionada && !pdfLayoutsCarregando) pdfInputRef.current.click(); }, disabled: pdfImportando || pdfLayoutsCarregando || !pdfLayoutSelecionado || !pdfCompetenciaSelecionada, style: { display: 'inline-flex', alignItems: 'center', gap: 8, cursor: pdfImportando ? 'wait' : 'pointer', background: 'var(--red)', color: '#FFFFFF', border: '1px solid #991B1B', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.18)', fontWeight: 700, padding: '10px 16px', borderRadius: 6 } },
                 h(FileText, { size: 17 }), ' Selecionar PDF para Importação'
               ),
-              h('input', { ref: pdfInputRef, type: 'file', accept: 'application/pdf,.pdf', disabled: pdfLayoutsCarregando || !pdfLayoutSelecionado || pdfImportando, style: { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }, onChange: lerFaturaPDF })
+              h('input', { ref: pdfInputRef, type: 'file', accept: 'application/pdf,.pdf', disabled: pdfLayoutsCarregando || !pdfLayoutSelecionado || !pdfCompetenciaSelecionada || pdfImportando, style: { position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }, onChange: lerFaturaPDF })
             ),
             pdfArquivo && h('div', { style: { fontSize: 12, marginBottom: 8 } }, 'Arquivo: ' + pdfArquivo),
             pdfImportando && h('div', { style: { padding: 10, background: '#FAF8F2', marginBottom: 10 } }, 'Lendo a fatura...'),
