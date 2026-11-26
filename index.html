@@ -1304,28 +1304,25 @@
       const faturasAgrupadas = useMemo(() => {
         const resumo = {};
         purchases.forEach(p => {
-          if (p.recorrente) {
-             let iterMonth = p.inicio;
-             let count = 0;
-             while(count < 24) { 
-               if (p.canceladoEm && iterMonth >= p.canceladoEm) break;
-               const mesesExcluidos = p.mesesExcluidos || [];
-               if (!mesesExcluidos.includes(iterMonth)) {
-                 if (!resumo[iterMonth]) resumo[iterMonth] = { competencia: iterMonth, total: 0, qtd: 0 };
-                 resumo[iterMonth].total += p.total; resumo[iterMonth].qtd += 1;
-               }
-               iterMonth = addMonths(iterMonth, 1);
-               count++;
-             }
-          } else {
-             const values = splitInstallments(p.total, p.parcelas); const pInicial = p.parcelaInicial || 1; const qtdRestante = p.parcelas - pInicial + 1; const mesesExcluidos = p.mesesExcluidos || [];
-             for (let i = 0; i < qtdRestante; i++) {
-               const comp = addMonths(p.inicio, i); 
-               if (mesesExcluidos.includes(comp)) continue;
-               if (p.canceladoEm && comp >= p.canceladoEm) continue;
-               const numeroParcela = pInicial + i; if (!resumo[comp]) resumo[comp] = { competencia: comp, total: 0, qtd: 0 };
-               resumo[comp].total += values[numeroParcela - 1]; resumo[comp].qtd += 1;
-             }
+          if (!p.inicio) return;
+          const totalParcelas = Math.max(1, Number(p.parcelas || 1));
+          const parcelaInicial = Math.max(1, Number(p.parcelaInicial || 1));
+          const valores = splitInstallments(Number(p.total || 0), totalParcelas);
+          const quantidade = p.recorrente ? 24 : Math.max(0, totalParcelas - parcelaInicial + 1);
+
+          for (let i = 0; i < quantidade; i++) {
+            const comp = addMonths(p.inicio, i);
+            if (p.canceladoEm && comp >= p.canceladoEm) break;
+            if ((p.mesesExcluidos || []).includes(comp)) continue;
+
+            const numeroParcela = p.recorrente ? i + 1 : parcelaInicial + i;
+            const ajuste = p.ajustesParcelas?.[String(numeroParcela)] || null;
+            const valorBase = p.recorrente ? Number(p.total || 0) : Number(valores[numeroParcela - 1] || 0);
+            const valorParcela = Number(ajuste?.valorParcela != null ? ajuste.valorParcela : valorBase);
+
+            if (!resumo[comp]) resumo[comp] = { competencia: comp, total: 0, qtd: 0 };
+            resumo[comp].total += valorParcela;
+            resumo[comp].qtd += 1;
           }
         });
         return Object.values(resumo).sort((a, b) => a.competencia.localeCompare(b.competencia));
