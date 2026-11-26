@@ -1381,8 +1381,13 @@
             subcategoriaId: fecharFaturaSubId, status: "Em aberto", bancoBaixaId: null, dataBaixa: null, criadoEm: Date.now(), linkFatura: comp
           };
         });
-        updateContasPagar(prev => [...prev.filter(p => !(p.ehPreviaFatura && p.linkFatura === comp)), ...newPagar]);
-        updateFechadas(prev => ({ ...prev, [comp]: { fechada: true, pagarIds: generatedIds } }));
+        // Salva a substituição da prévia e o fechamento oficial em uma única gravação.
+        // Evita que duas gravações concorrentes sobrescrevam uma à outra com estado antigo.
+        const contasPagarAtualizadas = [...(contasPagar || []).filter(p => !(p.ehPreviaFatura && (p.linkFatura === comp || String(p.id || "").endsWith("_" + comp)))), ...newPagar];
+        const faturasFechadasAtualizadas = { ...(faturasFechadas || {}), [comp]: { fechada: true, pagarIds: generatedIds } };
+        setContasPagar(contasPagarAtualizadas);
+        setFaturasFechadas(faturasFechadasAtualizadas);
+        saveDataToSupabase(purchases, contasPagarAtualizadas, contasReceber, cartoes, contasBancarias, categorias, deparaList, faturasFechadasAtualizadas, faturasBaixadas, diasFechados, mesesFechados);
         setFecharFaturaModal({ open: false, comp: "", totais: [], vencimentos: {} });
       }
 
