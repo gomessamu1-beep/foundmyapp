@@ -5291,7 +5291,7 @@
               h('button', {
                 type: 'button',
                 className: lancamentoTab === "cartao" ? "active" : "",
-                onClick: () => setLancamentoTab("cartao"),
+                onClick: () => { setLancamentoTab("cartao"); carregarConferenciaFaturas(); },
                 style: { justifyContent: 'flex-start', padding: '9px 14px', fontWeight: 600 }
               }, h(CreditCard, { size: 18 }), " Cartão de Crédito")
             ),
@@ -5320,13 +5320,13 @@
                 (() => {
                   const cartoesDaFatura = [...new Set(installmentsForMonth.map(p => getCartao(p.cartaoId)?.nome).filter(Boolean))];
                   const resumos = cartoesDaFatura.map(nome => ({ nome, resumo: getResumoValoresConferencia(month, nome) })).filter(x => x.resumo.quantidade > 0);
-                  return resumos.length ? h('div', { style: { marginTop: 10, marginBottom: 12, padding: 10, border: '1px solid var(--line)', borderRadius: 7 } },
+                  return h('div', { style: { marginTop: 10, marginBottom: 12, padding: 10, border: '1px solid var(--line)', borderRadius: 7 } },
                     h('strong', { style: { fontSize: 13 } }, 'Resumo da conferência da fatura'),
-                    resumos.map(x => h('div', { key: x.nome, style: { marginTop: 7 } },
+                    resumos.length ? resumos.map(x => h('div', { key: x.nome, style: { marginTop: 7 } },
                       h('div', { style: { fontSize: 12, fontWeight: 600 } }, x.nome),
                       renderResumoCompletoConferencia(x.resumo)
-                    ))
-                  ) : h('div', { style: { margin: '8px 0 12px', fontSize: 12, color: 'var(--ink-soft)' } }, 'Nenhum resumo de conferência disponível para esta competência. Consulte a conferência da fatura para carregar os dados.');
+                    )) : h('div', { style: { marginTop: 6, fontSize: 12, color: 'var(--ink-soft)' } }, conferenciaCarregando ? 'Carregando indicadores da conferência...' : 'Não há registros de conferência para esta competência. Consulte ou importe a fatura na aba Faturas.')
+                  );
                 })(),
                 h('div', { className: 'total-mes num' }, showMoney(totalMes)),
                 h('div', { className: 'total-sub', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
