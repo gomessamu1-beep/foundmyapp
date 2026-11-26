@@ -5771,17 +5771,6 @@
                   )
               ),
 
-              (() => {
-                const cartoesDaFatura = [...new Set(installmentsForMonth.map(p => getCartao(p.cartaoId)?.nome).filter(Boolean))];
-                const resumos = cartoesDaFatura.map(nome => ({ nome, resumo: getResumoValoresConferencia(month, nome) })).filter(x => x.resumo.quantidade > 0);
-                return resumos.length ? h('div', { style: { marginBottom: 12, padding: 10, border: '1px solid var(--line)', borderRadius: 7 } },
-                  h('strong', { style: { fontSize: 13 } }, 'Conferência do PDF por cartão'),
-                  resumos.map(x => h('div', { key: x.nome, style: { marginTop: 7 } },
-                    h('div', { style: { fontSize: 12, fontWeight: 600 } }, x.nome),
-                    renderResumoCompletoConferencia(x.resumo)
-                  ))
-                ) : null;
-              })(),
               installmentsForMonthVisiveis.length === 0 ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 13, padding: '16px 0' } }, "Nenhum lançamento encontrado para este filtro.") : h('table', null,
                 h('thead', null, h('tr', null, h('th', { style: { width: 30, textAlign: 'center' } }, h('input', { type: 'checkbox', checked: installmentsForMonthExibidos.length > 0 && selectedCartaoIds.length === installmentsForMonthExibidos.length, onChange: toggleSelectAllCartao, disabled: fechadaAtual })), h('th', null, "Data"), h('th', null, "Descrição / Obs"), h('th', null, "Categoria"), h('th', null, "Subcategoria"), h('th', { className: 'right' }, "Acréscimo"), h('th', { className: 'right' }, "Desconto"), h('th', { className: 'center' }, "Parcela"), h('th', { className: 'right' }, "Valor Parcela"), h('th', { className: 'right' }, "Valor Total"), h('th', { className: 'center' }, "Ações"))),
                 h('tbody', null, installmentsForMonthExibidos.map((p) => {
