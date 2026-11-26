@@ -5659,11 +5659,22 @@
               ),
               (() => {
                 const itens = Array.isArray(conferenciaSelecionada.itens) ? conferenciaSelecionada.itens : [];
+                const converterDataOrdenacao = valor => {
+                  const texto = String(valor || '').trim();
+                  let partes = texto.match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+                  if (partes) return Number(partes[1] + partes[2] + partes[3]);
+                  partes = texto.match(/^(\\d{2})[\\/.-](\\d{2})[\\/.-](\\d{4})$/);
+                  if (partes) return Number(partes[3] + partes[2] + partes[1]);
+                  return Number.MAX_SAFE_INTEGER;
+                };
                 const itensExibidos = itens.map((item, index) => ({ item, index })).filter(({ item }) => {
                   if (conferenciaFiltroExibicao === 'conferidos') return !!(item && item.conferido && !item.ignorado);
                   if (conferenciaFiltroExibicao === 'nao_conferidos') return !(item && (item.conferido || item.ignorado));
                   if (conferenciaFiltroExibicao === 'ignorados') return !!(item && item.ignorado);
                   return true;
+                }).sort((a, b) => {
+                  const diferenca = converterDataOrdenacao(a.item && a.item.data) - converterDataOrdenacao(b.item && b.item.data);
+                  return diferenca || a.index - b.index;
                 });
                 const quantidadeConferida = itens.filter(item => item && item.conferido && !item.ignorado).length;
                 const quantidadeIgnorada = itens.filter(item => item && item.ignorado).length;
