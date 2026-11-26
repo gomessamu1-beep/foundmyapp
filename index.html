@@ -1075,7 +1075,13 @@
           }
 
           const ajusteParcela = p.ajustesParcelas && p.ajustesParcelas[String(numeroDaParcela)] ? p.ajustesParcelas[String(numeroDaParcela)] : null;
-          return { ...p, ...(ajusteParcela || {}), index: numeroDaParcela, valorParcela: ajusteParcela && ajusteParcela.valorParcela != null ? Number(ajusteParcela.valorParcela) : valorDaParcela };
+          return {
+            ...p,
+            ...(ajusteParcela || {}),
+            index: ajusteParcela && ajusteParcela.index != null ? Number(ajusteParcela.index) : numeroDaParcela,
+            parcelas: ajusteParcela && ajusteParcela.totalParcelas != null ? Number(ajusteParcela.totalParcelas) : p.parcelas,
+            valorParcela: ajusteParcela && ajusteParcela.valorParcela != null ? Number(ajusteParcela.valorParcela) : valorDaParcela
+          };
         }).filter(Boolean);
 
         mapped.sort((a, b) => {
@@ -3452,7 +3458,7 @@
         setDescontoInput(Number(p.desconto || 0) ? (Number(p.desconto || 0) / divisorAjuste).toFixed(2).replace(".", ",") : "");
         setDataLancamento(p.dataCompra || currentDate());
         setFaturaMes(purchaseEditChoice.competence);
-        setParcelas("1"); setParcelaAtual("1");
+        setParcelas(String(p.parcelas || 1)); setParcelaAtual(String(parcela));
         setCartaoId(p.cartaoId || ""); setCategoriaId(p.categoriaId || ""); setSubcategoriaId(p.subcategoriaId || "");
         setIsRecorrente(false); setLancamentoTab("cartao"); setPurchaseEditChoice(null); setModalOpen(true);
       }
@@ -3562,13 +3568,38 @@
         else {
             novoRegistro.cartaoId = cartaoId || null;
             if (editingId && editingPurchaseInstallment) {
-              const ajuste = { ajusteParcelaIndividual: true, descricao: descricao.trim(), observacao: observacao.trim(), valorParcelaBase, valorParcela: valorParcelaFinal, acrescimo, desconto, dataCompra: dataLancamento || currentDate(), dataVencimento: dataLancamento || currentDate(), categoriaId, subcategoriaId: exigeSubcat ? subcategoriaId : null, cartaoId: cartaoId || null };
               const primeiro = editingPurchaseInstallment.installment;
+              const novoNumeroInicial = atual;
+              const novoTotalParcelas = n;
+              if (!Number.isInteger(novoNumeroInicial) || !Number.isInteger(novoTotalParcelas) || novoNumeroInicial < 1 || novoTotalParcelas < novoNumeroInicial || novoTotalParcelas > 60) {
+                return setFormError("Informe uma numeração de parcela válida. A parcela atual não pode ser maior que o total.");
+              }
+              const ajuste = {
+                ajusteParcelaIndividual: true,
+                descricao: descricao.trim(),
+                observacao: observacao.trim(),
+                valorParcelaBase,
+                valorParcela: valorParcelaFinal,
+                acrescimo,
+                desconto,
+                dataCompra: dataLancamento || currentDate(),
+                dataVencimento: dataLancamento || currentDate(),
+                categoriaId,
+                subcategoriaId: exigeSubcat ? subcategoriaId : null,
+                cartaoId: cartaoId || null
+              };
               updatePurchases(prev => prev.map(p => {
                 if (p.id !== editingPurchaseInstallment.purchaseId) return p;
                 const ajustesParcelas = { ...(p.ajustesParcelas || {}) };
-                const limite = editingPurchaseInstallment.scope === "future" ? Number(p.parcelas || primeiro) : primeiro;
-                for (let numero = primeiro; numero <= limite; numero++) ajustesParcelas[String(numero)] = { ...ajuste };
+                const totalOriginal = Number(p.parcelas || primeiro);
+                for (let numero = primeiro; numero <= totalOriginal; numero++) {
+                  const deslocamento = numero - primeiro;
+                  ajustesParcelas[String(numero)] = {
+                    ...ajuste,
+                    index: novoNumeroInicial + deslocamento,
+                    totalParcelas: novoTotalParcelas
+                  };
+                }
                 return { ...p, ajustesParcelas };
               }));
               setEditingPurchaseInstallment(null); setModalOpen(false);
@@ -6103,8 +6134,7 @@
           h('div', { className: 'modal-content', style: { maxWidth: 420, padding: 20 }, onClick: e => e.stopPropagation() },
             h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 } }, "Como deseja aplicar a alteração?"),
             h('div', { style: { fontSize: 13, color: 'var(--muted)', marginBottom: 16 } }, "Parcela " + purchaseEditChoice.installment + " da fatura " + formatMonthLabel(purchaseEditChoice.competence) + "."),
-            h('button', { type: 'button', className: 'action-btn', style: { width: '100%', justifyContent: 'center', marginBottom: 8 }, onClick: () => confirmarEscopoEdicaoParcela("only") }, "Somente esta parcela"),
-            h('button', { type: 'button', className: 'primary', style: { width: '100%', justifyContent: 'center' }, onClick: () => confirmarEscopoEdicaoParcela("future") }, "Esta e as demais parcelas"),
+            h('button', { type: 'button', className: 'primary', style: { width: '100%', justifyContent: 'center' }, onClick: () => confirmarEscopoEdicaoParcela("future") }, "Alterar esta e todas as parcelas seguintes"),
             h('button', { type: 'button', className: 'action-btn', style: { width: '100%', justifyContent: 'center', marginTop: 8 }, onClick: () => setPurchaseEditChoice(null) }, "Cancelar")
           )
         ),
