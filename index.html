@@ -3871,6 +3871,35 @@
         setBatchBaixaModal({ open: false, bancoId: "", dataBaixa: currentDate(), tipoMovimentacaoId: "" });
       }
 
+      async function removerLancamentoContabilBaixaPagar(itemPagar) {
+        // Não remove lançamentos manuais, de conciliação ou de pagamentos com cartão.
+        if (!itemPagar || itemPagar.origem === "CONCILIACAO BANCARIA" || itemPagar.isLancamentoDireto || itemPagar.formaBaixa === "CARTAO") return;
+        const userId = session?.user?.id;
+        if (!userId || !supabaseClient) throw new Error("Não foi possível acessar a contabilidade. Faça login novamente.");
+        const { data: vinculados, error: erroBusca } = await supabaseClient
+          .from("contabilidade_lancamentos")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("origem", "CONTAS_PAGAR")
+          .eq("origem_id", String(itemPagar.id));
+        if (erroBusca) throw erroBusca;
+        const idsContabeis = (vinculados || []).map(x => x.id);
+        if (!idsContabeis.length) return;
+        const { error: erroItens } = await supabaseClient
+          .from("contabilidade_lancamento_itens")
+          .delete()
+          .eq("user_id", userId)
+          .in("lancamento_id", idsContabeis);
+        if (erroItens) throw erroItens;
+        const { error: erroCabecalhos } = await supabaseClient
+          .from("contabilidade_lancamentos")
+          .delete()
+          .eq("user_id", userId)
+          .eq("origem", "CONTAS_PAGAR")
+          .eq("origem_id", String(itemPagar.id));
+        if (erroCabecalhos) throw erroCabecalhos;
+      }
+
       async function executarEstornoBaixa(type, id, dataBaixa) {
         if (dataBaixa && (isDiaFechado(dataBaixa) || isMesFechado(dataBaixa.substring(0, 7)))) return alert("Dia ou mês bloqueado.");
         const itemPagar = type === "pagar" ? contasPagar.find(p => String(p.id) === String(id)) : null;
@@ -3898,36 +3927,7 @@
         else if (type === "receber") { const item = contasReceber.find(p => p.id === id); transId = item && item.transferenciaId; }
 
         try {
-          // Ao estornar uma baixa de Contas a Pagar, remove também o lançamento
-          // contábil gerado para o título. A exclusão é restrita à origem e ao ID
-          // do próprio título, sem atingir compras do cartão ou lançamentos manuais.
-          if (type === "pagar" && itemPagar && itemPagar.origem !== "CONCILIACAO BANCARIA" && !itemPagar.isLancamentoDireto) {
-            const userId = session?.user?.id;
-            if (!userId || !supabaseClient) throw new Error("Não foi possível acessar a contabilidade. Faça login novamente.");
-            const { data: vinculados, error: erroBusca } = await supabaseClient
-              .from("contabilidade_lancamentos")
-              .select("id")
-              .eq("user_id", userId)
-              .eq("origem", "CONTAS_PAGAR")
-              .eq("origem_id", String(itemPagar.id));
-            if (erroBusca) throw erroBusca;
-            const idsContabeis = (vinculados || []).map(x => x.id);
-            if (idsContabeis.length) {
-              const { error: erroItens } = await supabaseClient
-                .from("contabilidade_lancamento_itens")
-                .delete()
-                .eq("user_id", userId)
-                .in("lancamento_id", idsContabeis);
-              if (erroItens) throw erroItens;
-              const { error: erroCabecalhos } = await supabaseClient
-                .from("contabilidade_lancamentos")
-                .delete()
-                .eq("user_id", userId)
-                .eq("origem", "CONTAS_PAGAR")
-                .eq("origem_id", String(itemPagar.id));
-              if (erroCabecalhos) throw erroCabecalhos;
-            }
-          }
+          if (type === "pagar") await removerLancamentoContabilBaixaPagar(itemPagar);
 
           const estornoUpdater = prev => prev.map(p => (String(p.id) === String(id) || (transId && p.transferenciaId === transId)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p);
           if (type === "pagar") { updateContasPagar(estornoUpdater); if (transId) updateContasReceber(estornoUpdater); }
@@ -3938,11 +3938,32 @@
         }
       }
 
-      function executarEstornoLote(type, ids) {
-        if (!ids || ids.length === 0) return alert("Nenhum item selecionado."); const listaAlvo = type === "pagar" ? contasPagar : contasReceber;
-        for (const id of ids) { const item = listaAlvo.find(i => i.id === id); if (type === "pagar" && item && item.formaBaixa === "CARTAO") return alert("O estorno de pagamentos com cartão deve ser feito individualmente, para remover também a compra vinculada da fatura."); if (item && item.dataBaixa) { if (isDiaFechado(item.dataBaixa) || isMesFechado(item.dataBaixa.substring(0, 7))) return alert(`Estorno cancelado: Há itens cuja data de baixa (${formatDateBR(item.dataBaixa)}) ou mês está bloqueada.`); } }
-        if (!window.confirm(`Deseja estornar a baixa dos ${ids.length} itens?`)) return;
-        if (type === "pagar") { updateContasPagar(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p)); setBatchPagarIds([]); } else if (type === "receber") { updateContasReceber(prev => prev.map(p => ids.includes(p.id) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p)); setBatchReceberIds([]); }
+      async function executarEstornoLote(type, ids) {
+        if (!ids || ids.length === 0) return alert("Nenhum item selecionado.");
+        const listaAlvo = type === "pagar" ? contasPagar : contasReceber;
+        for (const id of ids) {
+          const item = listaAlvo.find(i => String(i.id) === String(id));
+          if (type === "pagar" && item && item.formaBaixa === "CARTAO") return alert("O estorno de pagamentos com cartão deve ser feito individualmente, para remover também a compra vinculada da fatura.");
+          if (item && item.dataBaixa && (isDiaFechado(item.dataBaixa) || isMesFechado(item.dataBaixa.substring(0, 7)))) return alert(`Estorno cancelado: Há itens cuja data de baixa (${formatDateBR(item.dataBaixa)}) ou mês está bloqueada.`);
+        }
+        if (!window.confirm(`Deseja estornar a baixa dos ${ids.length} itens? Os lançamentos contábeis vinculados também serão excluídos.`)) return;
+        try {
+          if (type === "pagar") {
+            // Primeiro exclui a contabilidade de cada título; só depois reabre os títulos.
+            for (const id of ids) {
+              const item = listaAlvo.find(i => String(i.id) === String(id));
+              await removerLancamentoContabilBaixaPagar(item);
+            }
+            updateContasPagar(prev => prev.map(p => ids.some(id => String(id) === String(p.id)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p));
+            setBatchPagarIds([]);
+          } else if (type === "receber") {
+            updateContasReceber(prev => prev.map(p => ids.some(id => String(id) === String(p.id)) ? { ...p, status: "Em aberto", bancoBaixaId: null, dataBaixa: null } : p));
+            setBatchReceberIds([]);
+          }
+        } catch (e) {
+          console.error("Erro ao estornar baixas em lote e remover lançamentos contábeis:", e);
+          alert("Não foi possível concluir o estorno em lote: " + (e.message || "erro desconhecido"));
+        }
       }
 
       const movimentacoesConciliacao = useMemo(() => {
