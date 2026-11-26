@@ -1100,10 +1100,9 @@
         return true;
       }), [installmentsForMonth, filtroConciliacaoFatura, month]);
 
-      const installmentsForMonthVisiveis = useMemo(() =>
-        installmentsForMonthExibidos.filter(p => mostrarLancamentosTerminando || p.recorrente || Number(p.parcelas || 1) <= 1 || Number(p.index || 1) !== Number(p.parcelas || 1)),
-        [installmentsForMonthExibidos, mostrarLancamentosTerminando]
-      );
+      // A opção "Exibir lançamentos terminando" controla somente a lista destacada em amarelo.
+      // A lista principal de lançamentos do cartão deve sempre mostrar todas as parcelas.
+      const installmentsForMonthVisiveis = installmentsForMonthExibidos;
 
       const contasPagarForMonth = useMemo(() => {
         const mapped = contasPagar.map(p => {
