@@ -157,6 +157,7 @@
       const [pluggyTransactionsError, setPluggyTransactionsError] = useState("");
       const [pluggyTransactionsLoadedAt, setPluggyTransactionsLoadedAt] = useState("");
       const [pluggyTransactionAccountId, setPluggyTransactionAccountId] = useState("all");
+      const [pluggyTransactionDetailsOpen, setPluggyTransactionDetailsOpen] = useState({});
       const [categorias, setCategorias] = useState([]); 
       const [deparaList, setDeparaList] = useState([]);
       const [faturasFechadas, setFaturasFechadas] = useState({});
@@ -6320,14 +6321,37 @@
                       h('tbody', null,
                         pluggyTransactions.filter(t => pluggyTransactionAccountId === 'all' || t.accountId === pluggyTransactionAccountId).map(t => {
                           const valor = String(t.type).toUpperCase() === 'DEBIT' ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
-                          return h('tr', { key: t.accountId + ':' + t.id, style: { borderTop: '1px solid var(--line)' } },
-                            h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, formatDateBR(String(t.date || '').slice(0, 10))),
-                            h('td', { style: { padding: 9 } }, t.connector + ' • ' + t.accountName),
-                            h('td', { style: { padding: 9, minWidth: 190 } }, t.description || 'Movimentação bancária', t.operationType ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 10, marginTop: 2 } }, t.operationType) : null),
-                            h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, String(t.type).toUpperCase() === 'DEBIT' ? 'Saída' : 'Entrada'),
-                            h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 } }, valoresOcultos ? '••••••' : formatBRL(valor)),
-                            h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
-                            h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, String(t.status).toUpperCase() === 'PENDING' ? 'Pendente' : 'Efetivada')
+                          const detalheAberto = !!pluggyTransactionDetailsOpen[t.accountId + ':' + t.id];
+                          return h(React.Fragment, { key: t.accountId + ':' + t.id },
+                            h('tr', { style: { borderTop: '1px solid var(--line)' } },
+                              h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, formatDateBR(String(t.date || '').slice(0, 10))),
+                              h('td', { style: { padding: 9 } }, t.connector + ' • ' + t.accountName),
+                              h('td', { style: { padding: 9, minWidth: 190 } }, t.description || 'Movimentação bancária', t.operationType ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 10, marginTop: 2 } }, t.operationType) : null),
+                              h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, String(t.type).toUpperCase() === 'DEBIT' ? 'Saída' : 'Entrada'),
+                              h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 } }, valoresOcultos ? '••••••' : formatBRL(valor)),
+                              h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
+                              h('td', { style: { padding: 9, whiteSpace: 'nowrap' } },
+                                String(t.status).toUpperCase() === 'PENDING' ? 'Pendente' : 'Efetivada',
+                                h('button', { type: 'button', className: 'action-btn', style: { display: 'block', marginTop: 6, padding: '5px 8px', fontSize: 11, whiteSpace: 'nowrap' }, onClick: () => setPluggyTransactionDetailsOpen(prev => ({ ...prev, [t.accountId + ':' + t.id]: !prev[t.accountId + ':' + t.id] })) }, detalheAberto ? 'Ocultar detalhes' : 'Exibir detalhes')
+                              )
+                            ),
+                            detalheAberto && h('tr', { style: { background: 'var(--paper)' } },
+                              h('td', { colSpan: 7, style: { padding: 12, borderBottom: '1px solid var(--line)' } },
+                                h('div', { style: { fontWeight: 700, marginBottom: 9 } }, 'Detalhes da movimentação'),
+                                h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 } },
+                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'ID da transação Pluggy'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.id || 'Não informado')),
+                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'ID da conta Pluggy'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.accountId || 'Não informado')),
+                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Instituição'), h('div', { style: { fontWeight: 600 } }, t.connector || 'Não informado')),
+                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Categoria do banco'), h('div', { style: { fontWeight: 600 } }, t.category || 'Não informada')),
+                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Tipo retornado pelo banco'), h('div', { style: { fontWeight: 600 } }, t.type || 'Não informado')),
+                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Tipo de operação'), h('div', { style: { fontWeight: 600 } }, t.operationType || 'Não informado')),
+                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Situação retornada'), h('div', { style: { fontWeight: 600 } }, t.status || 'Não informada')),
+                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Identificador do banco'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.providerId || 'Não informado')),
+                                  h('div', { style: { gridColumn: '1 / -1' } }, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Descrição original do banco'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.rawDescription || t.description || 'Não informada'))
+                                ),
+                                h('div', { style: { marginTop: 10, fontSize: 10, color: 'var(--ink-soft)' } }, 'Esses dados ficarão disponíveis para o futuro confronto com os lançamentos do sistema.')
+                              )
+                            )
                           );
                         })
                       )
