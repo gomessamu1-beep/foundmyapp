@@ -298,6 +298,8 @@
       const [concilEditModal, setConcilEditModal] = useState({ open: false, item: null });
       const [pluggySistemaSelecionados, setPluggySistemaSelecionados] = useState([]);
       const [pluggyBancoSelecionados, setPluggyBancoSelecionados] = useState([]);
+      const [pluggyFiltroConciliacao, setPluggyFiltroConciliacao] = useState("todos");
+      const [pluggyFiltroTipo, setPluggyFiltroTipo] = useState("todos");
       const [pluggyConcilPersistido, setPluggyConcilPersistido] = useState(() => {
         try { return JSON.parse(localStorage.getItem("foundmyapp-pluggy-concil-v1") || '{"vinculos":[],"removidos":[]}'); }
         catch (_) { return { vinculos: [], removidos: [] }; }
@@ -5264,7 +5266,17 @@
           ),
 
           screen === "dashboard" && (() => {
-            const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
+            const movimentosSistemaFiltrados = movimentosSistema.filter(item => {
+                     const conciliado = sistemaConciliadoIds.has(String(item.id));
+                     const tipo = item.tipo === 'Débito' ? 'debito' : 'credito';
+                     return (pluggyFiltroConciliacao === 'todos' || (pluggyFiltroConciliacao === 'conciliados' ? conciliado : !conciliado)) && (pluggyFiltroTipo === 'todos' || pluggyFiltroTipo === tipo);
+                   });
+                   const extratoBancoFiltrado = extratoBanco.filter(tx => {
+                     const conciliado = pluggyConciliadoIds.has(String(tx.id));
+                     const tipo = String(tx.type || '').toUpperCase() === 'DEBIT' ? 'debito' : 'credito';
+                     return (pluggyFiltroConciliacao === 'todos' || (pluggyFiltroConciliacao === 'conciliados' ? conciliado : !conciliado)) && (pluggyFiltroTipo === 'todos' || pluggyFiltroTipo === tipo);
+                   });
+                   const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
             const mesAtual = dashboardCompetencia;
             const aberto = x => String(x.status || "").toLowerCase() !== "baixado" && String(x.status || "").toLowerCase() !== "recebido" && String(x.status || "").toLowerCase() !== "pago";
             const valorTitulo = x => Number(x.valorParcelaBase ?? x.valorBase ?? x.valorParcela ?? x.total ?? x.valor ?? 0) || 0;
@@ -6550,7 +6562,7 @@
                     h('div', { style:{ fontWeight:700, padding:'10px 12px', borderBottom:'1px solid var(--line)' } }, "Movimentações do Sistema"),
                     h('table', { style:{ width:'100%', minWidth:360, margin:0, fontSize:12 } },
                       h('thead', null, h('tr', null, h('th', { style:{ width:38 } }, " "), h('th', null, "Data"), h('th', { className:'right' }, "Valor"), h('th', null, "Situação / Ação"))),
-                      h('tbody', null, movimentosSistema.length ? movimentosSistema.map(item => {
+                      h('tbody', null, movimentosSistemaFiltrados.length ? movimentosSistemaFiltrados.map(item => {
                         const conciliado = sistemaConciliadoIds.has(String(item.id));
                         const divergente = parSistema.has(String(item.id)) && !conciliado;
                         const valor = item.tipo === 'Débito' ? -Number(item.valorDebito || 0) : Number(item.valorCredito || 0);
@@ -6569,7 +6581,7 @@
                     h('div', { style:{ fontWeight:700, padding:'10px 12px', borderBottom:'1px solid var(--line)' } }, "Movimentações da Pluggy"),
                     h('table', { style:{ width:'100%', minWidth:360, margin:0, fontSize:12 } },
                       h('thead', null, h('tr', null, h('th', { style:{ width:38 } }, " "), h('th', null, "Data"), h('th', { className:'right' }, "Valor"), h('th', null, "Situação"))),
-                      h('tbody', null, extratoBanco.length ? extratoBanco.map(tx => {
+                      h('tbody', null, extratoBancoFiltrado.length ? extratoBancoFiltrado.map(tx => {
                         const conciliado = pluggyConciliadoIds.has(String(tx.id));
                         const divergente = parPluggy.has(String(tx.id)) && !conciliado;
                         const valor = valorPluggy(tx);
@@ -6606,6 +6618,16 @@
                       h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Lançamentos conciliados"), h('strong', { style:{ color:'var(--green)', fontSize:18 } }, qtdConciliados + " de " + extratoBanco.length), h('div', { style:{ fontSize:11, color:'var(--ink-soft)', marginTop:3 } }, percentualConciliado.toFixed(1).replace('.', ',') + "% da Pluggy"))
                     ),
                     h('div', { style:{ fontSize:11, color:'var(--ink-soft)', marginBottom:12 } }, "Um lançamento só entra no saldo conciliado quando o valor e o sentido (entrada/saída) são iguais nos dois lados. Vínculos com valores diferentes aparecem como Valor divergente e permanecem fora do saldo conciliado."),
+                    h('div', { style:{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'center', padding:'10px 12px', marginBottom:12, border:'1px solid var(--line)', borderRadius:8, background:'var(--card)' } },
+                      h('div', { style:{ display:'flex', gap:5, alignItems:'center', flexWrap:'wrap' } },
+                        h('strong', { style:{ fontSize:12 } }, 'Conciliação:'),
+                        [['todos','Todos'],['conciliados','Conciliados'],['naoConciliados','Não conciliados']].map(([id,label]) => h('button', { key:id, type:'button', className:pluggyFiltroConciliacao === (id === 'naoConciliados' ? 'naoConciliados' : id) ? 'primary' : 'action-btn', style:{ padding:'6px 9px', fontSize:11 }, onClick:() => setPluggyFiltroConciliacao(id === 'naoConciliados' ? 'naoConciliados' : id) }, label))
+                      ),
+                      h('div', { style:{ display:'flex', gap:5, alignItems:'center', flexWrap:'wrap' } },
+                        h('strong', { style:{ fontSize:12 } }, 'Tipo:'),
+                        [['todos','Todos'],['debito','Débitos'],['credito','Créditos']].map(([id,label]) => h('button', { key:id, type:'button', className:pluggyFiltroTipo === id ? 'primary' : 'action-btn', style:{ padding:'6px 9px', fontSize:11 }, onClick:() => setPluggyFiltroTipo(id) }, label))
+                      )
+                    ),
                     h('div', { style:{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 } },
                       h('button', { type:'button', className:'primary', onClick:conciliarSelecionados, disabled:pluggySistemaSelecionados.length !== 1 || pluggyBancoSelecionados.length !== 1 }, "Conciliar selecionados"),
                       h('button', { type:'button', className:'action-btn', onClick:removerSelecionados, disabled:pluggySistemaSelecionados.length + pluggyBancoSelecionados.length === 0 }, "Remover conciliação"),
