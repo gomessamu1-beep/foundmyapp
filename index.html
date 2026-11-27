@@ -6449,10 +6449,10 @@
                 h('button', { type: 'button', className: 'primary', style: { width: '100%', justifyContent: 'flex-start', padding: '13px 14px' }, onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
                 h('button', { type: 'button', className: 'action-btn', style: { width: '100%', textAlign: 'left', padding: '13px 14px', borderColor: 'var(--green)' }, onClick: () => setConcilTab('resumo') }, "Resumo da Conciliação"),
                 h('button', { type: 'button', className: 'action-btn', style: { width: '100%', textAlign: 'left', padding: '13px 14px' }, onClick: () => { setConcilTab('calendario'); setCalendarioExpandido(true); } }, "Calendário de Saldos"),
-                h('button', { type: 'button', className: 'action-btn', style: { width: '100%', textAlign: 'left', padding: '13px 14px' }, onClick: () => setConcilTab('movimentacoes') }, "Movimentações Bancárias")
+                h('button', { type: 'button', className: 'action-btn', style: { width: '100%', textAlign: 'left', padding: '13px 14px' }, onClick: () => setConcilTab('movimentacoes') }, "Movimentações Bancárias"), h('button', { type: 'button', className: 'action-btn', style: { width: '100%', textAlign: 'left', padding: '13px 14px' }, onClick: () => setConcilTab('cruzamento') }, "Cruzamento de Extratos")
               ) : h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 440 } },
                 h('button', { type: 'button', className: 'action-btn', style: { alignSelf: 'flex-start', marginBottom: 4 }, onClick: () => { setConcilTab(''); setConcilExibido(false); } }, "← Voltar às opções"),
-                h('div', { className: 'primary', style: { width: '100%', padding: '12px 14px', cursor: 'default' } }, concilTab === 'resumo' ? "Resumo da Conciliação" : concilTab === 'calendario' ? "Calendário de Saldos" : "Movimentações Bancárias"),
+                h('div', { className: 'primary', style: { width: '100%', padding: '12px 14px', cursor: 'default' } }, concilTab === 'resumo' ? "Resumo da Conciliação" : concilTab === 'calendario' ? "Calendário de Saldos" : concilTab === 'cruzamento' ? "Cruzamento de Extratos" : "Movimentações Bancárias"),
                 concilExibido && h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
                   h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
                   h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
@@ -6506,6 +6506,46 @@
               })),
               ),
 
+
+              (!isAndroidApp || concilTab === 'cruzamento') && h(React.Fragment, null,
+                h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, borderBottom: '2px solid var(--line)', paddingBottom: 8 } }, "Cruzamento de Extratos"),
+                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 } }, "Comparação lado a lado do extrato do sistema e do extrato bancário Pluggy para a conta e o período selecionados acima."),
+                (() => {
+                  const contaSistema = contasBancarias.find(c => String(c.id) === String(concilContaId));
+                  const pluggyId = contaSistema ? contaSistema.pluggyAccountId : "";
+                  const extratoBanco = (pluggyTransactions || []).filter(t => String(t.accountId) === String(pluggyId) && String(t.date || "").slice(0,10) >= concilDataIni && String(t.date || "").slice(0,10) <= concilDataFim);
+                  const linhas = movimentacoesConciliacao.map(item => ({ item, tx: encontrarTransacaoPluggyParaMovimentacao(item, contaSistema) }));
+                  const conciliados = linhas.filter(x => x.tx).length;
+                  const pendentesSistema = linhas.length - conciliados;
+                  const idsConciliados = new Set(linhas.filter(x => x.tx).map(x => String(x.tx.id)));
+                  const pendentesBanco = extratoBanco.filter(t => !idsConciliados.has(String(t.id))).length;
+                  const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
+                  const box = (titulo, registros) => h('section', { style: { minWidth: 0, border: '1px solid var(--line)', borderRadius: 8, padding: 10, background: 'var(--card)' } },
+                    h('h4', { style: { margin: '0 0 9px', fontSize: 13 } }, titulo),
+                    registros.length ? registros.map((x,idx) => h('div', { key: idx, style: { padding: 9, borderBottom: '1px solid var(--line)', fontSize: 12 } },
+                      h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6 } },
+                        h('strong', null, formatDateBR(x.data)),
+                        h('strong', { style: { color: x.ok ? 'var(--green)' : 'var(--red)', fontSize: 10 } }, x.ok ? 'Conciliado' : 'Não conciliado')
+                      ),
+                      h('div', { style: { marginTop: 4 } }, x.descricao),
+                      h('strong', { style: { display: 'block', marginTop: 4 } }, money(x.valor))
+                    )) : h('div', { style: { color: 'var(--ink-soft)', fontSize: 12 } }, "Nenhuma movimentação neste período.")
+                  );
+                  return h('div', null,
+                    !pluggyTransactionsLoadedAt && h('div', { className: 'warning-box', style: { marginBottom: 10 } }, "Consulte as movimentações da Pluggy na área de saldos bancários para carregar o extrato."),
+                    !pluggyId && h('div', { className: 'warning-box', style: { marginBottom: 10 } }, "Vincule a conta bancária do sistema a uma conta Pluggy em Cadastros > Contas."),
+                    h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 8, marginBottom: 12 } },
+                      h('div', { className: 'top', style: { margin: 0, padding: 10 } }, h('div', { style: { fontSize: 11 } }, "Conciliados"), h('strong', { style: { color: 'var(--green)', fontSize: 20 } }, conciliados)),
+                      h('div', { className: 'top', style: { margin: 0, padding: 10 } }, h('div', { style: { fontSize: 11 } }, "Pendentes no sistema"), h('strong', { style: { color: 'var(--red)', fontSize: 20 } }, pendentesSistema)),
+                      h('div', { className: 'top', style: { margin: 0, padding: 10 } }, h('div', { style: { fontSize: 11 } }, "Pendentes no banco"), h('strong', { style: { color: 'var(--red)', fontSize: 20 } }, pendentesBanco))
+                    ),
+                    h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 } },
+                      box("Extrato do sistema", linhas.map(x => ({ data: x.item.data, descricao: x.item.descricao, valor: x.item.tipo === 'Débito' ? -Number(x.item.valorDebito || 0) : Number(x.item.valorCredito || 0), ok: !!x.tx }))),
+                      box("Extrato bancário (Pluggy)", extratoBanco.map(t => ({ data: String(t.date || '').slice(0,10), descricao: t.description || t.rawDescription || 'Movimentação bancária', valor: String(t.type).toUpperCase() === 'DEBIT' ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0)), ok: idsConciliados.has(String(t.id)) })))
+                    )
+                  );
+                })()
+              ),
               (!isAndroidApp || concilTab === 'movimentacoes') && h(React.Fragment, null,
               h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottom: '2px solid var(--line)', paddingBottom: 8 } }, "Movimentação Detalhada do Período Filtrado"),
 
