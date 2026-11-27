@@ -152,7 +152,7 @@
       const [diasFechados, setDiasFechados] = useState({});
       const [mesesFechados, setMesesFechados] = useState({});
       
-      const [screen, setScreen] = useState(() => sessionStorage.getItem('fatura-screen-v1') || "cadastros");
+      const [screen, setScreen] = useState("dashboard");
       const [faturaViewTab, setFaturaViewTab] = useState(() => sessionStorage.getItem("fatura-viewtab-v1") || "lancamentos");
       const [contabTab, setContabTab] = useState(() => sessionStorage.getItem("fatura-contabtab-v1") || "plano");
       const [contabPlano, setContabPlano] = useState([]);
@@ -4959,6 +4959,7 @@
               h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', minWidth: 'max-content' } }, h(CreditCard, { size: 22 }), h('span', { className: 'nav-text' }, "Samuel Gomes"))
             ),
             h('div', { className: 'sidebar-nav' },
+              h('button', { className: screen === "dashboard" ? "active" : "", onClick: () => { setScreen("dashboard"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Visão geral")),
               h('button', { className: screen === "cadastros" ? "active" : "", onClick: () => { setScreen("cadastros"); setMenuMobileOpen(false); } }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
               h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => { setScreen("lancamentos"); setLancamentoTab(""); setMenuMobileOpen(false); } }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
               h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setFaturaViewTab("lancamentos"); setMenuMobileOpen(false); carregarConferenciaFaturas(); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
@@ -4987,6 +4988,7 @@
               style: { display: 'none' }
             }, '☰'),
             h('h2', { style: { margin: 0, fontSize: '20px', color: 'var(--ink)' } }, 
+              screen === 'dashboard' ? 'Visão geral' :
               screen === 'cadastros' ? 'Cadastros e Configurações' :
               screen === 'lancamentos' ? 'Gestão de Lançamentos' :
               screen === 'faturas' ? 'Faturas de Cartão' :
@@ -5008,6 +5010,67 @@
               valoresOcultos ? "Exibir Valores" : "Ocultar Valores"
             )
           ),
+
+          screen === "dashboard" && (() => {
+            const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
+            const mesAtual = currentMonth();
+            const aberto = x => String(x.status || "").toLowerCase() !== "baixado" && String(x.status || "").toLowerCase() !== "recebido" && String(x.status || "").toLowerCase() !== "pago";
+            const valorTitulo = x => Number(x.valorParcelaBase ?? x.valorBase ?? x.valorParcela ?? x.total ?? x.valor ?? 0) || 0;
+            const pagarAbertas = (contasPagar || []).filter(aberto);
+            const receberAbertas = (contasReceber || []).filter(aberto);
+            const pagarMes = (contasPagar || []).filter(x => String(x.dataBaixa || "").startsWith(mesAtual) && !aberto(x)).reduce((a,x) => a + Number(x.valorPagoBaixa ?? valorTitulo(x)), 0);
+            const receberMes = (contasReceber || []).filter(x => String(x.dataBaixa || "").startsWith(mesAtual) && !aberto(x)).reduce((a,x) => a + Number(x.valorRecebidoBaixa ?? valorTitulo(x)), 0);
+            const resultadoMes = receberMes - pagarMes;
+            const maxFluxo = Math.max(receberMes, pagarMes, 1);
+            const vencimentos = [...pagarAbertas.map(x => ({...x, _tipo:"Pagar"})), ...receberAbertas.map(x => ({...x, _tipo:"Receber"}))]
+              .filter(x => x.vencimento || x.dataVencimento)
+              .sort((a,b) => String(a.vencimento || a.dataVencimento).localeCompare(String(b.vencimento || b.dataVencimento))).slice(0,5);
+            const recentes = [...(purchases || [])].sort((a,b) => String(b.data || b.dataCompra || b.created_at || "").localeCompare(String(a.data || a.dataCompra || a.created_at || ""))).slice(0,6);
+            const card = (label, value, hint, icon, color) => h('div', { style:{background:'var(--card)',border:'1px solid var(--line)',borderRadius:10,padding:'15px',minWidth:0,boxShadow:'0 1px 3px rgba(0,0,0,.04)'} },
+              h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}},h('span',{style:{fontSize:12,color:'var(--ink-soft)'}},label),h('span',{style:{color:color||'var(--ink-soft)'}},icon)),
+              h('div',{style:{fontSize:21,fontWeight:750,marginTop:9,overflowWrap:'anywhere'}},value),
+              h('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:5}},hint));
+            const shortcut = (label,desc,icon,target,tab) => h('button',{type:'button',onClick:()=>{setScreen(target);if(tab)setLancamentoTab(tab);setMenuMobileOpen(false);},style:{display:'flex',alignItems:'center',gap:11,textAlign:'left',padding:'12px',border:'1px solid var(--line)',borderRadius:8,background:'var(--card)',color:'var(--ink)',cursor:'pointer',minWidth:0}},h('span',{style:{display:'grid',placeItems:'center',width:34,height:34,borderRadius:8,background:'var(--bg-soft,#f1f5f9)',flexShrink:0}},icon),h('span',null,h('strong',{style:{display:'block',fontSize:13}},label),h('small',{style:{display:'block',fontSize:11,color:'var(--ink-soft)',marginTop:3}},desc)));
+            return h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
+              h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,flexWrap:'wrap'}},
+                h('div',null,h('div',{style:{fontSize:18,fontWeight:700}},'Resumo financeiro'),h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:3}},formatMonthLabel(mesAtual))),
+                h('button',{type:'button',className:'action-btn',onClick:()=>setValoresOcultos(v=>!v),style:{display:'inline-flex',alignItems:'center',gap:7}},valoresOcultos?h(Eye,{size:16}):h(EyeOff,{size:16}),valoresOcultos?'Mostrar valores':'Ocultar valores')),
+              h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:10}},
+                card('Contas a pagar em aberto',money(pagarAbertas.reduce((a,x)=>a+valorTitulo(x),0)),pagarAbertas.length+' título(s) pendente(s)',h(ArrowDownCircle,{size:20}),'var(--red)'),
+                card('Contas a receber em aberto',money(receberAbertas.reduce((a,x)=>a+valorTitulo(x),0)),receberAbertas.length+' título(s) pendente(s)',h(ArrowUpCircle,{size:20}),'var(--green)'),
+                card('Saldo bancário','—',contasBancarias.length+' conta(s) cadastrada(s); consulte a conciliação',h(Landmark,{size:20})),
+                card('Resultado financeiro do mês',money(resultadoMes),'Recebimentos menos pagamentos baixados no mês',h(BarChart3,{size:20}),resultadoMes>=0?'var(--green)':'var(--red)')
+              ),
+              h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,320px),1fr))',gap:12}},
+                h('section',{style:{background:'var(--card)',border:'1px solid var(--line)',borderRadius:10,padding:15,minWidth:0}},
+                  h('strong',{style:{fontSize:14}},'Fluxo financeiro do mês'),
+                  h('div',{style:{display:'flex',flexDirection:'column',gap:14,marginTop:16}},
+                    [['Recebido',receberMes,'var(--green)'],['Pago',pagarMes,'var(--red)']].map(([label,val,color])=>h('div',{key:label},
+                      h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:6}},h('span',null,label),h('strong',null,money(val))),
+                      h('div',{style:{height:10,background:'var(--line)',borderRadius:10,overflow:'hidden'}},h('div',{style:{height:'100%',width:((val/maxFluxo)*100)+'%',background:color,borderRadius:10,minWidth:val>0?3:0}})))))),
+                h('section',{style:{background:'var(--card)',border:'1px solid var(--line)',borderRadius:10,padding:15,minWidth:0}},
+                  h('strong',{style:{fontSize:14}},'Próximos vencimentos'),
+                  vencimentos.length?vencimentos.map((x,i)=>h('div',{key:x.id||i,style:{display:'flex',justifyContent:'space-between',gap:10,padding:'9px 0',borderBottom:i===vencimentos.length-1?'0':'1px solid var(--line)',fontSize:12}},
+                    h('div',{style:{minWidth:0}},h('div',{style:{fontWeight:600,overflowWrap:'anywhere'}},x.descricao||x.nome||'Lançamento'),h('div',{style:{color:'var(--ink-soft)',marginTop:3}},x._tipo+' • '+formatDateBR(x.vencimento||x.dataVencimento))),
+                    h('strong',{style:{whiteSpace:'nowrap',color:x._tipo==='Pagar'?'var(--red)':'var(--green)'}},money(valorTitulo(x))))):h('div',{style:{fontSize:12,color:'var(--ink-soft)',padding:'14px 0'}},'Nenhum vencimento pendente encontrado.')
+                )
+              ),
+              h('section',{style:{background:'var(--card)',border:'1px solid var(--line)',borderRadius:10,padding:15}},
+                h('strong',{style:{fontSize:14}},'Acesso rápido'),
+                h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:8,marginTop:12}},
+                  shortcut('Financeiro','Contas a pagar e receber',h(CreditCard,{size:18}),'lancamentos',''),
+                  shortcut('Cartões','Lançamentos e faturas',h(CreditCard,{size:18}),'faturas'),
+                  shortcut('Contabilidade','Plano, lançamentos e relatórios',h(FolderTree,{size:18}),'contabilidade'),
+                  shortcut('Relatórios','Consultas financeiras',h(BarChart3,{size:18}),'relatorios'),
+                  shortcut('Conciliação bancária','Conferir movimentações',h(RefreshCw,{size:18}),'conciliacao')
+                )
+              ),
+              h('section',{style:{background:'var(--card)',border:'1px solid var(--line)',borderRadius:10,padding:15}},
+                h('strong',{style:{fontSize:14}},'Lançamentos recentes'),
+                recentes.length?h('div',{style:{overflowX:'auto',marginTop:8}},h('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:12}},h('tbody',null,recentes.map((x,i)=>h('tr',{key:x.id||i,style:{borderBottom:'1px solid var(--line)'}},h('td',{style:{padding:'9px 6px'}},formatDateBR(x.data||x.dataCompra||'')),h('td',{style:{padding:'9px 6px'}},x.descricao||x.estabelecimento||x.nome||'Compra'),h('td',{style:{padding:'9px 6px',textAlign:'right',fontWeight:600,whiteSpace:'nowrap'}},money(x.valorTotal??x.valor??x.valorParcela??0))))))):h('div',{style:{fontSize:12,color:'var(--ink-soft)',padding:'12px 0'}},'Nenhum lançamento recente encontrado.')
+              )
+            );
+          })(),
 
           screen === "contabilidade" && h('div', { className: 'form-card' },
             h('div', { className: 'sub-nav', style: { marginBottom: 16 } },
