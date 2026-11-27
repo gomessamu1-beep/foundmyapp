@@ -291,7 +291,7 @@
       const [concilDataIni, setConcilDataIni] = useState(`${currentMonth()}-01`);
       const [concilDataFim, setConcilDataFim] = useState(currentDate());
       const [concilExibido, setConcilExibido] = useState(false);
-      const [concilTab, setConcilTab] = useState(() => sessionStorage.getItem("fatura-conciltab-v1") || "");
+      const [concilTab, setConcilTab] = useState(() => sessionStorage.getItem("fatura-conciltab-v1") || "movimentacoes");
       const [concilCalMes, setConcilCalMes] = useState(currentMonth());
       const [calendarioExpandido, setCalendarioExpandido] = useState(false);
 
