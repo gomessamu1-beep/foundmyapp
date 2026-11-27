@@ -643,7 +643,7 @@
         const valor = Number(acao.amount);
         const data = String(acao.date || currentDate()).slice(0, 10);
         const categoria = categorias.find(c => String(c.nome || "").trim().toLocaleLowerCase("pt-BR") === String(acao.category_name || "").trim().toLocaleLowerCase("pt-BR"));
-        if (!descricao || !Number.isFinite(valor) || valor <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(data) || !categoria) {
+        if (!descricao || !Number.isFinite(valor) || valor <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(data) || !categoria || categoria.isTransferencia || String(categoria.tipo || "").toLowerCase() !== (tipo === "create_payable" ? "despesa" : "receita")) {
           alert("Não foi possível validar o lançamento. Confira se a descrição, o valor, a data e a categoria estão corretos e cadastrados.");
           return;
         }
