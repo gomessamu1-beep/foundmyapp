@@ -6404,7 +6404,7 @@
                           h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: Number(t.balance) < 0 ? 'var(--red)' : 'inherit' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap' } },
                             h('strong', { style: { display:'block', color: correspondente ? 'var(--green)' : 'var(--red)', marginBottom:6 } }, correspondente ? 'Conciliado' : 'Não conciliado'),
-                            h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
+                            !correspondente && !(pluggyConcilPersistido?.vinculos || []).some(v => String(v.contaId) === String(concilContaId) && String(v.pluggyId) === String(t.id)) && h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
                               const ehDebito = String(t.type || '').toUpperCase() === 'DEBIT';
                               setLrTipo(ehDebito ? 'despesa' : 'receita');
                               setLrDescricao(String(t.description || t.rawDescription || 'Movimentação Pluggy').trim());
@@ -6579,7 +6579,7 @@
                           h('td', { className:'right num', style:{ whiteSpace:'nowrap', color:valor < 0 ? 'var(--red)' : 'inherit' } }, money(valor)),
                           h('td', null,
                             h('span', { style:{ display:'block', color:conciliado?'var(--green)':(divergente?'var(--amber)':'var(--red)'), fontWeight:700, whiteSpace:'nowrap', marginBottom:6 } }, conciliado ? "Conciliado" : (divergente ? "Valor divergente" : "Não conciliado")),
-                            h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
+                            !conciliado && h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
                               const ehDebito = String(tx.type || '').toUpperCase() === 'DEBIT';
                               setLrTipo(ehDebito ? 'despesa' : 'receita');
                               setLrDescricao(String(tx.description || tx.rawDescription || 'Movimentação Pluggy').trim());
