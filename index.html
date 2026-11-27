@@ -153,6 +153,11 @@
       const [mesesFechados, setMesesFechados] = useState({});
       
       const [dashboardCompetencia, setDashboardCompetencia] = useState(currentMonth());
+      const [assistantOpen, setAssistantOpen] = useState(false);
+      const [assistantInput, setAssistantInput] = useState("");
+      const [assistantMessages, setAssistantMessages] = useState([]);
+      const [assistantBusy, setAssistantBusy] = useState(false);
+      const [assistantPendingAction, setAssistantPendingAction] = useState(null);
       const [screen, setScreen] = useState("dashboard");
       const [faturaViewTab, setFaturaViewTab] = useState(() => sessionStorage.getItem("fatura-viewtab-v1") || "lancamentos");
       const [contabTab, setContabTab] = useState(() => sessionStorage.getItem("fatura-contabtab-v1") || "plano");
@@ -600,7 +605,76 @@
       async function alternarTipoMov(item){const {error}=await supabaseClient.from("tipos_movimentacao").update({ativo:!item.ativo,updated_at:new Date().toISOString()}).eq("id",item.id).eq("user_id",session.user.id);if(error)return alert(error.message);carregarTiposMovimentacao();}
       async function excluirTipoMov(item){if(!confirm("Excluir "+item.descricao+"?"))return;const {error}=await supabaseClient.from("tipos_movimentacao").delete().eq("id",item.id).eq("user_id",session.user.id);if(error)return alert(error.message);carregarTiposMovimentacao();}
       function renderParametrosContabilidadePagar() {
-        return h(React.Fragment, null,
+  
+      async function enviarMensagemAssistente(e) {
+        if (e) e.preventDefault();
+        const pergunta = assistantInput.trim();
+        if (!pergunta || assistantBusy) return;
+        const historico = [...assistantMessages, { role: "user", text: pergunta }].slice(-12);
+        setAssistantMessages(historico);
+        setAssistantInput("");
+        setAssistantBusy(true);
+        setAssistantPendingAction(null);
+        try {
+          const { data, error } = await supabaseClient.functions.invoke("foundmyapp-assistant", {
+            body: { message: pergunta, history: historico.slice(-10) }
+          });
+          if (error) throw error;
+          if (!data || !data.reply) throw new Error("A IA não retornou uma resposta válida.");
+          setAssistantMessages(prev => [...prev, { role: "assistant", text: data.reply }]);
+          if (data.action && data.action.action_type && data.action.action_type !== "none") setAssistantPendingAction(data.action);
+        } catch (err) {
+          console.error("Assistente Gemini:", err);
+          setAssistantMessages(prev => [...prev, { role: "assistant", text: "Não consegui acessar o Gemini agora. " + (err?.message || "Verifique sua conexão e tente novamente.") }]);
+        } finally {
+          setAssistantBusy(false);
+        }
+      }
+
+      function executarAcaoAssistente() {
+        const acao = assistantPendingAction;
+        if (!acao) return;
+        const tipo = String(acao.action_type || "");
+        if (!["create_payable", "create_receivable"].includes(tipo)) {
+          alert("Essa ação ainda não está disponível para execução automática.");
+          return;
+        }
+        const descricao = String(acao.description || "").trim();
+        const valor = Number(acao.amount);
+        const data = String(acao.date || currentDate()).slice(0, 10);
+        const categoria = categorias.find(c => String(c.nome || "").trim().toLocaleLowerCase("pt-BR") === String(acao.category_name || "").trim().toLocaleLowerCase("pt-BR"));
+        if (!descricao || !Number.isFinite(valor) || valor <= 0 || !/^\\d{4}-\\d{2}-\\d{2}$/.test(data) || !categoria) {
+          alert("Não foi possível validar o lançamento. Confira se a descrição, o valor, a data e a categoria estão corretos e cadastrados.");
+          return;
+        }
+        const subcategoriaNome = String(acao.subcategory_name || "").trim();
+        const subcategoria = subcategoriaNome ? (categoria.subcategorias || []).find(x => String(x.nome || "").trim().toLocaleLowerCase("pt-BR") === subcategoriaNome.toLocaleLowerCase("pt-BR")) : null;
+        if (!categoria.isTransferencia && !subcategoria) {
+          alert("A subcategoria informada não foi encontrada dentro da categoria " + categoria.nome + ". Nenhum lançamento foi gravado.");
+          return;
+        }
+        const competencia = data.slice(0, 7);
+        if (isDiaFechado(data) || isMesFechado(competencia)) {
+          alert("O dia ou mês informado está fechado. Abra o período antes de criar esse lançamento.");
+          return;
+        }
+        const registro = {
+          id: uid(), descricao, observacao: String(acao.observation || "").trim(),
+          total: valor, valorBase: valor, valorParcela: valor, valorParcelaBase: valor,
+          acrescimo: 0, desconto: 0, dataCompra: data, dataVencimento: data,
+          parcelas: 1, parcelaInicial: 1, inicio: competencia, recorrente: false,
+          cartaoId: null, categoriaId: categoria.id,
+          subcategoriaId: categoria.isTransferencia ? null : subcategoria.id,
+          status: "Em aberto", bancoBaixaId: null, dataBaixa: null,
+          criadoEm: Date.now(), origem: tipo === "create_payable" ? "CONTAS A PAGAR" : "CONTAS A RECEBER"
+        };
+        if (tipo === "create_payable") updateContasPagar(prev => [...prev, registro]);
+        else updateContasReceber(prev => [...prev, registro]);
+        setAssistantMessages(prev => [...prev, { role: "assistant", text: "Lançamento incluído em " + (tipo === "create_payable" ? "Contas a Pagar" : "Contas a Receber") + ": " + descricao + " — " + formatBRL(valor) + "." }]);
+        setAssistantPendingAction(null);
+      }
+
+      return h(React.Fragment, null,
         h('div', { className:'form-card', style:{padding:14,marginBottom:14,border:'1px solid var(--line)'} },
           h('div', { style:{fontWeight:700,marginBottom:6} }, "Contas a Pagar"),
           h('div', { style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10} }, "Selecione uma única conta analítica de despesa para todos os acréscimos e uma única conta analítica de receita para todos os descontos. Se não houver esses valores no pagamento, essas contas não serão movimentadas."),
@@ -6640,6 +6714,40 @@
               h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setContaModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
             )
           )
+        )
+
+        ,
+        h("div", { style: { position: "fixed", right: 18, bottom: 18, zIndex: 2500 } },
+          assistantOpen ? h("div", { style: { width: "min(390px, calc(100vw - 28px))", height: "min(570px, calc(100dvh - 100px))", display: "flex", flexDirection: "column", background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 12px 40px rgba(0,0,0,.24)", overflow: "hidden" } },
+            h("div", { style: { padding: "12px 14px", background: "var(--paper)", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" } },
+              h("div", null, h("strong", null, "Assistente FoundMyApp"), h("div", { style: { fontSize: 11, color: "var(--ink-soft)" } }, "Gemini • ações somente com sua confirmação")),
+              h("button", { type: "button", className: "action-btn", onClick: () => setAssistantOpen(false), "aria-label": "Fechar assistente" }, "✕")
+            ),
+            h("div", { style: { flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 9 } },
+              assistantMessages.length === 0 && h("div", { style: { color: "var(--ink-soft)", fontSize: 13, lineHeight: 1.5 } }, "Olá! Posso responder perguntas sobre seus dados financeiros e preparar lançamentos. Exemplo: “Quanto tenho em contas a pagar?” ou “Lance uma despesa de R$ 250 para amanhã na categoria Alimentação”."),
+              assistantMessages.map((m, i) => h("div", { key: i, style: { alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "90%", padding: "9px 11px", borderRadius: 10, background: m.role === "user" ? "var(--paper)" : "var(--bg, #f3f4f6)", border: "1px solid var(--line)", fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.45 } }, m.text)),
+              assistantBusy && h("div", { style: { color: "var(--ink-soft)", fontSize: 12 } }, "Analisando seus dados…"),
+              assistantPendingAction && h("div", { style: { border: "1px solid var(--line)", borderRadius: 10, padding: 11, background: "var(--paper)", fontSize: 12 } },
+                h("strong", null, "Confirmar lançamento"),
+                h("div", { style: { marginTop: 7, lineHeight: 1.6 } },
+                  h("div", null, "Tipo: ", assistantPendingAction.action_type === "create_payable" ? "Conta a pagar" : "Conta a receber"),
+                  h("div", null, "Descrição: ", assistantPendingAction.description || "—"),
+                  h("div", null, "Valor: ", Number(assistantPendingAction.amount || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })),
+                  h("div", null, "Data: ", assistantPendingAction.date || "—"),
+                  h("div", null, "Categoria: ", assistantPendingAction.category_name || "—"),
+                  assistantPendingAction.subcategory_name && h("div", null, "Subcategoria: ", assistantPendingAction.subcategory_name)
+                ),
+                h("div", { style: { display: "flex", gap: 7, marginTop: 10 } },
+                  h("button", { type: "button", className: "primary", onClick: executarAcaoAssistente }, "Confirmar e lançar"),
+                  h("button", { type: "button", className: "action-btn", onClick: () => setAssistantPendingAction(null) }, "Cancelar")
+                )
+              )
+            ),
+            h("form", { onSubmit: enviarMensagemAssistente, style: { padding: 10, borderTop: "1px solid var(--line)", display: "flex", gap: 7, alignItems: "flex-end" } },
+              h("textarea", { value: assistantInput, onChange: e => setAssistantInput(e.target.value), placeholder: "Pergunte ou dê um comando…", rows: 2, style: { flex: 1, minWidth: 0, resize: "none", border: "1px solid var(--line)", borderRadius: 8, padding: 9, font: "inherit", fontSize: 13, background: "var(--card)", color: "var(--ink)" }, disabled: assistantBusy }),
+              h("button", { type: "submit", className: "primary", disabled: assistantBusy || !assistantInput.trim() }, "Enviar")
+            )
+          ) : h("button", { type: "button", onClick: () => setAssistantOpen(true), style: { width: 58, height: 58, borderRadius: 30, border: "none", background: "var(--green)", color: "#fff", fontSize: 25, fontWeight: 700, boxShadow: "0 5px 18px rgba(0,0,0,.25)", cursor: "pointer" }, title: "Abrir assistente de IA" }, "✦")
         )
       );
     }
