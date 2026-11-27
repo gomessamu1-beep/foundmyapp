@@ -157,6 +157,9 @@
       const [pluggyTransactionsError, setPluggyTransactionsError] = useState("");
       const [pluggyTransactionsLoadedAt, setPluggyTransactionsLoadedAt] = useState("");
       const [pluggyTransactionAccountId, setPluggyTransactionAccountId] = useState("");
+       const [pluggyFilterStart, setPluggyFilterStart] = useState("");
+       const [pluggyFilterEnd, setPluggyFilterEnd] = useState("");
+       const [pluggyFilterType, setPluggyFilterType] = useState("all");
       const [pluggyTransactionDetailsOpen, setPluggyTransactionDetailsOpen] = useState({});
       const [categorias, setCategorias] = useState([]); 
       const [deparaList, setDeparaList] = useState([]);
@@ -6277,95 +6280,83 @@
                 h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 } }, 'No seletor da Pluggy, escolha qualquer uma das instituições que você cadastrou. Você pode conectar mais de uma instituição; as conexões ficam vinculadas somente ao seu usuário do FoundMyApp.'),
                 pluggyError && h('div', { style: { color: 'var(--red)', fontSize: 12, marginTop: 9, whiteSpace: 'pre-wrap' } }, pluggyError),
                 pluggyLoading && h('div', { style: { fontSize: 12, marginTop: 10, color: 'var(--ink-soft)' } }, 'Consultando os saldos de todas as instituições…'),
-                pluggyAccounts.length > 0 && h('div', { className: 'list-vertical', style: { marginTop: 12 } },
-                  pluggyAccounts.map(account => h('div', { className: 'list-item', key: account.id },
-                    h('div', { className: 'list-item-main' },
-                      h('div', { style: { fontWeight: 600 } }, account.name || 'Conta bancária'),
-                      h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 } }, [account.connector, account.type, account.subtype, account.number].filter(Boolean).join(' • ') || 'Conta conectada')
-                    ),
-                    h('strong', { style: { whiteSpace: 'nowrap', fontSize: 15 } }, valoresOcultos ? '••••••' : Number(account.balance || 0).toLocaleString('pt-BR', { style: 'currency', currency: account.currencyCode || 'BRL' }))
-                  ))
+                pluggyAccounts.length > 0 && h('div', { className: 'list-vertical', style: { marginTop: 12, gap: 10 } },
+                  pluggyAccounts.filter(account => String(account.type || '').toUpperCase() === 'BANK').map(account => {
+                    const aberto = String(pluggyTransactionAccountId) === String(account.id);
+                    const movimentacoesConta = pluggyTransactions.filter(t => String(t.accountId) === String(account.id));
+                    const movimentacoesFiltradas = movimentacoesConta.filter(t => {
+                      const data = String(t.date || '').slice(0, 10);
+                      const dataInicialOk = !pluggyFilterStart || data >= pluggyFilterStart;
+                      const dataFinalOk = !pluggyFilterEnd || data <= pluggyFilterEnd;
+                      const tipo = String(t.type || '').toUpperCase();
+                      const tipoOk = pluggyFilterType === 'all' || (pluggyFilterType === 'debit' ? tipo === 'DEBIT' : tipo !== 'DEBIT');
+                      return dataInicialOk && dataFinalOk && tipoOk;
+                    });
+                    return h('div', { key: account.id, style: { display: 'block', border: '1px solid var(--line)', borderRadius: 8, background: '#fff', overflow: 'hidden' } },
+                      h('button', { type: 'button', onClick: () => setPluggyTransactionAccountId(aberto ? '' : account.id), style: { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, border: 0, background: aberto ? 'var(--paper)' : '#fff', color: 'var(--ink)', textAlign: 'left', cursor: 'pointer' } },
+                        h('div', { style: { minWidth: 0, flex: 1 } },
+                          h('div', { style: { fontWeight: 700 } }, account.connector || 'Banco'),
+                          h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 } }, account.name || 'Conta bancária'),
+                          h('div', { style: { fontSize: 10, color: 'var(--ink-soft)', marginTop: 3 } }, [account.type, account.subtype, account.number].filter(Boolean).join(' • ') || 'Conta conectada')
+                        ),
+                        h('div', { style: { textAlign: 'right', flexShrink: 0 } },
+                          h('strong', { style: { display: 'block', fontSize: 15, whiteSpace: 'nowrap' } }, valoresOcultos ? '••••••' : Number(account.balance || 0).toLocaleString('pt-BR', { style: 'currency', currency: account.currencyCode || 'BRL' })),
+                          h('span', { style: { display: 'block', fontSize: 10, color: 'var(--ink-soft)', marginTop: 4 } }, movimentacoesConta.length + ' movimentação(ões)'),
+                          h('span', { style: { fontSize: 11, color: 'var(--green)', fontWeight: 700 } }, aberto ? 'Ocultar ▲' : 'Ver movimentações ▼')
+                        )
+                      ),
+                      aberto && h('div', { style: { padding: 12, borderTop: '1px solid var(--line)' } },
+                        h('div', { style: { fontWeight: 700, fontSize: 13, marginBottom: 8 } }, 'Consultar movimentações deste banco'),
+                        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, alignItems: 'end' } },
+                          h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', value: pluggyFilterStart, onChange: e => setPluggyFilterStart(e.target.value) })),
+                          h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', value: pluggyFilterEnd, onChange: e => setPluggyFilterEnd(e.target.value) })),
+                          h('div', { className: 'field' }, h('label', null, 'Tipo'), h('select', { value: pluggyFilterType, onChange: e => setPluggyFilterType(e.target.value) }, h('option', { value: 'all' }, 'Todos'), h('option', { value: 'debit' }, 'Saídas'), h('option', { value: 'credit' }, 'Entradas')))
+                        ),
+                        h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 } },
+                          h('button', { type: 'button', className: 'primary', disabled: pluggyTransactionsLoading, onClick: carregarMovimentacoesPluggy }, pluggyTransactionsLoading ? 'Consultando…' : (pluggyTransactionsLoadedAt ? 'Atualizar movimentações' : 'Consultar movimentações')),
+                          h('button', { type: 'button', className: 'action-btn', onClick: () => { setPluggyFilterStart(''); setPluggyFilterEnd(''); setPluggyFilterType('all'); } }, 'Limpar filtros'),
+                          h('span', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, movimentacoesFiltradas.length + ' registro(s) encontrado(s)')
+                        ),
+                        pluggyTransactionsError && h('div', { style: { color: 'var(--red)', fontSize: 12, marginTop: 8, whiteSpace: 'pre-wrap' } }, pluggyTransactionsError),
+                        pluggyTransactionsLoading && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 } }, 'Consultando o histórico disponibilizado pelo banco…'),
+                        !pluggyTransactionsLoadedAt && !pluggyTransactionsLoading && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 } }, 'Toque em Consultar movimentações para carregar o histórico desta conta.'),
+                        pluggyTransactionsLoadedAt && movimentacoesFiltradas.length > 0 && h('div', { style: { overflowX: 'auto', marginTop: 10, border: '1px solid var(--line)', borderRadius: 7 } },
+                          h('table', { style: { width: '100%', borderCollapse: 'collapse', minWidth: 690, fontSize: 12 } },
+                            h('thead', null, h('tr', { style: { background: 'var(--paper)', textAlign: 'left' } },
+                              h('th', { style: { padding: 9 } }, 'Data'), h('th', { style: { padding: 9 } }, 'Descrição'), h('th', { style: { padding: 9 } }, 'Tipo'), h('th', { style: { padding: 9, textAlign: 'right } }, 'Valor'), h('th', { style: { padding: 9, textAlign: 'right' } }, 'Saldo após'), h('th', { style: { padding: 9 } }, 'Situação / detalhes')
+                            )),
+                            h('tbody', null, movimentacoesFiltradas.map(t => {
+                              const valor = String(t.type).toUpperCase() === 'DEBIT' ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
+                              const detalheAberto = !!pluggyTransactionDetailsOpen[t.accountId + ':' + t.id];
+                              return h(React.Fragment, { key: t.accountId + ':' + t.id },
+                                h('tr', { style: { borderTop: '1px solid var(--line)' } },
+                                  h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, formatDateBR(String(t.date || '').slice(0, 10))),
+                                  h('td', { style: { padding: 9, minWidth: 180 } }, t.description || 'Movimentação bancária', t.operationType ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 10, marginTop: 2 } }, t.operationType) : null),
+                                  h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, valor < 0 ? 'Saída' : 'Entrada'),
+                                  h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 } }, valoresOcultos ? '••••••' : formatBRL(valor)),
+                                  h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
+                                  h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, String(t.status).toUpperCase() === 'PENDING' ? 'Pendente' : 'Efetivada', h('button', { type: 'button', className: 'action-btn', style: { display: 'block', marginTop: 6, padding: '5px 8px', fontSize: 11 }, onClick: () => setPluggyTransactionDetailsOpen(prev => ({ ...prev, [t.accountId + ':' + t.id]: !prev[t.accountId + ':' + t.id] })) }, detalheAberto ? 'Ocultar detalhes' : 'Exibir detalhes'))
+                                ),
+                                detalheAberto && h('tr', { style: { background: 'var(--paper)' } }, h('td', { colSpan: 6, style: { padding: 12, borderBottom: '1px solid var(--line)' } },
+                                  h('div', { style: { fontWeight: 700, marginBottom: 9 } }, 'Detalhes da movimentação'),
+                                  h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 } },
+                                    h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'ID da transação Pluggy'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.id || 'Não informado')),
+                                    h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Instituição'), h('div', { style: { fontWeight: 600 } }, t.connector || 'Não informado')),
+                                    h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Categoria do banco'), h('div', { style: { fontWeight: 600 } }, t.category || 'Não informada')),
+                                    h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Tipo de operação'), h('div', { style: { fontWeight: 600 } }, t.operationType || 'Não informado')),
+                                    h('div', { style: { gridColumn: '1 / -1' } }, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Descrição original do banco'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.rawDescription || t.description || 'Não informada'))
+                                  )
+                                ))
+                              );
+                            }))
+                          )
+                        ),
+                        pluggyTransactionsLoadedAt && movimentacoesFiltradas.length === 0 && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, padding: 10, textAlign: 'center' } }, movimentacoesConta.length ? 'Nenhuma movimentação corresponde aos filtros.' : 'Nenhuma movimentação retornada para esta conta.')
+                      )
+                    );
+                  })
                 ),
                 pluggyItemId.length > 0 && !pluggyLoading && pluggyAccounts.length === 0 && !pluggyError && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 } }, 'A conexão foi salva, mas a Pluggy ainda não retornou contas. Verifique o status da conexão e atualize os saldos.'),
-                pluggyItemId.length > 0 && h('div', { style: { marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' } },
-                  h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
-                    h('div', null,
-                      h('strong', { style: { fontSize: 14 } }, 'Movimentações bancárias'),
-                      h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 } }, 'Busca todo o histórico disponibilizado por cada banco, limitado ao período de até 12 meses da Pluggy.')
-                    ),
-                    h('button', { type: 'button', className: 'primary', disabled: pluggyTransactionsLoading, onClick: carregarMovimentacoesPluggy }, pluggyTransactionsLoading ? 'Buscando histórico…' : (pluggyTransactionsLoadedAt ? 'Atualizar movimentações' : 'Buscar movimentações'))
-                  ),
-                  pluggyTransactionsError && h('div', { style: { color: 'var(--red)', fontSize: 12, marginTop: 9, whiteSpace: 'pre-wrap' } }, pluggyTransactionsError),
-                  pluggyTransactionsLoading && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 9 } }, 'Consultando todas as páginas do histórico bancário. Isso pode levar alguns instantes…'),
-                  pluggyTransactionsLoadedAt && h('div', { style: { marginTop: 12 } },
-                    h('div', { style: { fontSize: 12, fontWeight: 700, marginBottom: 8 } }, 'Selecione o banco para visualizar suas movimentações:'),
-                    h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
-                      pluggyAccounts.filter(a => String(a.type || '').toUpperCase() === 'BANK').map(a => {
-                        const quantidade = pluggyTransactions.filter(t => String(t.accountId) === String(a.id)).length;
-                        const selecionada = String(pluggyTransactionAccountId) === String(a.id);
-                        return h('button', { key: a.id, type: 'button', className: selecionada ? 'primary' : 'action-btn', onClick: () => setPluggyTransactionAccountId(a.id), style: { minWidth: 145, justifyContent: 'center', padding: '10px 12px', borderColor: selecionada ? 'var(--green)' : 'var(--line)' } },
-                          h('span', null, a.connector || 'Banco'),
-                          h('span', { style: { display: 'block', fontSize: 11, fontWeight: 500, marginTop: 3 } }, a.name || 'Conta bancária'),
-                          h('span', { style: { display: 'block', fontSize: 10, opacity: .8, marginTop: 2 } }, quantidade + ' movimentação(ões)')
-                        );
-                      })
-                    ),
-                    h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 } }, pluggyTransactionAccountId ? pluggyTransactions.filter(t => String(t.accountId) === String(pluggyTransactionAccountId)).length + ' movimentação(ões) nesta conta' : 'Selecione um banco para abrir suas movimentações.')
-                  ),
-                  pluggyTransactionsLoadedAt && pluggyTransactionAccountId && pluggyTransactions.some(t => String(t.accountId) === String(pluggyTransactionAccountId)) && h('div', { style: { overflowX: 'auto', marginTop: 10, border: '1px solid var(--line)', borderRadius: 7 } },
-                    h('table', { style: { width: '100%', borderCollapse: 'collapse', minWidth: 720, fontSize: 12 } },
-                      h('thead', null, h('tr', { style: { background: 'var(--paper)', textAlign: 'left' } },
-                        h('th', { style: { padding: 9 } }, 'Data'),
-                        h('th', { style: { padding: 9 } }, 'Conta'),
-                        h('th', { style: { padding: 9 } }, 'Descrição'),
-                        h('th', { style: { padding: 9 } }, 'Tipo'),
-                        h('th', { style: { padding: 9, textAlign: 'right' } }, 'Valor'),
-                        h('th', { style: { padding: 9, textAlign: 'right' } }, 'Saldo após'),
-                        h('th', { style: { padding: 9 } }, 'Situação')
-                      )),
-                      h('tbody', null,
-                        pluggyTransactions.filter(t => String(t.accountId) === String(pluggyTransactionAccountId)).map(t => {
-                          const valor = String(t.type).toUpperCase() === 'DEBIT' ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
-                          const detalheAberto = !!pluggyTransactionDetailsOpen[t.accountId + ':' + t.id];
-                          return h(React.Fragment, { key: t.accountId + ':' + t.id },
-                            h('tr', { style: { borderTop: '1px solid var(--line)' } },
-                              h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, formatDateBR(String(t.date || '').slice(0, 10))),
-                              h('td', { style: { padding: 9 } }, t.connector + ' • ' + t.accountName),
-                              h('td', { style: { padding: 9, minWidth: 190 } }, t.description || 'Movimentação bancária', t.operationType ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 10, marginTop: 2 } }, t.operationType) : null),
-                              h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, String(t.type).toUpperCase() === 'DEBIT' ? 'Saída' : 'Entrada'),
-                              h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 } }, valoresOcultos ? '••••••' : formatBRL(valor)),
-                              h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
-                              h('td', { style: { padding: 9, whiteSpace: 'nowrap' } },
-                                String(t.status).toUpperCase() === 'PENDING' ? 'Pendente' : 'Efetivada',
-                                h('button', { type: 'button', className: 'action-btn', style: { display: 'block', marginTop: 6, padding: '5px 8px', fontSize: 11, whiteSpace: 'nowrap' }, onClick: () => setPluggyTransactionDetailsOpen(prev => ({ ...prev, [t.accountId + ':' + t.id]: !prev[t.accountId + ':' + t.id] })) }, detalheAberto ? 'Ocultar detalhes' : 'Exibir detalhes')
-                              )
-                            ),
-                            detalheAberto && h('tr', { style: { background: 'var(--paper)' } },
-                              h('td', { colSpan: 7, style: { padding: 12, borderBottom: '1px solid var(--line)' } },
-                                h('div', { style: { fontWeight: 700, marginBottom: 9 } }, 'Detalhes da movimentação'),
-                                h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 } },
-                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'ID da transação Pluggy'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.id || 'Não informado')),
-                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'ID da conta Pluggy'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.accountId || 'Não informado')),
-                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Instituição'), h('div', { style: { fontWeight: 600 } }, t.connector || 'Não informado')),
-                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Categoria do banco'), h('div', { style: { fontWeight: 600 } }, t.category || 'Não informada')),
-                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Tipo retornado pelo banco'), h('div', { style: { fontWeight: 600 } }, t.type || 'Não informado')),
-                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Tipo de operação'), h('div', { style: { fontWeight: 600 } }, t.operationType || 'Não informado')),
-                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Situação retornada'), h('div', { style: { fontWeight: 600 } }, t.status || 'Não informada')),
-                                  h('div', null, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Identificador do banco'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.providerId || 'Não informado')),
-                                  h('div', { style: { gridColumn: '1 / -1' } }, h('div', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, 'Descrição original do banco'), h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, t.rawDescription || t.description || 'Não informada'))
-                                ),
-                                h('div', { style: { marginTop: 10, fontSize: 10, color: 'var(--ink-soft)' } }, 'Esses dados ficarão disponíveis para o futuro confronto com os lançamentos do sistema.')
-                              )
-                            )
-                          );
-                        })
-                      )
-                    )
-                  ),
-                  pluggyTransactionsLoadedAt && !pluggyTransactionsLoading && pluggyTransactionAccountId && !pluggyTransactions.some(t => String(t.accountId) === String(pluggyTransactionAccountId)) && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, padding: 12, textAlign: 'center' } }, 'Este banco não retornou movimentações no período disponibilizado.')
-                  
-                )
-              ),
 
             isAndroidApp ? h('div', { style: { marginBottom: 16 } },
               h('div', { style: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 } }, "Conciliação Bancária"),
