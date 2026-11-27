@@ -28,7 +28,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "assistente-gemini-confirmacao-2026-11-26";
+    const APP_BUILD = "assistente-groq-2026-11-27";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -622,8 +622,8 @@
           setAssistantMessages(prev => [...prev, { role: "assistant", text: data.reply }]);
           if (data.action && data.action.action_type && data.action.action_type !== "none") setAssistantPendingAction(data.action);
         } catch (err) {
-          console.error("Assistente Gemini:", err);
-          setAssistantMessages(prev => [...prev, { role: "assistant", text: "Não consegui acessar o Gemini agora. " + (err?.message || "Verifique sua conexão e tente novamente.") }]);
+          console.error("Assistente FoundMyApp:", err);
+          setAssistantMessages(prev => [...prev, { role: "assistant", text: "Não consegui acessar o assistente de IA agora. " + (err?.message || "Verifique sua conexão e tente novamente.") }]);
         } finally {
           setAssistantBusy(false);
         }
@@ -6644,7 +6644,7 @@
         session && dadosFinanceirosCarregados && h("div", { style: { position: "fixed", right: 18, bottom: 18, zIndex: 2500 } },
           assistantOpen ? h("div", { style: { width: "min(390px, calc(100vw - 28px))", height: "min(570px, calc(100dvh - 100px))", display: "flex", flexDirection: "column", background: "var(--card)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 12px 40px rgba(0,0,0,.24)", overflow: "hidden" } },
             h("div", { style: { padding: "12px 14px", background: "var(--paper)", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between" } },
-              h("div", null, h("strong", null, "Assistente FoundMyApp"), h("div", { style: { fontSize: 11, color: "var(--ink-soft)" } }, "Gemini • ações somente com sua confirmação")),
+              h("div", null, h("strong", null, "Assistente FoundMyApp"), h("div", { style: { fontSize: 11, color: "var(--ink-soft)" } }, "Groq • ações somente com sua confirmação")),
               h("button", { type: "button", className: "action-btn", onClick: () => setAssistantOpen(false), "aria-label": "Fechar assistente" }, "✕")
             ),
             h("div", { style: { flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 9 } },
