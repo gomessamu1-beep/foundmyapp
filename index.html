@@ -4199,6 +4199,28 @@
         return candidatos.length === 1 ? candidatos[0] : null;
       }
 
+      function encontrarTransacaoPluggyParaMovimentacao(item, contaSistema) {
+        if (!item || !contaSistema || !contaSistema.pluggyAccountId) return null;
+        const valorSistema = Math.abs(Number(item.valorDebito || item.valorCredito || 0));
+        const candidatos = (pluggyTransactions || []).filter(t =>
+          String(t.accountId) === String(contaSistema.pluggyAccountId) &&
+          String(t.date || "").slice(0,10) === String(item.data || "") &&
+          (String(t.type || "").toUpperCase() === "DEBIT" ? item.tipo === "Débito" : item.tipo === "Crédito") &&
+          Math.abs(Math.abs(Number(t.amount || 0)) - valorSistema) <= 0.01
+        );
+        if (candidatos.length === 1) return candidatos[0];
+        if (candidatos.length > 1) {
+          const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+          const descricaoSistema = norm(item.descricao);
+          const porDescricao = candidatos.filter(t => {
+            const descricaoBanco = norm(t.description || t.rawDescription);
+            return descricaoSistema && descricaoBanco && (descricaoSistema.includes(descricaoBanco) || descricaoBanco.includes(descricaoSistema));
+          });
+          if (porDescricao.length === 1) return porDescricao[0];
+        }
+        return null;
+      }
+
       function calcularSaldoSistemaBancario(conta) {
         if (!conta) return null;
         const dataBase = String(conta.dataSaldoInicial || "0000-00-00");
@@ -4238,7 +4260,7 @@
           }
         });
         lista.sort((a, b) => a.data.localeCompare(b.data)); let saldoAcumulado = 0; return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); const contaPluggyVinculada = (contasBancarias || []).find(c => String(c.id) === String(concilContaId));
-          const txCorrespondente = contaPluggyVinculada && (pluggyTransactions || []).find(t => String(t.date || '').slice(0,10) === item.data && (String(t.type || '').toUpperCase() === 'DEBIT' ? item.tipo === 'Débito' : item.tipo === 'Crédito') && Math.abs(Math.abs(Number(t.amount || 0)) - Math.abs(Number(item.valorDebito || item.valorCredito || 0))) <= 0.01 && String(t.accountId) === String(contaPluggyVinculada.pluggyAccountId || ''));
+          const txCorrespondente = encontrarTransacaoPluggyParaMovimentacao(item, contaPluggyVinculada);
           return { ...item, saldo: saldoAcumulado, conciliadoPluggy: !!txCorrespondente }; });
       }, [concilExibido, concilContaId, concilDataIni, concilDataFim, contasPagar, contasReceber, faturasBaixadas, purchases, pluggyTransactions, contasBancarias]);
 
