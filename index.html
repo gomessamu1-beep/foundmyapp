@@ -6668,7 +6668,7 @@
               )
             ),
             h("form", { onSubmit: enviarMensagemAssistente, style: { padding: 10, borderTop: "1px solid var(--line)", display: "flex", gap: 7, alignItems: "flex-end" } },
-              h("textarea", { value: assistantInput, onChange: e => setAssistantInput(e.target.value), placeholder: "Pergunte ou dê um comando…", rows: 2, style: { flex: 1, minWidth: 0, resize: "none", border: "1px solid var(--line)", borderRadius: 8, padding: 9, font: "inherit", fontSize: 13, background: "var(--card)", color: "var(--ink)" }, disabled: assistantBusy }),
+              h("textarea", { value: assistantInput, onChange: e => setAssistantInput(e.target.value), onKeyDown: e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); enviarMensagemAssistente(e); } }, placeholder: "Pergunte ou dê um comando… (Enter para enviar, Shift+Enter para nova linha)", rows: 2, style: { flex: 1, minWidth: 0, resize: "none", border: "1px solid var(--line)", borderRadius: 8, padding: 9, font: "inherit", fontSize: 13, background: "var(--card)", color: "var(--ink)" }, disabled: assistantBusy }),
               h("button", { type: "submit", className: "primary", disabled: assistantBusy || !assistantInput.trim() }, "Enviar")
             )
           ) : h("button", { type: "button", onClick: () => setAssistantOpen(true), style: { width: 58, height: 58, borderRadius: 30, border: "none", background: "var(--green)", color: "#fff", fontSize: 25, fontWeight: 700, boxShadow: "0 5px 18px rgba(0,0,0,.25)", cursor: "pointer" }, title: "Abrir assistente de IA" }, "✦")
