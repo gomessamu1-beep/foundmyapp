@@ -6255,7 +6255,7 @@
                       h('div', { style: { fontWeight: 600 } }, account.name || 'Conta bancária'),
                       h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 } }, [account.connector, account.type, account.subtype, account.number].filter(Boolean).join(' • ') || 'Conta conectada')
                     ),
-                    h('strong', { style: { whiteSpace: 'nowrap', fontSize: 15 } }, Number(account.balance || 0).toLocaleString('pt-BR', { style: 'currency', currency: account.currencyCode || 'BRL' }))
+                    h('strong', { style: { whiteSpace: 'nowrap', fontSize: 15 } }, valoresOcultos ? '••••••' : Number(account.balance || 0).toLocaleString('pt-BR', { style: 'currency', currency: account.currencyCode || 'BRL' }))
                   ))
                 ),
                 pluggyItemId.length > 0 && !pluggyLoading && pluggyAccounts.length === 0 && !pluggyError && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 } }, 'A conexão foi salva, mas a Pluggy ainda não retornou contas. Verifique o status da conexão e atualize os saldos.')
