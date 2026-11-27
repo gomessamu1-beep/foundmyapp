@@ -6400,8 +6400,8 @@
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, formatDateBR(String(t.date || '').slice(0, 10))),
                           h('td', { style: { padding: 9, minWidth: 180 } }, t.description || 'Movimentação bancária'),
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)' } }, valor < 0 ? 'Saída' : 'Entrada'),
-                          h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600 } }, valoresOcultos ? '••••••' : formatBRL(valor)),
-                          h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
+                          h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: valor < 0 ? 'var(--red)' : 'inherit' } }, valoresOcultos ? '••••••' : formatBRL(valor)),
+                          h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: Number(t.balance) < 0 ? 'var(--red)' : 'inherit' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap' } },
                             h('strong', { style: { display:'block', color: correspondente ? 'var(--green)' : 'var(--red)', marginBottom:6 } }, correspondente ? 'Conciliado' : 'Não conciliado'),
                             h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
@@ -6557,7 +6557,7 @@
                         return h('tr', { key:String(item.id) },
                           h('td', { className:'center' }, checkbox(pluggySistemaSelecionados.includes(String(item.id)), e => setPluggySistemaSelecionados(prev => e.target.checked ? [...prev.filter(x => x !== String(item.id)), String(item.id)] : prev.filter(x => x !== String(item.id))))),
                           h('td', null, formatDateBR(item.data)),
-                          h('td', { className:'right num', style:{ whiteSpace:'nowrap' } }, money(valor)),
+                          h('td', { className:'right num', style:{ whiteSpace:'nowrap', color:valor < 0 ? 'var(--red)' : 'inherit' } }, money(valor)),
                           h('td', null,
                             h('span', { style:{ display:'block', color:conciliado?'var(--green)':(divergente?'var(--amber)':'var(--red)'), fontWeight:700, whiteSpace:'nowrap', marginBottom:6 } }, conciliado ? "Conciliado" : (divergente ? "Valor divergente" : "Não conciliado")),
                           )
