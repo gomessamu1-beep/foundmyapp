@@ -6402,7 +6402,19 @@
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)' } }, valor < 0 ? 'Saída' : 'Entrada'),
                           h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600 } }, valoresOcultos ? '••••••' : formatBRL(valor)),
                           h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
-                          h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, h('strong', { style: { color: correspondente ? 'var(--green)' : 'var(--red)' } }, correspondente ? 'Conciliado' : 'Não conciliado'))
+                          h('td', { style: { padding: 9, whiteSpace: 'nowrap' } },
+                            h('strong', { style: { display:'block', color: correspondente ? 'var(--green)' : 'var(--red)', marginBottom:6 } }, correspondente ? 'Conciliado' : 'Não conciliado'),
+                            h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
+                              const ehDebito = String(t.type || '').toUpperCase() === 'DEBIT';
+                              setLrTipo(ehDebito ? 'despesa' : 'receita');
+                              setLrDescricao(String(t.description || t.rawDescription || 'Movimentação Pluggy').trim());
+                              setLrObservacao('Importado da movimentação bancária Pluggy. ID: ' + String(t.id || ''));
+                              setLrData(String(t.date || '').slice(0,10));
+                              setLrValor(Math.abs(Number(t.amount || 0)).toFixed(2).replace('.', ','));
+                              setLrContaOrigem(contaSistemaSelecionada?.id || '');
+                              setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId('');
+                              setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true);
+                            } }, 'Lançar no sistema'))
                         );
                       }) : h('tr', null, h('td', { colSpan: 6, style: { textAlign: 'center', padding: 16, color: 'var(--ink-soft)' } }, 'Nenhuma movimentação encontrada para a conta e o período selecionados.')))
                     )
@@ -6537,7 +6549,7 @@
                   const tabelaSistema = h('div', { style:{ minWidth:0, overflowX:'auto', border:'1px solid var(--line)', borderRadius:8, background:'var(--card)' } },
                     h('div', { style:{ fontWeight:700, padding:'10px 12px', borderBottom:'1px solid var(--line)' } }, "Movimentações do Sistema"),
                     h('table', { style:{ width:'100%', minWidth:360, margin:0, fontSize:12 } },
-                      h('thead', null, h('tr', null, h('th', { style:{ width:38 } }, " "), h('th', null, "Data"), h('th', { className:'right' }, "Valor"), h('th', null, "Situação"))),
+                      h('thead', null, h('tr', null, h('th', { style:{ width:38 } }, " "), h('th', null, "Data"), h('th', { className:'right' }, "Valor"), h('th', null, "Situação / Ação"))),
                       h('tbody', null, movimentosSistema.length ? movimentosSistema.map(item => {
                         const conciliado = sistemaConciliadoIds.has(String(item.id));
                         const divergente = parSistema.has(String(item.id)) && !conciliado;
@@ -6548,17 +6560,6 @@
                           h('td', { className:'right num', style:{ whiteSpace:'nowrap' } }, money(valor)),
                           h('td', null,
                             h('span', { style:{ display:'block', color:conciliado?'var(--green)':(divergente?'var(--amber)':'var(--red)'), fontWeight:700, whiteSpace:'nowrap', marginBottom:6 } }, conciliado ? "Conciliado" : (divergente ? "Valor divergente" : "Não conciliado")),
-                            !conciliado && h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
-                              const ehDebito = valor < 0;
-                              setLrTipo(ehDebito ? 'despesa' : 'receita');
-                              setLrDescricao(String(tx.description || tx.rawDescription || 'Movimentação Pluggy').trim());
-                              setLrObservacao('Importado da movimentação bancária Pluggy. ID: ' + String(tx.id || ''));
-                              setLrData(String(tx.date || '').slice(0,10));
-                              setLrValor(Math.abs(Number(tx.amount || 0)).toFixed(2).replace('.', ','));
-                              setLrContaOrigem(contaSistema?.id || '');
-                              setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId('');
-                              setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true);
-                            } }, 'Lançar no sistema')
                           )
                         );
                       }) : h('tr', null, h('td', { colSpan:4, style:{ textAlign:'center', color:'var(--ink-soft)', padding:16 } }, "Nenhuma movimentação no período.")))
@@ -6576,7 +6577,20 @@
                           h('td', { className:'center' }, checkbox(pluggyBancoSelecionados.includes(String(tx.id)), e => setPluggyBancoSelecionados(prev => e.target.checked ? [...prev.filter(x => x !== String(tx.id)), String(tx.id)] : prev.filter(x => x !== String(tx.id))))),
                           h('td', null, formatDateBR(String(tx.date || "").slice(0,10))),
                           h('td', { className:'right num', style:{ whiteSpace:'nowrap' } }, money(valor)),
-                          h('td', null, h('span', { style:{ color:conciliado?'var(--green)':(divergente?'var(--amber)':'var(--red)'), fontWeight:700, whiteSpace:'nowrap' } }, conciliado ? "Conciliado" : (divergente ? "Valor divergente" : "Não conciliado")))
+                          h('td', null,
+                            h('span', { style:{ display:'block', color:conciliado?'var(--green)':(divergente?'var(--amber)':'var(--red)'), fontWeight:700, whiteSpace:'nowrap', marginBottom:6 } }, conciliado ? "Conciliado" : (divergente ? "Valor divergente" : "Não conciliado")),
+                            h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
+                              const ehDebito = String(tx.type || '').toUpperCase() === 'DEBIT';
+                              setLrTipo(ehDebito ? 'despesa' : 'receita');
+                              setLrDescricao(String(tx.description || tx.rawDescription || 'Movimentação Pluggy').trim());
+                              setLrObservacao('Importado da movimentação bancária Pluggy. ID: ' + String(tx.id || ''));
+                              setLrData(String(tx.date || '').slice(0,10));
+                              setLrValor(Math.abs(Number(tx.amount || 0)).toFixed(2).replace('.', ','));
+                              setLrContaOrigem(contaSistema?.id || '');
+                              setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId('');
+                              setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true);
+                            } }, 'Lançar no sistema')
+                          )
                         );
                       }) : h('tr', null, h('td', { colSpan:4, style:{ textAlign:'center', color:'var(--ink-soft)', padding:16 } }, "Nenhuma movimentação no período.")))
                     )
