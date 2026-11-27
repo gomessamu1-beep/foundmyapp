@@ -235,7 +235,7 @@
       const [contabContaDescontoId, setContabContaDescontoId] = useState("");
       const [contabDreConfiguracaoAberta, setContabDreConfiguracaoAberta] = useState(false);
       function contasElegiveisDRE() {
-        return contabPlano.filter(c => c.tipo === "ANALITICA" && ["RECEITA","DESPESA","RESULTADO"].includes(String(c.natureza || "").toUpperCase()));
+        return contabPlano.filter(c => c.tipo === "ANALITICA" && ["RECEITA","CUSTO","DESPESA","RESULTADO"].includes(String(c.natureza || "").toUpperCase()));
       }
       function idsContasDREAtivas() {
         const elegiveis = contasElegiveisDRE();
@@ -1665,7 +1665,7 @@
         } else {
           linhas.push(["Data","Histórico","Código da conta","Conta","Natureza","Débitos","Créditos","Saldo Devedor","Saldo Credor"]);
           const contasDREPermitidas = new Set(idsContasDREAtivas());
-          const natureza = contabRelatorioTipo==="dre"?["RECEITA","DESPESA","RESULTADO"]:contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"]:null;
+          const natureza = contabRelatorioTipo==="dre"?["RECEITA","CUSTO","DESPESA","RESULTADO"]:contabRelatorioTipo==="balanco"?["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO"]:null;
           contabPlano.filter(c=>c.tipo==="ANALITICA"&&(!natureza||natureza.includes(c.natureza))&&(contabRelatorioTipo!=="dre"||contasDREPermitidas.has(String(c.id)))).forEach(c=>{
             const itens=contabLancamentos.flatMap(l=>l.contabilidade_lancamento_itens||[]).filter(it=>it.conta_id===c.id);
             const d=itens.reduce((a,it)=>a+Number(it.debito||0),0), cr=itens.reduce((a,it)=>a+Number(it.credito||0),0);
@@ -5383,7 +5383,26 @@
                   h('form',{onSubmit:salvarContaContabil,style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:10,alignItems:'end'}},
                     h('div',{className:'field'},h('label',null,"Código *"),h('input',{value:contabCodigo,onChange:e=>setContabCodigo(formatarCodigoContabil(e.target.value)),placeholder:contabMascara,required:true,autoFocus:true})),
                     h('div',{className:'field'},h('label',null,"Descrição *"),h('input',{value:contabDescricao,onChange:e=>setContabDescricao(e.target.value),placeholder:"Caixa Geral",required:true})),
-                    h('div',{className:'field'},h('label',null,"Natureza"),h('select',{value:contabNatureza,onChange:e=>setContabNatureza(e.target.value)},["ATIVO","PASSIVO","PATRIMONIO_LIQUIDO","RECEITA","DESPESA","RESULTADO"].map(x=>h('option',{value:x,key:x},x.replaceAll("_"," "))))),
+                    h('div',{className:'field',style:{gridColumn:'1 / -1'}},
+                       h('label',null,"Classificação da conta"),
+                       h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(125px,1fr))',gap:8}},
+                         [
+                           {value:"ATIVO",label:"Ativo",icon:"🏦",color:"#2563eb",bg:"#eff6ff",desc:"Bens e direitos"},
+                           {value:"PASSIVO",label:"Passivo",icon:"🧾",color:"#d97706",bg:"#fffbeb",desc:"Obrigações"},
+                           {value:"RECEITA",label:"Receitas",icon:"📈",color:"#059669",bg:"#ecfdf5",desc:"Entradas e ganhos"},
+                           {value:"CUSTO",label:"Custos",icon:"🏭",color:"#7c3aed",bg:"#f5f3ff",desc:"Custos da operação"},
+                           {value:"DESPESA",label:"Despesas",icon:"💸",color:"#dc2626",bg:"#fef2f2",desc:"Despesas administrativas"}
+                         ].map(op=>h('button',{key:op.value,type:'button',onClick:()=>setContabNatureza(op.value),style:{textAlign:'left',padding:'11px 10px',borderRadius:10,border:contabNatureza===op.value?'2px solid '+op.color:'1px solid var(--line)',background:contabNatureza===op.value?op.bg:'var(--card)',cursor:'pointer',minHeight:78,boxShadow:contabNatureza===op.value?'0 0 0 2px '+op.color+'18':'none'}},
+                           h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:4}},
+                             h('span',{style:{fontSize:20}},op.icon),
+                             contabNatureza===op.value?h('span',{style:{fontSize:10,fontWeight:800,color:op.color}},"✓"):null
+                           ),
+                           h('div',{style:{fontWeight:800,fontSize:13,color:contabNatureza===op.value?op.color:'var(--ink)',marginTop:5}},op.label),
+                           h('div',{style:{fontSize:10,color:'var(--ink-soft)',marginTop:2}},op.desc)
+                         ))
+                       ),
+                       !["ATIVO","PASSIVO","RECEITA","CUSTO","DESPESA"].includes(contabNatureza)&&h('div',{style:{fontSize:11,color:'var(--ink-soft)',marginTop:6}},"Natureza atual preservada: "+contabNatureza.replaceAll("_"," "))
+                     ),
                     h('div',{className:'field'},h('label',null,"Tipo"),h('select',{value:contabTipo,onChange:e=>setContabTipo(e.target.value)},h('option',{value:"SINTETICA"},"Sintética"),h('option',{value:"ANALITICA"},"Analítica"))),
                     h('div',{className:'field',style:{gridColumn:'1 / -1'}},h('label',null,"Conta mãe (opcional)"),h('select',{value:contabContaPai,onChange:e=>setContabContaPai(e.target.value)},h('option',{value:""},"Sem conta mãe"),contabPlano.filter(c=>c.tipo==="SINTETICA"&&c.id!==contabEditandoId).map(c=>h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))),
                     h('div',{style:{display:'flex',gap:8,justifyContent:'flex-end',gridColumn:'1 / -1',marginTop:8}},
@@ -5648,7 +5667,7 @@
                         if(natureza==="ATIVO")resumo.ativo+=saldoFinal;
                         else if(natureza==="PASSIVO")resumo.passivo-=saldoFinal;
                         else if(natureza==="RECEITA")resumo.receitas-=saldoFinal;
-                        else if(natureza==="DESPESA")resumo.despesas+=saldoFinal;
+                        else if(natureza==="DESPESA"||natureza==="CUSTO")resumo.despesas+=saldoFinal;
                       }
                       const naturezaConta=String(conta.natureza||"").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\\s+/g,"_");
                       const naturezaAtivo=naturezaConta==="ATIVO"||naturezaConta.startsWith("ATIVO_");
