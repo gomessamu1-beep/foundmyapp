@@ -6327,7 +6327,7 @@
           ),
 
           screen === "conciliacao" && h('div', { className: 'form-card' },
-              h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
+              concilTab === 'cruzamento' && h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
                 h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
                   h('div', null,
                     h('strong', { style: { fontSize: 14 } }, 'Saldo bancário automático — Pluggy'),
