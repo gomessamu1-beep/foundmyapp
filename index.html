@@ -6518,6 +6518,22 @@
                   const parSistema = new Map(automaticos.map(p => [p.sistemaId, p.pluggyId]));
                   const parPluggy = new Map(automaticos.map(p => [p.pluggyId, p.sistemaId]));
                   vinculosConta.forEach(v => { parSistema.set(String(v.sistemaId), String(v.pluggyId)); parPluggy.set(String(v.pluggyId), String(v.sistemaId)); });
+                  const valorSistema = item => item.tipo === 'Débito' ? -Math.abs(Number(item.valorDebito || 0)) : Math.abs(Number(item.valorCredito || 0));
+                  const valorPluggy = tx => String(tx.type || "").toUpperCase() === "DEBIT" ? -Math.abs(Number(tx.amount || 0)) : Math.abs(Number(tx.amount || 0));
+                  const sistemaPorId = new Map(movimentosSistema.map(item => [String(item.id), item]));
+                  const pluggyPorId = new Map(extratoBanco.map(tx => [String(tx.id), tx]));
+                  const parConfereValor = (sistemaId, pluggyTxId) => {
+                    const item = sistemaPorId.get(String(sistemaId));
+                    const tx = pluggyPorId.get(String(pluggyTxId));
+                    if (!item || !tx) return false;
+                    return Math.abs(valorSistema(item) - valorPluggy(tx)) <= 0.01;
+                  };
+                  const sistemaConciliadoIds = new Set(Array.from(parSistema.entries()).filter(([sid, tid]) => parConfereValor(sid, tid)).map(([sid]) => sid));
+                  const pluggyConciliadoIds = new Set(Array.from(parPluggy.entries()).filter(([tid, sid]) => parConfereValor(sid, tid)).map(([tid]) => tid));
+                  const totalValorConciliado = extratoBanco.filter(tx => pluggyConciliadoIds.has(String(tx.id))).reduce((total, tx) => total + Math.abs(valorPluggy(tx)), 0);
+                  const totalPluggyNaoConciliado = extratoBanco.filter(tx => !pluggyConciliadoIds.has(String(tx.id))).reduce((total, tx) => total + Math.abs(valorPluggy(tx)), 0);
+                  const totalSistemaNaoConciliado = movimentosSistema.filter(item => !sistemaConciliadoIds.has(String(item.id))).reduce((total, item) => total + Math.abs(valorSistema(item)), 0);
+                  const percentualConciliado = extratoBanco.length ? (pluggyConciliadoIds.size / extratoBanco.length) * 100 : 0;
                   const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
                   const salvarDados = next => {
                     setPluggyConcilPersistido(next);
@@ -6569,13 +6585,14 @@
                     h('table', { style:{ width:'100%', minWidth:360, margin:0, fontSize:12 } },
                       h('thead', null, h('tr', null, h('th', { style:{ width:38 } }, " "), h('th', null, "Data"), h('th', { className:'right' }, "Valor"), h('th', null, "Situação"))),
                       h('tbody', null, movimentosSistema.length ? movimentosSistema.map(item => {
-                        const conciliado = parSistema.has(String(item.id));
+                        const conciliado = sistemaConciliadoIds.has(String(item.id));
+                        const divergente = parSistema.has(String(item.id)) && !conciliado;
                         const valor = item.tipo === 'Débito' ? -Number(item.valorDebito || 0) : Number(item.valorCredito || 0);
                         return h('tr', { key:String(item.id) },
                           h('td', { className:'center' }, checkbox(pluggySistemaSelecionados.includes(String(item.id)), e => setPluggySistemaSelecionados(prev => e.target.checked ? [...prev.filter(x => x !== String(item.id)), String(item.id)] : prev.filter(x => x !== String(item.id))))),
                           h('td', null, formatDateBR(item.data)),
                           h('td', { className:'right num', style:{ whiteSpace:'nowrap' } }, money(valor)),
-                          h('td', null, h('span', { style:{ color:conciliado?'var(--green)':'var(--red)', fontWeight:700, whiteSpace:'nowrap' } }, conciliado ? "Conciliado" : "Não conciliado"))
+                          h('td', null, h('span', { style:{ color:conciliado?'var(--green)':(divergente?'var(--amber)':'var(--red)'), fontWeight:700, whiteSpace:'nowrap' } }, conciliado ? "Conciliado" : (divergente ? "Valor divergente" : "Não conciliado")))
                         );
                       }) : h('tr', null, h('td', { colSpan:4, style:{ textAlign:'center', color:'var(--ink-soft)', padding:16 } }, "Nenhuma movimentação no período.")))
                     )
@@ -6585,26 +6602,29 @@
                     h('table', { style:{ width:'100%', minWidth:360, margin:0, fontSize:12 } },
                       h('thead', null, h('tr', null, h('th', { style:{ width:38 } }, " "), h('th', null, "Data"), h('th', { className:'right' }, "Valor"), h('th', null, "Situação"))),
                       h('tbody', null, extratoBanco.length ? extratoBanco.map(tx => {
-                        const conciliado = parPluggy.has(String(tx.id));
-                        const valor = String(tx.type || "").toUpperCase() === "DEBIT" ? -Math.abs(Number(tx.amount || 0)) : Math.abs(Number(tx.amount || 0));
+                        const conciliado = pluggyConciliadoIds.has(String(tx.id));
+                        const divergente = parPluggy.has(String(tx.id)) && !conciliado;
+                        const valor = valorPluggy(tx);
                         return h('tr', { key:String(tx.id) },
                           h('td', { className:'center' }, checkbox(pluggyBancoSelecionados.includes(String(tx.id)), e => setPluggyBancoSelecionados(prev => e.target.checked ? [...prev.filter(x => x !== String(tx.id)), String(tx.id)] : prev.filter(x => x !== String(tx.id))))),
                           h('td', null, formatDateBR(String(tx.date || "").slice(0,10))),
                           h('td', { className:'right num', style:{ whiteSpace:'nowrap' } }, money(valor)),
-                          h('td', null, h('span', { style:{ color:conciliado?'var(--green)':'var(--red)', fontWeight:700, whiteSpace:'nowrap' } }, conciliado ? "Conciliado" : "Não conciliado"))
+                          h('td', null, h('span', { style:{ color:conciliado?'var(--green)':(divergente?'var(--amber)':'var(--red)'), fontWeight:700, whiteSpace:'nowrap' } }, conciliado ? "Conciliado" : (divergente ? "Valor divergente" : "Não conciliado")))
                         );
                       }) : h('tr', null, h('td', { colSpan:4, style:{ textAlign:'center', color:'var(--ink-soft)', padding:16 } }, "Nenhuma movimentação no período.")))
                     )
                   );
-                  const qtdConciliados = movimentosSistema.filter(m => parSistema.has(String(m.id))).length;
+                  const qtdConciliados = sistemaConciliadoIds.size;
                   const qtdPendentesSistema = movimentosSistema.length - qtdConciliados;
-                  const qtdPendentesBanco = extratoBanco.filter(t => !parPluggy.has(String(t.id))).length;
+                  const qtdPendentesBanco = extratoBanco.length - pluggyConciliadoIds.size;
                   return h('div', null,
-                    h('div', { style:{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 } },
-                      h('div', { className:'top', style:{ margin:0, padding:'8px 12px', flex:'1 1 110px' } }, h('div', { style:{ fontSize:11 } }, "Conciliados"), h('strong', { style:{ color:'var(--green)', fontSize:19 } }, qtdConciliados)),
-                      h('div', { className:'top', style:{ margin:0, padding:'8px 12px', flex:'1 1 110px' } }, h('div', { style:{ fontSize:11 } }, "Pendentes no sistema"), h('strong', { style:{ color:'var(--red)', fontSize:19 } }, qtdPendentesSistema)),
-                      h('div', { className:'top', style:{ margin:0, padding:'8px 12px', flex:'1 1 110px' } }, h('div', { style:{ fontSize:11 } }, "Pendentes na Pluggy"), h('strong', { style:{ color:'var(--red)', fontSize:19 } }, qtdPendentesBanco))
+                    h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:8, marginBottom:12 } },
+                      h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo conciliado (valores iguais)"), h('strong', { style:{ color:'var(--green)', fontSize:18 } }, money(totalValorConciliado))),
+                      h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo não conciliado — Pluggy"), h('strong', { style:{ color:'var(--red)', fontSize:18 } }, money(totalPluggyNaoConciliado))),
+                      h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo não conciliado — Sistema"), h('strong', { style:{ color:'var(--red)', fontSize:18 } }, money(totalSistemaNaoConciliado))),
+                      h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Lançamentos conciliados"), h('strong', { style:{ color:'var(--green)', fontSize:18 } }, qtdConciliados + " de " + extratoBanco.length), h('div', { style:{ fontSize:11, color:'var(--ink-soft)', marginTop:3 } }, percentualConciliado.toFixed(1).replace('.', ',') + "% da Pluggy"))
                     ),
+                    h('div', { style:{ fontSize:11, color:'var(--ink-soft)', marginBottom:12 } }, "Um lançamento só entra no saldo conciliado quando o valor e o sentido (entrada/saída) são iguais nos dois lados. Vínculos com valores diferentes aparecem como Valor divergente e permanecem fora do saldo conciliado."),
                     h('div', { style:{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 } },
                       h('button', { type:'button', className:'primary', onClick:conciliarSelecionados, disabled:pluggySistemaSelecionados.length !== 1 || pluggyBancoSelecionados.length !== 1 }, "Conciliar selecionados"),
                       h('button', { type:'button', className:'action-btn', onClick:removerSelecionados, disabled:pluggySistemaSelecionados.length + pluggyBancoSelecionados.length === 0 }, "Remover conciliação"),
