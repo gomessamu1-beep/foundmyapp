@@ -5266,17 +5266,7 @@
           ),
 
           screen === "dashboard" && (() => {
-            const movimentosSistemaFiltrados = movimentosSistema.filter(item => {
-                     const conciliado = sistemaConciliadoIds.has(String(item.id));
-                     const tipo = item.tipo === 'Débito' ? 'debito' : 'credito';
-                     return (pluggyFiltroConciliacao === 'todos' || (pluggyFiltroConciliacao === 'conciliados' ? conciliado : !conciliado)) && (pluggyFiltroTipo === 'todos' || pluggyFiltroTipo === tipo);
-                   });
-                   const extratoBancoFiltrado = extratoBanco.filter(tx => {
-                     const conciliado = pluggyConciliadoIds.has(String(tx.id));
-                     const tipo = String(tx.type || '').toUpperCase() === 'DEBIT' ? 'debito' : 'credito';
-                     return (pluggyFiltroConciliacao === 'todos' || (pluggyFiltroConciliacao === 'conciliados' ? conciliado : !conciliado)) && (pluggyFiltroTipo === 'todos' || pluggyFiltroTipo === tipo);
-                   });
-                   const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
+            const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
             const mesAtual = dashboardCompetencia;
             const aberto = x => String(x.status || "").toLowerCase() !== "baixado" && String(x.status || "").toLowerCase() !== "recebido" && String(x.status || "").toLowerCase() !== "pago";
             const valorTitulo = x => Number(x.valorParcelaBase ?? x.valorBase ?? x.valorParcela ?? x.total ?? x.valor ?? 0) || 0;
@@ -6527,6 +6517,17 @@
                   };
                   const sistemaConciliadoIds = new Set(Array.from(parSistema.entries()).filter(([sid, tid]) => parConfereValor(sid, tid)).map(([sid]) => sid));
                   const pluggyConciliadoIds = new Set(Array.from(parPluggy.entries()).filter(([tid, sid]) => parConfereValor(sid, tid)).map(([tid]) => tid));
+                  const movimentosSistemaFiltrados = movimentosSistema.filter(item => {
+                     const conciliado = sistemaConciliadoIds.has(String(item.id));
+                     const tipo = item.tipo === 'Débito' ? 'debito' : 'credito';
+                     return (pluggyFiltroConciliacao === 'todos' || (pluggyFiltroConciliacao === 'conciliados' ? conciliado : !conciliado)) && (pluggyFiltroTipo === 'todos' || pluggyFiltroTipo === tipo);
+                   });
+                   const extratoBancoFiltrado = extratoBanco.filter(tx => {
+                     const conciliado = pluggyConciliadoIds.has(String(tx.id));
+                     const tipo = String(tx.type || '').toUpperCase() === 'DEBIT' ? 'debito' : 'credito';
+                     return (pluggyFiltroConciliacao === 'todos' || (pluggyFiltroConciliacao === 'conciliados' ? conciliado : !conciliado)) && (pluggyFiltroTipo === 'todos' || pluggyFiltroTipo === tipo);
+                   });
+                  
                   const totalValorConciliado = extratoBanco.filter(tx => pluggyConciliadoIds.has(String(tx.id))).reduce((total, tx) => total + Math.abs(valorPluggy(tx)), 0);
                   const totalPluggyNaoConciliado = extratoBanco.filter(tx => !pluggyConciliadoIds.has(String(tx.id))).reduce((total, tx) => total + Math.abs(valorPluggy(tx)), 0);
                   const totalSistemaNaoConciliado = movimentosSistema.filter(item => !sistemaConciliadoIds.has(String(item.id))).reduce((total, item) => total + Math.abs(valorSistema(item)), 0);
