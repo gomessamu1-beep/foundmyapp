@@ -6333,7 +6333,14 @@
           ),
 
           screen === "conciliacao" && h('div', { className: 'form-card' },
-              concilTab === 'cruzamento' && h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
+              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, 'Conciliação Bancária'),
+              h('button', { type: 'button', className: 'primary', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), ' Novo Lançamento')
+            ),
+            h('div', { role: 'tablist', 'aria-label': 'Abas da Conciliação Bancária', style: { display: 'flex', gap: 6, overflowX: 'auto', borderBottom: '1px solid var(--line)', marginBottom: 16, paddingBottom: 7, WebkitOverflowScrolling: 'touch' } },
+              [['resumo', 'Resumo'], ['calendario', 'Calendário'], ['movimentacoes', 'Movimentações do Sistema'], ['cruzamento', 'Cruzamento de Extratos'], ['saldoPluggy', 'Saldo bancário — Pluggy']].map(([id, label]) => h('button', { key: id, type: 'button', role: 'tab', 'aria-selected': concilTab === id, className: concilTab === id ? 'primary' : 'action-btn', style: { whiteSpace: 'nowrap', borderRadius: 7, padding: '9px 13px', borderBottom: concilTab === id ? '3px solid var(--green)' : '3px solid transparent' }, onClick: () => { setConcilTab(id); if (id === 'calendario') setCalendarioExpandido(true); } }, label))
+            ),
+              concilTab === 'saldoPluggy' && h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
                 h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
                   h('div', null,
                     h('strong', { style: { fontSize: 14 } }, 'Saldo bancário automático — Pluggy'),
@@ -6448,15 +6455,8 @@
                 ),
                 pluggyItemId.length > 0 && !pluggyLoading && pluggyAccounts.length === 0 && !pluggyError && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 } }, 'A conexão foi salva, mas a Pluggy ainda não retornou contas. Verifique o status da conexão e atualize os saldos.'),
                 ),
-
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
-              h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, 'Conciliação Bancária'),
-              h('button', { type: 'button', className: 'primary', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), ' Novo Lançamento')
-            ),
-            h('div', { role: 'tablist', 'aria-label': 'Abas da Conciliação Bancária', style: { display: 'flex', gap: 6, overflowX: 'auto', borderBottom: '1px solid var(--line)', marginBottom: 16, paddingBottom: 7, WebkitOverflowScrolling: 'touch' } },
-              [['resumo', 'Resumo'], ['calendario', 'Calendário'], ['movimentacoes', 'Movimentações do Sistema'], ['cruzamento', 'Cruzamento de Extratos']].map(([id, label]) => h('button', { key: id, type: 'button', role: 'tab', 'aria-selected': concilTab === id, className: concilTab === id ? 'primary' : 'action-btn', style: { whiteSpace: 'nowrap', borderRadius: 7, padding: '9px 13px', borderBottom: concilTab === id ? '3px solid var(--green)' : '3px solid transparent' }, onClick: () => { setConcilTab(id); if (id === 'calendario') setCalendarioExpandido(true); } }, label))
-            ),
-            concilTab !== "" && h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: isAndroidApp ? '1fr' : '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, width: '100%' } },
+            
+            ['resumo', 'calendario', 'movimentacoes', 'cruzamento'].includes(concilTab) && h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: isAndroidApp ? '1fr' : '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, width: '100%' } },
               h('div', { className: 'field' }, h('label', null, 'Conta bancária'), h('select', { style: { width: '100%', boxSizing: 'border-box' }, value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: '' }, 'Selecione a conta...'), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
               h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })),
               h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })),
