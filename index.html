@@ -4183,6 +4183,25 @@
         }
       }
 
+      function calcularSaldoSistemaBancario(conta) {
+        if (!conta) return null;
+        const dataBase = String(conta.dataSaldoInicial || "0000-00-00");
+        let saldo = Number(conta.saldoInicial || 0);
+        (contasPagar || []).forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === String(conta.id) && p.dataBaixa && p.dataBaixa > dataBase) saldo -= Number(p.valorParcela || p.total || 0); });
+        (contasReceber || []).forEach(r => { if (r.status === "Baixado" && String(r.bancoBaixaId) === String(conta.id) && r.dataBaixa && r.dataBaixa > dataBase) saldo += Number(r.valorParcela || r.total || 0); });
+        Object.entries(faturasBaixadas || {}).forEach(([comp, baixa]) => {
+          if (!baixa || baixa.status !== "Baixado" || String(baixa.bancoId) !== String(conta.id) || !baixa.dataBaixa || baixa.dataBaixa <= dataBase) return;
+          const totalComp = (purchases || []).reduce((s, p) => {
+            const idx = monthDiff(p.inicio, comp); if (idx < 0 || (p.canceladoEm && comp >= p.canceladoEm) || (p.mesesExcluidos || []).includes(comp)) return s;
+            if (p.recorrente) return s + Number(p.total || 0);
+            const inicial = p.parcelaInicial || 1; if (idx >= p.parcelas - inicial + 1) return s;
+            const split = splitInstallments(p.total, p.parcelas); return s + Number(split[(inicial - 1) + idx] || 0);
+          }, 0);
+          saldo -= totalComp;
+        });
+        return Number(saldo.toFixed(2));
+      }
+
       const movimentacoesConciliacao = useMemo(() => {
         if (!concilExibido || !concilContaId) return []; const lista = [];
         contasPagar.forEach(p => { if (p.status === "Baixado" && p.bancoBaixaId === concilContaId && p.dataBaixa) { if (p.dataBaixa >= concilDataIni && p.dataBaixa <= concilDataFim) lista.push({ id: p.id, tipoOrigem: 'pagar', itemRef: p, data: p.dataBaixa, descricao: p.descricao, observacao: p.observacao, tipo: "Débito", valorDebito: p.recorrente ? p.valorParcela : (p.valorParcela || p.total), valorCredito: 0 }); } });
@@ -6286,6 +6305,9 @@
                 pluggyAccounts.length > 0 && h('div', { className: 'list-vertical', style: { marginTop: 12, gap: 10 } },
                   pluggyAccounts.filter(account => String(account.type || '').toUpperCase() === 'BANK').map(account => {
                     const aberto = String(pluggyTransactionAccountId) === String(account.id);
+                    const contaSistemaVinculada = contasBancarias.find(c => String(c.pluggyAccountId || "") === String(account.id));
+                    const saldoSistemaVinculado = contaSistemaVinculada ? calcularSaldoSistemaBancario(contaSistemaVinculada) : null;
+                    const diferencaSaldoPluggy = saldoSistemaVinculado == null ? null : Number((Number(account.balance || 0) - saldoSistemaVinculado).toFixed(2));
                     const movimentacoesConta = pluggyTransactions.filter(t => String(t.accountId) === String(account.id));
                     const movimentacoesFiltradas = movimentacoesConta.filter(t => {
                       const data = String(t.date || '').slice(0, 10);
@@ -6305,11 +6327,19 @@
                         h('div', { style: { textAlign: 'right', flexShrink: 0 } },
                           h('strong', { style: { display: 'block', fontSize: 15, whiteSpace: 'nowrap' } }, valoresOcultos ? '••••••' : Number(account.balance || 0).toLocaleString('pt-BR', { style: 'currency', currency: account.currencyCode || 'BRL' })),
                           h('span', { style: { display: 'block', fontSize: 10, color: 'var(--ink-soft)', marginTop: 4 } }, movimentacoesConta.length + ' movimentação(ões)'),
+                          contaSistemaVinculada && h('span', { style: { display: 'block', fontSize: 10, marginTop: 4, color: Math.abs(diferencaSaldoPluggy) <= 0.01 ? 'var(--green)' : 'var(--red)', fontWeight: 700 } }, Math.abs(diferencaSaldoPluggy) <= 0.01 ? 'Saldo conciliado' : 'Divergência: ' + (valoresOcultos ? '••••••' : formatBRL(diferencaSaldoPluggy))),
+                          !contaSistemaVinculada && h('span', { style: { display: 'block', fontSize: 10, color: 'var(--amber)', marginTop: 4 } }, 'Vincule a uma conta do sistema para comparar o saldo'),
                           h('span', { style: { fontSize: 11, color: 'var(--green)', fontWeight: 700 } }, aberto ? 'Ocultar ▲' : 'Ver movimentações ▼')
                         )
                       ),
                       aberto && h('div', { style: { padding: 12, borderTop: '1px solid var(--line)' } },
                         h('div', { style: { fontWeight: 700, fontSize: 13, marginBottom: 8 } }, 'Consultar movimentações deste banco'),
+                        contaSistemaVinculada && h('div', { style: { padding: 10, marginBottom: 10, borderRadius: 7, background: 'var(--paper)', border: '1px solid var(--line)', fontSize: 12 } },
+                          h('div', { style: { fontWeight: 700, marginBottom: 6 } }, 'Conferência de saldo com o financeiro'),
+                          h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8 } }, h('span', null, 'Saldo calculado no sistema'), h('strong', null, valoresOcultos ? '••••••' : formatBRL(saldoSistemaVinculado))),
+                          h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8 } }, h('span', null, 'Saldo informado pela Pluggy'), h('strong', null, valoresOcultos ? '••••••' : formatBRL(Number(account.balance || 0)))),
+                          h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 5, paddingTop: 5, borderTop: '1px solid var(--line)', color: Math.abs(diferencaSaldoPluggy) <= 0.01 ? 'var(--green)' : 'var(--red)' } }, h('strong', null, Math.abs(diferencaSaldoPluggy) <= 0.01 ? 'Saldos conciliados' : 'Saldo divergente'), h('strong', null, valoresOcultos ? '••••••' : formatBRL(diferencaSaldoPluggy)))
+                        ),
                         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8, alignItems: 'end' } },
                           h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', value: pluggyFilterStart, onChange: e => setPluggyFilterStart(e.target.value) })),
                           h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', value: pluggyFilterEnd, onChange: e => setPluggyFilterEnd(e.target.value) })),
