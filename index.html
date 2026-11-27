@@ -29,7 +29,7 @@
     const supabaseUrl = 'https://odvntvvcgdoerewytvum.supabase.co';
     const supabaseKey = 'sb_publishable_IssO3agsbMYN_V243zTbTg_Flm5TFZF';
     const supabaseClient = window.supabase && window.supabase.createClient ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
-    const APP_BUILD = "pluggy-santander-2026-11-27";
+    const APP_BUILD = "pluggy-transactions-2026-11-27";
     console.info("[FoundMyApp] Build:", APP_BUILD);
 
     // Ícones
@@ -152,6 +152,11 @@
       const [pluggyLoading, setPluggyLoading] = useState(false);
       const [pluggyConnecting, setPluggyConnecting] = useState(false);
       const [pluggyError, setPluggyError] = useState("");
+      const [pluggyTransactions, setPluggyTransactions] = useState([]);
+      const [pluggyTransactionsLoading, setPluggyTransactionsLoading] = useState(false);
+      const [pluggyTransactionsError, setPluggyTransactionsError] = useState("");
+      const [pluggyTransactionsLoadedAt, setPluggyTransactionsLoadedAt] = useState("");
+      const [pluggyTransactionAccountId, setPluggyTransactionAccountId] = useState("all");
       const [categorias, setCategorias] = useState([]); 
       const [deparaList, setDeparaList] = useState([]);
       const [faturasFechadas, setFaturasFechadas] = useState({});
@@ -727,6 +732,28 @@
           setPluggyError(error?.message || "Não foi possível consultar os saldos bancários.");
         } finally {
           setPluggyLoading(false);
+        }
+      }
+
+      async function carregarMovimentacoesPluggy() {
+        if (!session?.user?.id) return alert("Entre no sistema para consultar as movimentações bancárias.");
+        setPluggyTransactionsLoading(true);
+        setPluggyTransactionsError("");
+        try {
+          const { data, error } = await supabaseClient.functions.invoke("pluggy-transactions", { body: {} });
+          if (error) throw new Error(error.message || "Falha ao consultar as movimentações bancárias.");
+          if (data?.error) throw new Error(data.error);
+          setPluggyTransactions(Array.isArray(data?.transactions) ? data.transactions : []);
+          setPluggyTransactionsLoadedAt(new Date().toISOString());
+          if (data?.partialError) {
+            const detalhes = Array.isArray(data.errors) ? data.errors.join(" ") : "";
+            setPluggyTransactionsError(detalhes || "Algumas contas não retornaram todas as movimentações. Tente atualizar novamente.");
+          }
+        } catch (error) {
+          console.error("Erro ao consultar movimentações Pluggy:", error);
+          setPluggyTransactionsError(error?.message || "Não foi possível consultar as movimentações bancárias.");
+        } finally {
+          setPluggyTransactionsLoading(false);
         }
       }
 
@@ -6258,7 +6285,56 @@
                     h('strong', { style: { whiteSpace: 'nowrap', fontSize: 15 } }, valoresOcultos ? '••••••' : Number(account.balance || 0).toLocaleString('pt-BR', { style: 'currency', currency: account.currencyCode || 'BRL' }))
                   ))
                 ),
-                pluggyItemId.length > 0 && !pluggyLoading && pluggyAccounts.length === 0 && !pluggyError && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 } }, 'A conexão foi salva, mas a Pluggy ainda não retornou contas. Verifique o status da conexão e atualize os saldos.')
+                pluggyItemId.length > 0 && !pluggyLoading && pluggyAccounts.length === 0 && !pluggyError && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 } }, 'A conexão foi salva, mas a Pluggy ainda não retornou contas. Verifique o status da conexão e atualize os saldos.'),
+                pluggyItemId.length > 0 && h('div', { style: { marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line)' } },
+                  h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
+                    h('div', null,
+                      h('strong', { style: { fontSize: 14 } }, 'Movimentações bancárias'),
+                      h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 } }, 'Busca todo o histórico disponibilizado por cada banco, limitado ao período de até 12 meses da Pluggy.')
+                    ),
+                    h('button', { type: 'button', className: 'primary', disabled: pluggyTransactionsLoading, onClick: carregarMovimentacoesPluggy }, pluggyTransactionsLoading ? 'Buscando histórico…' : (pluggyTransactionsLoadedAt ? 'Atualizar movimentações' : 'Buscar movimentações'))
+                  ),
+                  pluggyTransactionsError && h('div', { style: { color: 'var(--red)', fontSize: 12, marginTop: 9, whiteSpace: 'pre-wrap' } }, pluggyTransactionsError),
+                  pluggyTransactionsLoading && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 9 } }, 'Consultando todas as páginas do histórico bancário. Isso pode levar alguns instantes…'),
+                  pluggyTransactionsLoadedAt && h('div', { style: { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 } },
+                    h('div', { className: 'field', style: { minWidth: 220, maxWidth: 320, flex: '1 1 220px' } },
+                      h('label', null, 'Filtrar conta bancária'),
+                      h('select', { value: pluggyTransactionAccountId, onChange: e => setPluggyTransactionAccountId(e.target.value) },
+                        h('option', { value: 'all' }, 'Todas as contas'),
+                        pluggyAccounts.filter(a => String(a.type || '').toUpperCase() === 'BANK').map(a => h('option', { key: a.id, value: a.id }, (a.connector ? a.connector + ' • ' : '') + (a.name || 'Conta bancária')))
+                      )
+                    ),
+                    h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, pluggyTransactions.filter(t => pluggyTransactionAccountId === 'all' || t.accountId === pluggyTransactionAccountId).length + ' movimentação(ões) encontrada(s)')
+                  ),
+                  pluggyTransactionsLoadedAt && pluggyTransactions.length > 0 && h('div', { style: { overflowX: 'auto', marginTop: 10, border: '1px solid var(--line)', borderRadius: 7 } },
+                    h('table', { style: { width: '100%', borderCollapse: 'collapse', minWidth: 720, fontSize: 12 } },
+                      h('thead', null, h('tr', { style: { background: 'var(--paper)', textAlign: 'left' } },
+                        h('th', { style: { padding: 9 } }, 'Data'),
+                        h('th', { style: { padding: 9 } }, 'Conta'),
+                        h('th', { style: { padding: 9 } }, 'Descrição'),
+                        h('th', { style: { padding: 9 } }, 'Tipo'),
+                        h('th', { style: { padding: 9, textAlign: 'right' } }, 'Valor'),
+                        h('th', { style: { padding: 9, textAlign: 'right' } }, 'Saldo após'),
+                        h('th', { style: { padding: 9 } }, 'Situação')
+                      )),
+                      h('tbody', null,
+                        pluggyTransactions.filter(t => pluggyTransactionAccountId === 'all' || t.accountId === pluggyTransactionAccountId).map(t => {
+                          const valor = String(t.type).toUpperCase() === 'DEBIT' ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
+                          return h('tr', { key: t.accountId + ':' + t.id, style: { borderTop: '1px solid var(--line)' } },
+                            h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, formatDateBR(String(t.date || '').slice(0, 10))),
+                            h('td', { style: { padding: 9 } }, t.connector + ' • ' + t.accountName),
+                            h('td', { style: { padding: 9, minWidth: 190 } }, t.description || 'Movimentação bancária', t.operationType ? h('div', { style: { color: 'var(--ink-soft)', fontSize: 10, marginTop: 2 } }, t.operationType) : null),
+                            h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, String(t.type).toUpperCase() === 'DEBIT' ? 'Saída' : 'Entrada'),
+                            h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 } }, valoresOcultos ? '••••••' : formatBRL(valor)),
+                            h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
+                            h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, String(t.status).toUpperCase() === 'PENDING' ? 'Pendente' : 'Efetivada')
+                          );
+                        })
+                      )
+                    )
+                  ),
+                  pluggyTransactionsLoadedAt && pluggyTransactions.length === 0 && !pluggyTransactionsLoading && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, padding: 12, textAlign: 'center' } }, 'A Pluggy não retornou movimentações para as contas bancárias conectadas.')
+                )
               ),
 
             isAndroidApp ? h('div', { style: { marginBottom: 16 } },
