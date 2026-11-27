@@ -4183,6 +4183,22 @@
         }
       }
 
+      function encontrarCorrespondenciaFinanceiraPluggy(transacao, contaSistema) {
+        if (!transacao || !contaSistema) return null;
+        const data = String(transacao.date || "").slice(0,10);
+        const debito = String(transacao.type || "").toUpperCase() === "DEBIT";
+        const valor = Math.abs(Number(transacao.amount || 0));
+        if (!data || !Number.isFinite(valor)) return null;
+        const lista = debito ? (contasPagar || []) : (contasReceber || []);
+        const candidatos = [];
+        lista.forEach(item => {
+          if (item.status !== "Baixado" || String(item.bancoBaixaId) !== String(contaSistema.id) || String(item.dataBaixa || "") !== data) return;
+          const v = Number(item.valorParcela || item.total || 0);
+          if (Math.abs(v - valor) <= 0.01) candidatos.push({ id:String(item.id), descricao:item.descricao || "", tipoOrigem:debito ? "pagar" : "receber", itemRef:item });
+        });
+        return candidatos.length === 1 ? candidatos[0] : null;
+      }
+
       function calcularSaldoSistemaBancario(conta) {
         if (!conta) return null;
         const dataBase = String(conta.dataSaldoInicial || "0000-00-00");
@@ -4221,8 +4237,10 @@
             }
           }
         });
-        lista.sort((a, b) => a.data.localeCompare(b.data)); let saldoAcumulado = 0; return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); return { ...item, saldo: saldoAcumulado }; });
-      }, [concilExibido, concilContaId, concilDataIni, concilDataFim, contasPagar, contasReceber, faturasBaixadas, purchases]);
+        lista.sort((a, b) => a.data.localeCompare(b.data)); let saldoAcumulado = 0; return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); const contaPluggyVinculada = (contasBancarias || []).find(c => String(c.id) === String(concilContaId));
+          const txCorrespondente = contaPluggyVinculada && (pluggyTransactions || []).find(t => String(t.date || '').slice(0,10) === item.data && (String(t.type || '').toUpperCase() === 'DEBIT' ? item.tipo === 'Débito' : item.tipo === 'Crédito') && Math.abs(Math.abs(Number(t.amount || 0)) - Math.abs(Number(item.valorDebito || item.valorCredito || 0))) <= 0.01 && String(t.accountId) === String(contaPluggyVinculada.pluggyAccountId || ''));
+          return { ...item, saldo: saldoAcumulado, conciliadoPluggy: !!txCorrespondente }; });
+      }, [concilExibido, concilContaId, concilDataIni, concilDataFim, contasPagar, contasReceber, faturasBaixadas, purchases, pluggyTransactions, contasBancarias]);
 
       const resumoDiarioConcil = useMemo(() => {
         const grupos = {}; movimentacoesConciliacao.forEach(m => { if (!grupos[m.data]) grupos[m.data] = { data: m.data, debitos: 0, creditos: 0, itens: [] }; grupos[m.data].debitos += m.valorDebito; grupos[m.data].creditos += m.valorCredito; grupos[m.data].itens.push(m); });
@@ -6361,6 +6379,7 @@
                             h('tbody', null, movimentacoesFiltradas.map(t => {
                               const valor = String(t.type).toUpperCase() === 'DEBIT' ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
                               const detalheAberto = !!pluggyTransactionDetailsOpen[t.accountId + ':' + t.id];
+                              const lancamentoCorrespondente = encontrarCorrespondenciaFinanceiraPluggy(t, contaSistemaVinculada);
                               return h(React.Fragment, { key: t.accountId + ':' + t.id },
                                 h('tr', { style: { borderTop: '1px solid var(--line)' } },
                                   h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, formatDateBR(String(t.date || '').slice(0, 10))),
@@ -6368,7 +6387,17 @@
                                   h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, valor < 0 ? 'Saída' : 'Entrada'),
                                   h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 } }, valoresOcultos ? '••••••' : formatBRL(valor)),
                                   h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
-                                  h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, String(t.status).toUpperCase() === 'PENDING' ? 'Pendente' : 'Efetivada', h('button', { type: 'button', className: 'action-btn', style: { display: 'block', marginTop: 6, padding: '5px 8px', fontSize: 11 }, onClick: () => setPluggyTransactionDetailsOpen(prev => ({ ...prev, [t.accountId + ':' + t.id]: !prev[t.accountId + ':' + t.id] })) }, detalheAberto ? 'Ocultar detalhes' : 'Exibir detalhes'))
+                                  h('td', { style: { padding: 9, whiteSpace: 'nowrap' } },
+                                    h('div', null, String(t.status).toUpperCase() === 'PENDING' ? 'Pendente' : 'Efetivada'),
+                                    h('strong', { style: { display: 'block', marginTop: 4, color: lancamentoCorrespondente ? 'var(--green)' : 'var(--red)', fontSize: 11 } }, contaSistemaVinculada ? (lancamentoCorrespondente ? 'Conciliado' : 'Não conciliado') : 'Vincule a conta do sistema'),
+                                    !lancamentoCorrespondente && contaSistemaVinculada && h('button', { type: 'button', className: 'primary', style: { display: 'block', marginTop: 6, padding: '5px 9px', fontSize: 11 }, onClick: () => {
+                                      const ehDebito = valor < 0;
+                                      setLrTipo(ehDebito ? 'despesa' : 'receita'); setLrDescricao(String(t.description || t.rawDescription || 'Movimentação Pluggy').trim());
+                                      setLrObservacao('Importado da movimentação bancária Pluggy. ID: ' + String(t.id || '')); setLrData(String(t.date || '').slice(0,10));
+                                      setLrValor(Math.abs(Number(t.amount || 0)).toFixed(2).replace('.', ',')); setLrContaOrigem(contaSistemaVinculada.id);
+                                      setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true);
+                                    } }, 'Lançar no sistema'),
+                                    h('button', { type: 'button', className: 'action-btn', style: { display: 'block', marginTop: 6, padding: '5px 8px', fontSize: 11 }, onClick: () => setPluggyTransactionDetailsOpen(prev => ({ ...prev, [t.accountId + ':' + t.id]: !prev[t.accountId + ':' + t.id] })) }, detalheAberto ? 'Ocultar detalhes' : 'Exibir detalhes'))
                                 ),
                                 detalheAberto && h('tr', { style: { background: 'var(--paper)' } }, h('td', { colSpan: 6, style: { padding: 12, borderBottom: '1px solid var(--line)' } },
                                   h('div', { style: { fontWeight: 700, marginBottom: 9 } }, 'Detalhes da movimentação'),
@@ -6458,7 +6487,7 @@
               (!isAndroidApp || concilTab === 'movimentacoes') && h(React.Fragment, null,
               h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 12, borderBottom: '2px solid var(--line)', paddingBottom: 8 } }, "Movimentação Detalhada do Período Filtrado"),
 
-              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e) }, isDiaFechado(grupo.data) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { style: { marginTop: 0 } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('a', { href: '#', style: { color: 'var(--green)', fontWeight: 'bold', textDecoration: 'underline', fontSize: '12px' }, onClick: (e) => { e.preventDefault(); setConcilEditModal({ open: true, item }); } }, "🔗 Abrir / Alterar")), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))),
+              resumoDiarioConcil.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma movimentação para o período filtrado.") : resumoDiarioConcil.map(grupo => h('div', { key: grupo.data, style: { marginBottom: 16, border: '1px solid var(--line)', borderRadius: 6, background: '#fff', padding: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', borderBottom: '1px solid var(--line)', paddingBottom: 6, marginBottom: 8 } }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', null, `📅 ${formatDateBR(grupo.data)}`), h('button', { type: 'button', className: 'action-btn', style: { padding: '2px 6px', background: isDiaFechado(grupo.data) ? 'var(--amber-soft)' : '#fff' }, onClick: (e) => toggleDiaFechado(grupo.data, e) }, isDiaFechado(grupo.data) ? h(Lock, { size: 12, color: 'var(--amber)' }) : h(Unlock, { size: 12 }))), h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, `Débitos: ${showMoney(grupo.debitos)} | Créditos: ${showMoney(grupo.creditos)}`)), h('table', { style: { marginTop: 0 } }, h('thead', null, h('tr', null, h('th', null, "Descrição / Obs"), h('th', { className: 'center' }, "Tipo"), h('th', { className: 'center' }, "Link"), h('th', { className: 'right' }, "Débito (-)"), h('th', { className: 'right' }, "Crédito (+)"), h('th', { className: 'right' }, "Saldo"))), h('tbody', null, grupo.itens.map(item => h('tr', { key: item.id }, h('td', null, h('div', { style: { fontWeight: '500' } }, item.descricao), item.observacao && h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `📝 ${item.observacao}`)), h('td', { className: 'center' }, h('span', { className: `badge ${item.tipo === 'Débito' ? 'aberto' : 'baixado'}` }, item.tipo)), h('td', { className: 'center' }, h('div', { style: { fontSize: 11, fontWeight: 700, color: item.conciliadoPluggy ? 'var(--green)' : 'var(--red)', marginBottom: 4 } }, item.conciliadoPluggy ? 'Conciliado' : 'Não conciliado'), h('a', { href: '#', style: { color: 'var(--green)', fontWeight: 'bold', textDecoration: 'underline', fontSize: '12px' }, onClick: (e) => { e.preventDefault(); setConcilEditModal({ open: true, item }); } }, "🔗 Abrir / Alterar")), h('td', { className: 'right num', style: { color: 'var(--red)' } }, item.valorDebito ? showMoney(item.valorDebito) : '-'), h('td', { className: 'right num', style: { color: 'var(--green)' } }, item.valorCredito ? showMoney(item.valorCredito) : '-'), h('td', { className: 'right num', style: { fontWeight: 'bold' } }, showMoney(item.saldo)))))))),
               )
             )
           )
