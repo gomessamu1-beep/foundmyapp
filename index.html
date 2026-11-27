@@ -296,6 +296,12 @@
       const [calendarioExpandido, setCalendarioExpandido] = useState(false);
 
       const [concilEditModal, setConcilEditModal] = useState({ open: false, item: null });
+      const [pluggySistemaSelecionados, setPluggySistemaSelecionados] = useState([]);
+      const [pluggyBancoSelecionados, setPluggyBancoSelecionados] = useState([]);
+      const [pluggyConcilPersistido, setPluggyConcilPersistido] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("foundmyapp-pluggy-concil-v1") || '{"vinculos":[],"removidos":[]}'); }
+        catch (_) { return { vinculos: [], removidos: [] }; }
+      });
 
       const [baixaModal, setBaixaModal] = useState({ open: false, type: null, id: null, bancoId: "", dataBaixa: currentDate(), tipoMovimentacaoId: "", acrescimo: "", desconto: "" });
       const [pagamentoCartaoModal, setPagamentoCartaoModal] = useState({ open:false, id:null, dataBaixa:currentDate(), cartaoId:"", juros:"", parcelas:"1", competencia:currentMonth(), tipoMovimentacaoId:"" });
@@ -6485,41 +6491,128 @@
 
 
               concilTab === 'cruzamento' && h(React.Fragment, null,
-                h('div', { style: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, borderBottom: '2px solid var(--line)', paddingBottom: 8 } }, "Cruzamento de Extratos"),
-                h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 } }, "Comparação lado a lado do extrato do sistema e do extrato bancário Pluggy para a conta e o período selecionados acima."),
                 (() => {
                   const contaSistema = contasBancarias.find(c => String(c.id) === String(concilContaId));
+                  const contaKey = String(concilContaId || "");
                   const pluggyId = contaSistema ? contaSistema.pluggyAccountId : "";
-                  const extratoBanco = (pluggyTransactions || []).filter(t => { const data = String(t.date || "").slice(0,10); return String(t.accountId) === String(pluggyId) && (!concilDataIni || data >= concilDataIni) && (!concilDataFim || data <= concilDataFim); });
-                  const linhas = movimentacoesConciliacao.map(item => ({ item, tx: encontrarTransacaoPluggyParaMovimentacao(item, contaSistema) }));
-                  const conciliados = linhas.filter(x => x.tx).length;
-                  const pendentesSistema = linhas.length - conciliados;
-                  const idsConciliados = new Set(linhas.filter(x => x.tx).map(x => String(x.tx.id)));
-                  const pendentesBanco = extratoBanco.filter(t => !idsConciliados.has(String(t.id))).length;
+                  const extratoBanco = (pluggyTransactions || []).filter(t => {
+                    const data = String(t.date || "").slice(0,10);
+                    return String(t.accountId) === String(pluggyId) && (!concilDataIni || data >= concilDataIni) && (!concilDataFim || data <= concilDataFim);
+                  });
+                  const movimentosSistema = movimentacoesConciliacao || [];
+                  const dados = pluggyConcilPersistido || { vinculos: [], removidos: [] };
+                  const vinculosConta = (dados.vinculos || []).filter(v => String(v.contaId) === contaKey);
+                  const removidosConta = new Set((dados.removidos || []).filter(v => String(v.contaId) === contaKey).map(v => String(v.sistemaId) + "|" + String(v.pluggyId)));
+                  const vinculoPorSistema = new Map(vinculosConta.map(v => [String(v.sistemaId), v]));
+                  const vinculoPorPluggy = new Map(vinculosConta.map(v => [String(v.pluggyId), v]));
+                  const automaticos = [];
+                  const usadosAutomaticos = new Set();
+                  movimentosSistema.forEach(item => {
+                    if (vinculoPorSistema.has(String(item.id))) return;
+                    const tx = encontrarTransacaoPluggyParaMovimentacao(item, contaSistema);
+                    if (tx && !vinculoPorPluggy.has(String(tx.id)) && !usadosAutomaticos.has(String(tx.id)) && !removidosConta.has(String(item.id) + "|" + String(tx.id))) {
+                      automaticos.push({ sistemaId:String(item.id), pluggyId:String(tx.id) });
+                      usadosAutomaticos.add(String(tx.id));
+                    }
+                  });
+                  const parSistema = new Map(automaticos.map(p => [p.sistemaId, p.pluggyId]));
+                  const parPluggy = new Map(automaticos.map(p => [p.pluggyId, p.sistemaId]));
+                  vinculosConta.forEach(v => { parSistema.set(String(v.sistemaId), String(v.pluggyId)); parPluggy.set(String(v.pluggyId), String(v.sistemaId)); });
                   const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
-                  const box = (titulo, registros) => h('section', { style: { minWidth: 0, border: '1px solid var(--line)', borderRadius: 8, padding: 10, background: 'var(--card)' } },
-                    h('h4', { style: { margin: '0 0 9px', fontSize: 13 } }, titulo),
-                    registros.length ? registros.map((x,idx) => h('div', { key: idx, style: { padding: 9, borderBottom: '1px solid var(--line)', fontSize: 12 } },
-                      h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 6 } },
-                        h('strong', null, formatDateBR(x.data)),
-                        h('strong', { style: { color: x.ok ? 'var(--green)' : 'var(--red)', fontSize: 10 } }, x.ok ? 'Conciliado' : 'Não conciliado')
-                      ),
-                      h('div', { style: { marginTop: 4 } }, x.descricao),
-                      h('strong', { style: { display: 'block', marginTop: 4 } }, money(x.valor))
-                    )) : h('div', { style: { color: 'var(--ink-soft)', fontSize: 12 } }, "Nenhuma movimentação neste período.")
-                  );
-                  return h('div', null,
-                    !pluggyTransactionsLoadedAt && h('div', { className: 'warning-box', style: { marginBottom: 10 } }, "Consulte as movimentações da Pluggy na área de saldos bancários para carregar o extrato."),
-                    !pluggyId && h('div', { className: 'warning-box', style: { marginBottom: 10 } }, "Vincule a conta bancária do sistema a uma conta Pluggy em Cadastros > Contas."),
-                    h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 8, marginBottom: 12 } },
-                      h('div', { className: 'top', style: { margin: 0, padding: 10 } }, h('div', { style: { fontSize: 11 } }, "Conciliados"), h('strong', { style: { color: 'var(--green)', fontSize: 20 } }, conciliados)),
-                      h('div', { className: 'top', style: { margin: 0, padding: 10 } }, h('div', { style: { fontSize: 11 } }, "Pendentes no sistema"), h('strong', { style: { color: 'var(--red)', fontSize: 20 } }, pendentesSistema)),
-                      h('div', { className: 'top', style: { margin: 0, padding: 10 } }, h('div', { style: { fontSize: 11 } }, "Pendentes no banco"), h('strong', { style: { color: 'var(--red)', fontSize: 20 } }, pendentesBanco))
-                    ),
-                    h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10 } },
-                      box("Extrato do sistema", linhas.map(x => ({ data: x.item.data, descricao: x.item.descricao, valor: x.item.tipo === 'Débito' ? -Number(x.item.valorDebito || 0) : Number(x.item.valorCredito || 0), ok: !!x.tx }))),
-                      box("Extrato bancário (Pluggy)", extratoBanco.map(t => ({ data: String(t.date || '').slice(0,10), descricao: t.description || t.rawDescription || 'Movimentação bancária', valor: String(t.type).toUpperCase() === 'DEBIT' ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0)), ok: idsConciliados.has(String(t.id)) })))
+                  const salvarDados = next => {
+                    setPluggyConcilPersistido(next);
+                    localStorage.setItem("foundmyapp-pluggy-concil-v1", JSON.stringify(next));
+                  };
+                  const conciliarSelecionados = () => {
+                    if (!contaKey || pluggySistemaSelecionados.length !== 1 || pluggyBancoSelecionados.length !== 1) {
+                      alert("Selecione exatamente um lançamento do sistema e um lançamento da Pluggy.");
+                      return;
+                    }
+                    const sistemaId = String(pluggySistemaSelecionados[0]);
+                    const pluggyTxId = String(pluggyBancoSelecionados[0]);
+                    if (parSistema.has(sistemaId) || parPluggy.has(pluggyTxId)) {
+                      alert("Um dos lançamentos já está conciliado. Remova a conciliação atual antes de criar outro vínculo.");
+                      return;
+                    }
+                    const next = {
+                      vinculos: [...(dados.vinculos || []).filter(v => !(String(v.contaId) === contaKey && (String(v.sistemaId) === sistemaId || String(v.pluggyId) === pluggyTxId))), { contaId:contaKey, sistemaId, pluggyId:pluggyTxId }],
+                      removidos: (dados.removidos || []).filter(v => !(String(v.contaId) === contaKey && String(v.sistemaId) === sistemaId && String(v.pluggyId) === pluggyTxId))
+                    };
+                    salvarDados(next);
+                    setPluggySistemaSelecionados([]);
+                    setPluggyBancoSelecionados([]);
+                  };
+                  const removerSelecionados = () => {
+                    const pares = [];
+                    pluggySistemaSelecionados.forEach(id => {
+                      const pluggy = parSistema.get(String(id));
+                      if (pluggy) pares.push({ sistemaId:String(id), pluggyId:String(pluggy) });
+                    });
+                    pluggyBancoSelecionados.forEach(id => {
+                      const sistema = parPluggy.get(String(id));
+                      if (sistema) pares.push({ sistemaId:String(sistema), pluggyId:String(id) });
+                    });
+                    const unicos = Array.from(new Map(pares.map(p => [p.sistemaId + "|" + p.pluggyId, p])).values());
+                    if (!unicos.length) { alert("Selecione um ou mais lançamentos que estejam conciliados."); return; }
+                    const removidos = [...(dados.removidos || [])];
+                    unicos.forEach(p => {
+                      if (!removidos.some(v => String(v.contaId) === contaKey && String(v.sistemaId) === p.sistemaId && String(v.pluggyId) === p.pluggyId))
+                        removidos.push({ contaId:contaKey, sistemaId:p.sistemaId, pluggyId:p.pluggyId });
+                    });
+                    salvarDados({ vinculos:(dados.vinculos || []).filter(v => !(String(v.contaId) === contaKey && unicos.some(p => p.sistemaId === String(v.sistemaId) && p.pluggyId === String(v.pluggyId)))), removidos });
+                    setPluggySistemaSelecionados([]);
+                    setPluggyBancoSelecionados([]);
+                  };
+                  const checkbox = (checked, onChange) => h('input', { type:'checkbox', checked, onChange, style:{ width:16, height:16, cursor:'pointer' } });
+                  const tabelaSistema = h('div', { style:{ minWidth:0, overflowX:'auto', border:'1px solid var(--line)', borderRadius:8, background:'var(--card)' } },
+                    h('div', { style:{ fontWeight:700, padding:'10px 12px', borderBottom:'1px solid var(--line)' } }, "Movimentações do Sistema"),
+                    h('table', { style:{ width:'100%', minWidth:360, margin:0, fontSize:12 } },
+                      h('thead', null, h('tr', null, h('th', { style:{ width:38 } }, " "), h('th', null, "Data"), h('th', { className:'right' }, "Valor"), h('th', null, "Situação"))),
+                      h('tbody', null, movimentosSistema.length ? movimentosSistema.map(item => {
+                        const conciliado = parSistema.has(String(item.id));
+                        const valor = item.tipo === 'Débito' ? -Number(item.valorDebito || 0) : Number(item.valorCredito || 0);
+                        return h('tr', { key:String(item.id) },
+                          h('td', { className:'center' }, checkbox(pluggySistemaSelecionados.includes(String(item.id)), e => setPluggySistemaSelecionados(prev => e.target.checked ? [...prev.filter(x => x !== String(item.id)), String(item.id)] : prev.filter(x => x !== String(item.id))))),
+                          h('td', null, formatDateBR(item.data)),
+                          h('td', { className:'right num', style:{ whiteSpace:'nowrap' } }, money(valor)),
+                          h('td', null, h('span', { style:{ color:conciliado?'var(--green)':'var(--red)', fontWeight:700, whiteSpace:'nowrap' } }, conciliado ? "Conciliado" : "Não conciliado"))
+                        );
+                      }) : h('tr', null, h('td', { colSpan:4, style:{ textAlign:'center', color:'var(--ink-soft)', padding:16 } }, "Nenhuma movimentação no período.")))
                     )
+                  );
+                  const tabelaPluggy = h('div', { style:{ minWidth:0, overflowX:'auto', border:'1px solid var(--line)', borderRadius:8, background:'var(--card)' } },
+                    h('div', { style:{ fontWeight:700, padding:'10px 12px', borderBottom:'1px solid var(--line)' } }, "Movimentações da Pluggy"),
+                    h('table', { style:{ width:'100%', minWidth:360, margin:0, fontSize:12 } },
+                      h('thead', null, h('tr', null, h('th', { style:{ width:38 } }, " "), h('th', null, "Data"), h('th', { className:'right' }, "Valor"), h('th', null, "Situação"))),
+                      h('tbody', null, extratoBanco.length ? extratoBanco.map(tx => {
+                        const conciliado = parPluggy.has(String(tx.id));
+                        const valor = String(tx.type || "").toUpperCase() === "DEBIT" ? -Math.abs(Number(tx.amount || 0)) : Math.abs(Number(tx.amount || 0));
+                        return h('tr', { key:String(tx.id) },
+                          h('td', { className:'center' }, checkbox(pluggyBancoSelecionados.includes(String(tx.id)), e => setPluggyBancoSelecionados(prev => e.target.checked ? [...prev.filter(x => x !== String(tx.id)), String(tx.id)] : prev.filter(x => x !== String(tx.id))))),
+                          h('td', null, formatDateBR(String(tx.date || "").slice(0,10))),
+                          h('td', { className:'right num', style:{ whiteSpace:'nowrap' } }, money(valor)),
+                          h('td', null, h('span', { style:{ color:conciliado?'var(--green)':'var(--red)', fontWeight:700, whiteSpace:'nowrap' } }, conciliado ? "Conciliado" : "Não conciliado"))
+                        );
+                      }) : h('tr', null, h('td', { colSpan:4, style:{ textAlign:'center', color:'var(--ink-soft)', padding:16 } }, "Nenhuma movimentação no período.")))
+                    )
+                  );
+                  const qtdConciliados = movimentosSistema.filter(m => parSistema.has(String(m.id))).length;
+                  const qtdPendentesSistema = movimentosSistema.length - qtdConciliados;
+                  const qtdPendentesBanco = extratoBanco.filter(t => !parPluggy.has(String(t.id))).length;
+                  return h('div', null,
+                    h('div', { style:{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 } },
+                      h('div', { className:'top', style:{ margin:0, padding:'8px 12px', flex:'1 1 110px' } }, h('div', { style:{ fontSize:11 } }, "Conciliados"), h('strong', { style:{ color:'var(--green)', fontSize:19 } }, qtdConciliados)),
+                      h('div', { className:'top', style:{ margin:0, padding:'8px 12px', flex:'1 1 110px' } }, h('div', { style:{ fontSize:11 } }, "Pendentes no sistema"), h('strong', { style:{ color:'var(--red)', fontSize:19 } }, qtdPendentesSistema)),
+                      h('div', { className:'top', style:{ margin:0, padding:'8px 12px', flex:'1 1 110px' } }, h('div', { style:{ fontSize:11 } }, "Pendentes na Pluggy"), h('strong', { style:{ color:'var(--red)', fontSize:19 } }, qtdPendentesBanco))
+                    ),
+                    h('div', { style:{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 } },
+                      h('button', { type:'button', className:'primary', onClick:conciliarSelecionados, disabled:pluggySistemaSelecionados.length !== 1 || pluggyBancoSelecionados.length !== 1 }, "Conciliar selecionados"),
+                      h('button', { type:'button', className:'action-btn', onClick:removerSelecionados, disabled:pluggySistemaSelecionados.length + pluggyBancoSelecionados.length === 0 }, "Remover conciliação"),
+                      h('button', { type:'button', className:'action-btn', onClick:() => { setPluggySistemaSelecionados([]); setPluggyBancoSelecionados([]); } }, "Limpar seleção")
+                    ),
+                    !pluggyId && h('div', { className:'warning-box', style:{ marginBottom:10 } }, "Vincule a conta bancária do sistema a uma conta Pluggy em Cadastros > Contas."),
+                    !pluggyTransactionsLoadedAt && h('div', { className:'warning-box', style:{ marginBottom:10 } }, "Consulte para carregar o extrato da Pluggy."),
+                    h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:10, alignItems:'start' } }, tabelaSistema, tabelaPluggy)
                   );
                 })()
               ),
