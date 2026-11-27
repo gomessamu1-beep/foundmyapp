@@ -6460,7 +6460,8 @@
               )
             ) : h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
               h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Conciliação Bancária"),
-              h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6 } },
+              h('div', { className: 'export-buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                h('button', { type: 'button', className: 'action-btn', onClick: () => { setConcilTab('cruzamento'); setConcilExibido(true); } }, "Cruzamento de Extratos"),
                 h('button', { type: 'button', className: 'primary', onClick: () => { setLrTipo('despesa'); setLrDescricao(''); setLrObservacao(''); setLrData(currentDate()); setLrValor(''); setLrContaOrigem(concilContaId || ''); setLrContaDestino(''); setLrCategoriaId(''); setLrSubcategoriaId(''); setLrIsTransferencia(false); setLrError(''); setLrModalOpen(true); } }, h(Plus), " Novo Lançamento"),
                 concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportConciliacaoExcel }, h(FileSpreadsheet, { size: 14 }), " Excel"),
                 concilExibido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF }, h(Printer, { size: 14 }), " Imprimir")
