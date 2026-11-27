@@ -408,33 +408,6 @@
         localStorage.setItem('fatura-oculto-v1', valoresOcultos);
       }, [valoresOcultos]);
       
-      const [santanderNotificationId, setSantanderNotificationId] = useState(null);
-      const [santanderNotificationPrompt, setSantanderNotificationPrompt] = useState(null);
-      const santanderPromptShownRef = useRef(false);
-
-      useEffect(() => {
-        if (!session || dataLoading || santanderPromptShownRef.current || !window.FoundMyAppAndroid) return;
-        santanderPromptShownRef.current = true;
-
-        const android = window.FoundMyAppAndroid;
-        try {
-          if (!android.hasNotificationAccess()) {
-            if (window.confirm("Quer ativar a leitura das notificações do Santander? O FoundMyApp usará esse acesso apenas para guardar possíveis compras no aparelho e sugerir lançamentos na fatura.")) {
-              android.openNotificationAccessSettings();
-            }
-            return;
-          }
-
-          const pendentes = JSON.parse(android.getPendingNotifications() || "[]");
-          if (!Array.isArray(pendentes) || pendentes.length === 0) return;
-
-          const item = pendentes[0];
-          setSantanderNotificationPrompt({ item, total: pendentes.length });
-        } catch (err) {
-          console.warn("[FoundMyApp] Não foi possível ler notificações Santander:", err);
-        }
-      }, [session, dataLoading, cartoes]);
-
       const [modalOpen, setModalOpen] = useState(false);
       const [planilhaModalOpen, setPlanilhaModalOpen] = useState(false);
       const [planilhaPreview, setPlanilhaPreview] = useState([]);
@@ -3715,10 +3688,6 @@
             else {
               updatePurchases(prev => [...prev, novoRegistro]);
               sincronizarCompraFaturaContabil(novoRegistro).catch(e => { console.error("Contabilidade da fatura:", e); alert("A compra foi salva, mas houve erro ao contabilizar: " + (e.message || "erro desconhecido")); });
-              if (santanderNotificationId && window.FoundMyAppAndroid) {
-                window.FoundMyAppAndroid.markHandled(santanderNotificationId);
-                setSantanderNotificationId(null);
-              }
               resetFormAfterSave();
             } 
         }
@@ -6464,52 +6433,6 @@
             h('button', { type: 'button', className: 'primary', style: { width: '100%', justifyContent: 'center' }, onClick: () => confirmarEscopoEdicaoParcela("future") }, "Alterar esta e todas as parcelas seguintes"),
             h('button', { type: 'button', className: 'action-btn', style: { width: '100%', justifyContent: 'center', marginTop: 8 }, onClick: () => setPurchaseEditChoice(null) }, "Cancelar")
           )
-        ),
-
-        santanderNotificationPrompt && ReactDOM.createPortal(
-          h('div', { className: 'modal-overlay', style: { zIndex: 12000 } },
-            h('div', { className: 'modal-content', style: { maxWidth: 430, width: '92%', padding: 20 }, onClick: e => e.stopPropagation() },
-              h('div', { style: { fontSize: 18, fontWeight: 700, marginBottom: 8 } }, 'Notificação do Santander'),
-              h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, santanderNotificationPrompt.total + ' notificação(ões) pendente(s). Confira os dados antes de lançar.'),
-              h('div', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--surface, #ffffff)', color: 'var(--ink, #111827)', textAlign: 'left', minHeight: 112 } },
-                h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: .5, color: 'var(--ink-soft, #64748b)', marginBottom: 5 } }, 'COMPRA IDENTIFICADA'),
-                h('div', { style: { fontSize: 17, fontWeight: 700, lineHeight: 1.35, overflowWrap: 'anywhere' } }, santanderNotificationPrompt.item.merchant || santanderNotificationPrompt.item.title || 'Estabelecimento não identificado'),
-                h('div', { style: { display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 12 } },
-                  h('div', null, h('div', { style: { fontSize: 11, color: 'var(--ink-soft, #64748b)' } }, 'VALOR'), h('div', { style: { fontSize: 16, fontWeight: 700 } }, santanderNotificationPrompt.item.amount ? ('R$ ' + String(santanderNotificationPrompt.item.amount).replace('.', ',')) : 'Não identificado')),
-                  h('div', null, h('div', { style: { fontSize: 11, color: 'var(--ink-soft, #64748b)' } }, 'DATA'), h('div', { style: { fontSize: 16, fontWeight: 700 } }, santanderNotificationPrompt.item.date || 'Não identificada'))
-                ),
-                santanderNotificationPrompt.item.text && h('div', { style: { fontSize: 12, color: 'var(--ink-soft, #64748b)', marginTop: 10, overflowWrap: 'anywhere' } }, santanderNotificationPrompt.item.text)
-              ),
-              h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' } },
-                h('button', { type: 'button', className: 'action-btn', onClick: () => {
-                  try {
-                    if (!window.FoundMyAppAndroid?.ignoreNotification) throw new Error('Atualize o APK para usar esta função.');
-                    window.FoundMyAppAndroid.ignoreNotification(santanderNotificationPrompt.item.id);
-                    setSantanderNotificationPrompt(null);
-                  } catch (e) { alert(e.message || 'Não foi possível ignorar a notificação.'); }
-                } }, 'Ignorar'),
-                h('button', { type: 'button', className: 'primary', onClick: () => {
-                  const item = santanderNotificationPrompt.item;
-                  const textoCompleto = [item.title, item.text].filter(Boolean).join(' — ');
-                  const valorMatch = textoCompleto.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/);
-                  const valor = item.amount ? String(item.amount).replace(/\./g, '') : (valorMatch ? valorMatch[1].replace(/\./g, '') : '');
-                  const dataTexto = String(item.date || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                  const dataNotificacao = dataTexto ? new Date(Number(dataTexto[3]), Number(dataTexto[2]) - 1, Number(dataTexto[1])) : (item.postedAt ? new Date(Number(item.postedAt)) : new Date());
-                  const dataISO = dataNotificacao.getFullYear() + '-' + String(dataNotificacao.getMonth() + 1).padStart(2, '0') + '-' + String(dataNotificacao.getDate()).padStart(2, '0');
-                  const cartaoSantander = cartoes.find(x => /santander/i.test(x.nome || ''));
-                  const descricaoSugerida = String(item.merchant || item.title || 'Compra Santander').replace(/\\s+/g, ' ').trim().slice(0, 70);
-                  setScreen('faturas'); setMonth(dataISO.slice(0, 7)); setDescricao(descricaoSugerida);
-                  setObservacao('Sugerido pela notificação do aplicativo Santander. Confira os dados antes de salvar.');
-                  setValorTotal(valor); setValorParcelaInput(''); setDataLancamento(dataISO); setFaturaMes(dataISO.slice(0, 7));
-                  setParcelas('1'); setParcelaAtual('1'); setCartaoId(cartaoSantander?.id || (cartoes.length === 1 ? cartoes[0].id : ''));
-                  setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao');
-                  setEditingId(null); setFormError(''); setSantanderNotificationId(item.id);
-                  setSantanderNotificationPrompt(null); setModalOpen(true);
-                } }, 'Lançar')
-              )
-            )
-          ),
-          document.body
         ),
 
         modalOpen && h('div', { className: 'modal-overlay launch-modal-overlay', onKeyDown: e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); } } },
