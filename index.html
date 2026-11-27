@@ -174,7 +174,7 @@
       const [assistantMessages, setAssistantMessages] = useState([]);
       const [assistantBusy, setAssistantBusy] = useState(false);
       const [assistantPendingAction, setAssistantPendingAction] = useState(null);
-      const [screen, setScreen] = useState("dashboard");
+      const [screen, setScreen] = useState(() => sessionStorage.getItem("fatura-screen-v1") || "dashboard");
       const [faturaViewTab, setFaturaViewTab] = useState(() => sessionStorage.getItem("fatura-viewtab-v1") || "lancamentos");
       const [contabTab, setContabTab] = useState(() => sessionStorage.getItem("fatura-contabtab-v1") || "plano");
       const [contabPlano, setContabPlano] = useState([]);
