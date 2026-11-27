@@ -5606,32 +5606,6 @@
               h('div', { className: 'list-vertical', style: { marginTop: 12 } }, cartoes.map((c) => h('div', { className: 'list-item', key: c.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h('span', { className: 'dot', style: { background: c.cor } }), h('div', null, h('div', null, c.nome), h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, `Fecha dia ${c.fechamento || '01'} • Vence dia ${c.vencimento || '10'}`))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingCartaoId(c.id); setNovoCartaoNome(c.nome); setNovoCartaoBanco(c.bancoCode || "033"); setNovoCartaoCor(c.cor || CARD_COLORS[0]); setNovoCartaoFechamento(c.fechamento || "01"); setNovoCartaoVencimento(c.vencimento || "10"); setNovoCartaoContaContabilId(c.contaContabilId || ""); setCartaoModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'cartao', id: c.id, title: 'Excluir Cartão', message: `Excluir ${c.nome}?`, option: "all" }) }, h(Trash2, { size: 14 })))))))
             ),
             cadastroTab === "contas" && h(React.Fragment, null,
-              h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
-                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
-                  h('div', null,
-                    h('strong', { style: { fontSize: 14 } }, 'Saldo bancário automático — Pluggy'),
-                    h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, pluggyItem.length ? pluggyItem.length + ' instituição(ões) conectada(s) • ' + pluggyAccounts.length + ' conta(s) bancária(s)' : 'Conecte suas instituições financeiras cadastradas na Pluggy para consultar os saldos diretamente no FoundMyApp.')
-                  ),
-                  h('div', { style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
-                    h('button', { type: 'button', className: 'primary', disabled: pluggyConnecting, onClick: conectarBancoPluggy }, pluggyConnecting ? 'Conectando…' : (pluggyItemId.length ? 'Conectar outra instituição' : 'Conectar instituições')),
-                    pluggyItemId.length > 0 && h('button', { type: 'button', className: 'action-btn', disabled: pluggyLoading, onClick: carregarSaldosPluggy }, pluggyLoading ? 'Consultando…' : 'Atualizar saldos'),
-                    pluggyItemId.length > 0 && h('button', { type: 'button', className: 'action-btn delete', onClick: desconectarBancoPluggy }, 'Desvincular todas')
-                  )
-                ),
-                h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 } }, 'No seletor da Pluggy, escolha qualquer uma das instituições que você cadastrou. Você pode conectar mais de uma instituição; as conexões ficam vinculadas somente ao seu usuário do FoundMyApp.'),
-                pluggyError && h('div', { style: { color: 'var(--red)', fontSize: 12, marginTop: 9, whiteSpace: 'pre-wrap' } }, pluggyError),
-                pluggyLoading && h('div', { style: { fontSize: 12, marginTop: 10, color: 'var(--ink-soft)' } }, 'Consultando os saldos de todas as instituições…'),
-                pluggyAccounts.length > 0 && h('div', { className: 'list-vertical', style: { marginTop: 12 } },
-                  pluggyAccounts.map(account => h('div', { className: 'list-item', key: account.id },
-                    h('div', { className: 'list-item-main' },
-                      h('div', { style: { fontWeight: 600 } }, account.name || 'Conta bancária'),
-                      h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 } }, [account.connector, account.type, account.subtype, account.number].filter(Boolean).join(' • ') || 'Conta conectada')
-                    ),
-                    h('strong', { style: { whiteSpace: 'nowrap', fontSize: 15 } }, Number(account.balance || 0).toLocaleString('pt-BR', { style: 'currency', currency: account.currencyCode || 'BRL' }))
-                  ))
-                ),
-                pluggyItemId.length > 0 && !pluggyLoading && pluggyAccounts.length === 0 && !pluggyError && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 } }, 'A conexão foi salva, mas a Pluggy ainda não retornou contas. Verifique o status da conexão e atualize os saldos.')
-              ),
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, h('div', { style: { fontSize: 14, color: 'var(--ink-soft)' } }, "Minhas Contas Bancárias e Caixas"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingContaId(null); setNovaContaNome(""); setNovaContaBanco("033"); setNovaContaTipo("corrente"); setNovaContaAgencia(""); setNovaContaNumero(""); setNovaContaContaContabilId(""); setContaModalOpen(true); } }, h(Plus), " Nova Conta")),
               h('div', { className: 'list-vertical', style: { marginTop: 12 } }, contasBancarias.length === 0 ? h('div', { style: { padding: '30px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 } }, "Nenhuma conta cadastrada.") : contasBancarias.map((conta) => { const bancoObj = BANCOS_FEBRABAN.find(b => b.code === conta.bancoCode); const tipoLabel = conta.tipo === 'corrente' ? 'Conta Corrente' : conta.tipo === 'investimento' ? 'Investimento' : conta.tipo === 'dinheiro' ? 'Dinheiro / Caixa' : 'Outros'; return h('div', { className: 'list-item', key: conta.id }, h('div', { className: 'list-item-main' }, h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, h(Landmark, { size: 20 }), h('div', null, h('div', { style: { fontWeight: '600' } }, conta.nome), h('div', { style: { fontSize: '12px', color: 'var(--ink-soft)', marginTop: '2px' } }, `${bancoObj ? bancoObj.name : conta.bancoCode} • ${tipoLabel}` + (conta.agencia || conta.numero ? ` • Ag: ${conta.agencia || '-'} | Conta: ${conta.numero || '-'}` : '')))), h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => { setEditingContaId(conta.id); setNovaContaNome(conta.nome); setNovaContaBanco(conta.bancoCode || "033"); setNovaContaTipo(conta.tipo || "corrente"); setNovaContaAgencia(conta.agencia || ""); setNovaContaNumero(conta.numero || ""); setNovaContaContaContabilId(conta.contaContabilId || ""); setContaModalOpen(true); } }, h(Pencil, { size: 14 })), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'conta', id: conta.id, title: 'Excluir Conta', message: `Excluir a conta ${conta.nome}?`, option: "all" }) }, h(Trash2, { size: 14 }))))); }))
             ),
@@ -6260,6 +6234,33 @@
           ),
 
           screen === "conciliacao" && h('div', { className: 'form-card' },
+              h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
+                  h('div', null,
+                    h('strong', { style: { fontSize: 14 } }, 'Saldo bancário automático — Pluggy'),
+                    h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, pluggyItem.length ? pluggyItem.length + ' instituição(ões) conectada(s) • ' + pluggyAccounts.length + ' conta(s) bancária(s)' : 'Conecte suas instituições financeiras cadastradas na Pluggy para consultar os saldos diretamente no FoundMyApp.')
+                  ),
+                  h('div', { style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
+                    h('button', { type: 'button', className: 'primary', disabled: pluggyConnecting, onClick: conectarBancoPluggy }, pluggyConnecting ? 'Conectando…' : (pluggyItemId.length ? 'Conectar outra instituição' : 'Conectar instituições')),
+                    pluggyItemId.length > 0 && h('button', { type: 'button', className: 'action-btn', disabled: pluggyLoading, onClick: carregarSaldosPluggy }, pluggyLoading ? 'Consultando…' : 'Atualizar saldos'),
+                    pluggyItemId.length > 0 && h('button', { type: 'button', className: 'action-btn delete', onClick: desconectarBancoPluggy }, 'Desvincular todas')
+                  )
+                ),
+                h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 } }, 'No seletor da Pluggy, escolha qualquer uma das instituições que você cadastrou. Você pode conectar mais de uma instituição; as conexões ficam vinculadas somente ao seu usuário do FoundMyApp.'),
+                pluggyError && h('div', { style: { color: 'var(--red)', fontSize: 12, marginTop: 9, whiteSpace: 'pre-wrap' } }, pluggyError),
+                pluggyLoading && h('div', { style: { fontSize: 12, marginTop: 10, color: 'var(--ink-soft)' } }, 'Consultando os saldos de todas as instituições…'),
+                pluggyAccounts.length > 0 && h('div', { className: 'list-vertical', style: { marginTop: 12 } },
+                  pluggyAccounts.map(account => h('div', { className: 'list-item', key: account.id },
+                    h('div', { className: 'list-item-main' },
+                      h('div', { style: { fontWeight: 600 } }, account.name || 'Conta bancária'),
+                      h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 } }, [account.connector, account.type, account.subtype, account.number].filter(Boolean).join(' • ') || 'Conta conectada')
+                    ),
+                    h('strong', { style: { whiteSpace: 'nowrap', fontSize: 15 } }, Number(account.balance || 0).toLocaleString('pt-BR', { style: 'currency', currency: account.currencyCode || 'BRL' }))
+                  ))
+                ),
+                pluggyItemId.length > 0 && !pluggyLoading && pluggyAccounts.length === 0 && !pluggyError && h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 10 } }, 'A conexão foi salva, mas a Pluggy ainda não retornou contas. Verifique o status da conexão e atualize os saldos.')
+              ),
+
             isAndroidApp ? h('div', { style: { marginBottom: 16 } },
               h('div', { style: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 } }, "Conciliação Bancária"),
               concilTab === "" ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 440 } },
