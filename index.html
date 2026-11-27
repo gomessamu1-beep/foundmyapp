@@ -6396,7 +6396,7 @@
                       h('tbody', null, movimentacoesDaConta.length ? movimentacoesDaConta.map(t => {
                         const valor = formatarValorPluggy(t);
                         const correspondente = encontrarCorrespondenciaFinanceiraPluggy(t, contaSistemaSelecionada);
-                        return h('tr', { key: String(t.id), style: { borderTop: '1px solid var(--line)' } },
+                        return h('tr', { key: String(t.id), style: { borderTop: '1px solid var(--line)', background: correspondente ? 'var(--green-soft, #e8f5e9)' : 'transparent' } },
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap' } }, formatDateBR(String(t.date || '').slice(0, 10))),
                           h('td', { style: { padding: 9, minWidth: 180 } }, t.description || 'Movimentação bancária'),
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)' } }, valor < 0 ? 'Saída' : 'Entrada'),
@@ -6554,7 +6554,7 @@
                         const conciliado = sistemaConciliadoIds.has(String(item.id));
                         const divergente = parSistema.has(String(item.id)) && !conciliado;
                         const valor = item.tipo === 'Débito' ? -Number(item.valorDebito || 0) : Number(item.valorCredito || 0);
-                        return h('tr', { key:String(item.id) },
+                        return h('tr', { key:String(item.id), style:{ background:conciliado ? 'var(--green-soft, #e8f5e9)' : 'transparent' } },
                           h('td', { className:'center' }, checkbox(pluggySistemaSelecionados.includes(String(item.id)), e => setPluggySistemaSelecionados(prev => e.target.checked ? [...prev.filter(x => x !== String(item.id)), String(item.id)] : prev.filter(x => x !== String(item.id))))),
                           h('td', null, h('div', null, formatDateBR(item.data)), item.descricao && h('div', { style:{ fontSize:10, color:'var(--ink-soft)', marginTop:3, lineHeight:1.3, whiteSpace:'normal', overflowWrap:'anywhere' } }, item.descricao)),
                           h('td', { className:'right num', style:{ whiteSpace:'nowrap', color:valor < 0 ? 'var(--red)' : 'inherit' } }, money(valor)),
@@ -6573,7 +6573,7 @@
                         const conciliado = pluggyConciliadoIds.has(String(tx.id));
                         const divergente = parPluggy.has(String(tx.id)) && !conciliado;
                         const valor = valorPluggy(tx);
-                        return h('tr', { key:String(tx.id) },
+                        return h('tr', { key:String(tx.id), style:{ background:conciliado ? 'var(--green-soft, #e8f5e9)' : 'transparent' } },
                           h('td', { className:'center' }, checkbox(pluggyBancoSelecionados.includes(String(tx.id)), e => setPluggyBancoSelecionados(prev => e.target.checked ? [...prev.filter(x => x !== String(tx.id)), String(tx.id)] : prev.filter(x => x !== String(tx.id))))),
                           h('td', null, h('div', null, formatDateBR(String(tx.date || "").slice(0,10))), h('div', { style:{ fontSize:10, color:'var(--ink-soft)', marginTop:3, lineHeight:1.3, whiteSpace:'normal', overflowWrap:'anywhere' } }, String(tx.description || tx.rawDescription || 'Movimentação bancária'))),
                           h('td', { className:'right num', style:{ whiteSpace:'nowrap', color:valor < 0 ? 'var(--red)' : 'inherit' } }, money(valor)),
