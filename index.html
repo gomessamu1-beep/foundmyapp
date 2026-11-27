@@ -5609,15 +5609,15 @@
                 h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
                   h('div', null,
                     h('strong', { style: { fontSize: 14 } }, 'Saldo bancário automático — Pluggy'),
-                    h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, pluggyItem ? 'Conexão: ' + (pluggyItem.connector || 'Instituição financeira') + ' • ' + (pluggyItem.executionStatus || pluggyItem.status || 'Conectada') : 'Conecte sua conta Santander para consultar o saldo diretamente no FoundMyApp.')
+                    h('div', { style: { fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 } }, pluggyItem ? 'Instituição: ' + (pluggyItem.connector || 'Instituição financeira') + ' • ' + (pluggyItem.executionStatus || pluggyItem.status || 'Conectada') : 'Conecte suas instituições financeiras cadastradas na Pluggy para consultar os saldos diretamente no FoundMyApp.')
                   ),
                   h('div', { style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
-                    h('button', { type: 'button', className: 'primary', disabled: pluggyConnecting, onClick: conectarBancoPluggy }, pluggyConnecting ? 'Conectando…' : (pluggyItemId ? 'Conectar outra conta' : 'Conectar Santander')),
+                    h('button', { type: 'button', className: 'primary', disabled: pluggyConnecting, onClick: conectarBancoPluggy }, pluggyConnecting ? 'Conectando…' : (pluggyItemId ? 'Conectar outra conta' : 'Conectar contas bancárias')),
                     pluggyItemId && h('button', { type: 'button', className: 'action-btn', disabled: pluggyLoading, onClick: carregarSaldosPluggy }, pluggyLoading ? 'Consultando…' : 'Atualizar saldos'),
                     pluggyItemId && h('button', { type: 'button', className: 'action-btn delete', onClick: desconectarBancoPluggy }, 'Desvincular')
                   )
                 ),
-                h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 } }, 'No seletor da Pluggy, escolha Banco Santander. A conexão é vinculada somente ao seu usuário do FoundMyApp.'),
+                h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 8 } }, 'No seletor da Pluggy, escolha qualquer uma das instituições que você cadastrou. Você pode conectar mais de uma instituição; as conexões ficam vinculadas somente ao seu usuário do FoundMyApp.'),
                 pluggyError && h('div', { style: { color: 'var(--red)', fontSize: 12, marginTop: 9, whiteSpace: 'pre-wrap' } }, pluggyError),
                 pluggyLoading && h('div', { style: { fontSize: 12, marginTop: 10, color: 'var(--ink-soft)' } }, 'Consultando suas contas no Santander…'),
                 pluggyAccounts.length > 0 && h('div', { className: 'list-vertical', style: { marginTop: 12 } },
