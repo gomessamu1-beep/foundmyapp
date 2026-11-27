@@ -606,6 +606,31 @@
       async function excluirTipoMov(item){if(!confirm("Excluir "+item.descricao+"?"))return;const {error}=await supabaseClient.from("tipos_movimentacao").delete().eq("id",item.id).eq("user_id",session.user.id);if(error)return alert(error.message);carregarTiposMovimentacao();}
       function renderParametrosContabilidadePagar() {
   
+      return h(React.Fragment, null,
+        h('div', { className:'form-card', style:{padding:14,marginBottom:14,border:'1px solid var(--line)'} },
+          h('div', { style:{fontWeight:700,marginBottom:6} }, "Contas a Pagar"),
+          h('div', { style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10} }, "Selecione uma única conta analítica de despesa para todos os acréscimos e uma única conta analítica de receita para todos os descontos. Se não houver esses valores no pagamento, essas contas não serão movimentadas."),
+          h('div', { className:'field', style:{marginBottom:10} },
+            h('label', null, "Acréscimos (juros, multas e taxas)"),
+            h('select', { value:contabContaAcrescimoId, onChange:e=>setContabContaAcrescimoId(e.target.value) },
+              h('option',{value:""},"Selecione a conta de despesa..."),
+              contabPlano.filter(x=>x.natureza==="DESPESA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
+            )
+          ),
+          h('div', { className:'field', style:{marginBottom:10} },
+            h('label', null, "Descontos (abatimentos e descontos obtidos)"),
+            h('select', { value:contabContaDescontoId, onChange:e=>setContabContaDescontoId(e.target.value) },
+              h('option',{value:""},"Selecione a conta de receita..."),
+              contabPlano.filter(x=>x.natureza==="RECEITA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
+            )
+          ),
+          h('div', { style:{display:'flex',justifyContent:'flex-end'} },
+            h('button',{type:'button',className:'primary',onClick:salvarConfiguracaoAjustesPagar},"Salvar vínculos contábeis")
+          )
+        ),
+        );
+      }
+
       async function enviarMensagemAssistente(e) {
         if (e) e.preventDefault();
         const pergunta = assistantInput.trim();
@@ -674,30 +699,6 @@
         setAssistantPendingAction(null);
       }
 
-      return h(React.Fragment, null,
-        h('div', { className:'form-card', style:{padding:14,marginBottom:14,border:'1px solid var(--line)'} },
-          h('div', { style:{fontWeight:700,marginBottom:6} }, "Contas a Pagar"),
-          h('div', { style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10} }, "Selecione uma única conta analítica de despesa para todos os acréscimos e uma única conta analítica de receita para todos os descontos. Se não houver esses valores no pagamento, essas contas não serão movimentadas."),
-          h('div', { className:'field', style:{marginBottom:10} },
-            h('label', null, "Acréscimos (juros, multas e taxas)"),
-            h('select', { value:contabContaAcrescimoId, onChange:e=>setContabContaAcrescimoId(e.target.value) },
-              h('option',{value:""},"Selecione a conta de despesa..."),
-              contabPlano.filter(x=>x.natureza==="DESPESA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
-            )
-          ),
-          h('div', { className:'field', style:{marginBottom:10} },
-            h('label', null, "Descontos (abatimentos e descontos obtidos)"),
-            h('select', { value:contabContaDescontoId, onChange:e=>setContabContaDescontoId(e.target.value) },
-              h('option',{value:""},"Selecione a conta de receita..."),
-              contabPlano.filter(x=>x.natureza==="RECEITA"&&x.tipo==="ANALITICA"&&x.ativa!==false&&x.aceita_lancamento!==false).map(x=>h('option',{key:x.id,value:x.id},(x.codigo||"")+" - "+x.descricao))
-            )
-          ),
-          h('div', { style:{display:'flex',justifyContent:'flex-end'} },
-            h('button',{type:'button',className:'primary',onClick:salvarConfiguracaoAjustesPagar},"Salvar vínculos contábeis")
-          )
-        ),
-        );
-      }
 
       function renderParametrosMovimentacao(){const lista=tiposMovimentacao.filter(x=>x.tipo===paramTipo);return h(React.Fragment,null,
         h("div",{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}},h("button",{type:"button",className:paramTipo==="PAGAMENTO"?"primary":"action-btn",onClick:()=>{setParamTipo("PAGAMENTO");setParamEditId("");}},"Tipos de Pagamento"),h("button",{type:"button",className:paramTipo==="RECEBIMENTO"?"primary":"action-btn",onClick:()=>{setParamTipo("RECEBIMENTO");setParamEditId("");}},"Tipos de Recebimento")),
