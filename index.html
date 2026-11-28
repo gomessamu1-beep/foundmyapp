@@ -297,6 +297,9 @@
       const [concilDataFim, setConcilDataFim] = useState(currentDate());
       const [concilExibido, setConcilExibido] = useState(false);
       const [concilSaldoPluggyConsulta, setConcilSaldoPluggyConsulta] = useState(null);
+      const [concilSaldoPluggyContaRascunho, setConcilSaldoPluggyContaRascunho] = useState("");
+      const [concilSaldoPluggyDataIniRascunho, setConcilSaldoPluggyDataIniRascunho] = useState(`${currentMonth()}-01`);
+      const [concilSaldoPluggyDataFimRascunho, setConcilSaldoPluggyDataFimRascunho] = useState(currentDate());
       const [concilTab, setConcilTab] = useState(() => sessionStorage.getItem("fatura-conciltab-v1") || "movimentacoes");
       const [concilCalMes, setConcilCalMes] = useState(currentMonth());
       const [calendarioExpandido, setCalendarioExpandido] = useState(false);
@@ -6768,10 +6771,10 @@
                 const diferenca = saldoSistema == null || saldoPluggy == null ? null : Number((saldoPluggy - saldoSistema).toFixed(2));
                 return h(React.Fragment, null,
                   h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: isAndroidApp ? '1fr' : '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 14, width: '100%' } },
-                    h('div', { className: 'field' }, h('label', null, 'Conta bancária'), h('select', { style: { width: '100%', boxSizing: 'border-box' }, value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: '' }, 'Selecione a conta...'), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
-                    h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })),
-                    h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })),
-                    h('button', { type: 'button', className: 'primary', style: { minHeight: 40 }, disabled: pluggyTransactionsLoading, onClick: () => { setConcilSaldoPluggyConsulta({ contaId: concilContaId, dataIni: concilDataIni, dataFim: concilDataFim }); setConcilExibido(true); carregarMovimentacoesPluggy(); } }, pluggyTransactionsLoading ? 'Consultando extrato…' : 'Consultar')
+                    h('div', { className: 'field' }, h('label', null, 'Conta bancária'), h('select', { style: { width: '100%', boxSizing: 'border-box' }, value: concilSaldoPluggyContaRascunho, onChange: e => setConcilSaldoPluggyContaRascunho(e.target.value) }, h('option', { value: '' }, 'Selecione a conta...'), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
+                    h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilSaldoPluggyDataIniRascunho, onChange: e => setConcilSaldoPluggyDataIniRascunho(e.target.value) })),
+                    h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilSaldoPluggyDataFimRascunho, onChange: e => setConcilSaldoPluggyDataFimRascunho(e.target.value) })),
+                    h('button', { type: 'button', className: 'primary', style: { minHeight: 40 }, disabled: pluggyTransactionsLoading, onClick: () => { setConcilSaldoPluggyConsulta({ contaId: concilSaldoPluggyContaRascunho, dataIni: concilSaldoPluggyDataIniRascunho, dataFim: concilSaldoPluggyDataFimRascunho }); setConcilExibido(true); carregarMovimentacoesPluggy(); } }, pluggyTransactionsLoading ? 'Consultando extrato…' : 'Consultar')
                   ),
                   h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
                   h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
