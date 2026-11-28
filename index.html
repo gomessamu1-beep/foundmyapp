@@ -309,6 +309,7 @@
       const [pluggyBancoSelecionados, setPluggyBancoSelecionados] = useState([]);
       const [pluggyFiltroConciliacao, setPluggyFiltroConciliacao] = useState("todos");
       const [pluggyFiltroTipo, setPluggyFiltroTipo] = useState("todos");
+      const [pluggyCruzamentoAba, setPluggyCruzamentoAba] = useState("lancamentos");
       const [pluggyConcilPersistido, setPluggyConcilPersistido] = useState(() => {
         try { return JSON.parse(localStorage.getItem("foundmyapp-pluggy-concil-v1") || '{"vinculos":[],"removidos":[]}'); }
         catch (_) { return { vinculos: [], removidos: [] }; }
@@ -6932,7 +6933,48 @@
                   const totalPluggyNaoConciliado = extratoBanco.filter(tx => !pluggyConciliadoIds.has(String(tx.id))).reduce((total, tx) => total + Math.abs(valorPluggy(tx)), 0);
                   const totalSistemaNaoConciliado = movimentosSistema.filter(item => !sistemaConciliadoIds.has(String(item.id))).reduce((total, item) => total + Math.abs(valorSistema(item)), 0);
                   const percentualConciliado = extratoBanco.length ? (pluggyConciliadoIds.size / extratoBanco.length) * 100 : 0;
-                  const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
+                  
+                  const contaSaldoBase = contaSistema || {};
+                  const dataBaseSaldo = String(contaSaldoBase.dataSaldoInicial || "0000-00-00");
+                  const saldoInicialBase = Number(contaSaldoBase.saldoInicial || 0);
+                  const movimentosSistemaHistorico = [];
+                  (contasPagar || []).forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === contaKey && p.dataBaixa && p.dataBaixa > dataBaseSaldo && p.dataBaixa <= concilDataFim) movimentosSistemaHistorico.push({ data:p.dataBaixa, valor:-Number(p.valorParcela || p.total || 0) }); });
+                  (contasReceber || []).forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === contaKey && p.dataBaixa && p.dataBaixa > dataBaseSaldo && p.dataBaixa <= concilDataFim) movimentosSistemaHistorico.push({ data:p.dataBaixa, valor:Number(p.valorParcela || p.total || 0) }); });
+                  Object.entries(faturasBaixadas || {}).forEach(([comp, baixa]) => {
+                    if (!baixa || baixa.status !== "Baixado" || String(baixa.bancoId) !== contaKey || !baixa.dataBaixa || baixa.dataBaixa <= dataBaseSaldo || baixa.dataBaixa > concilDataFim) return;
+                    const total = (purchases || []).reduce((sum, p) => {
+                      const idx = monthDiff(p.inicio, comp);
+                      if (idx < 0 || (p.canceladoEm && comp >= p.canceladoEm) || (p.mesesExcluidos || []).includes(comp)) return sum;
+                      if (p.recorrente) return sum + Number(p.total || 0);
+                      const inicial = p.parcelaInicial || 1;
+                      if (idx >= p.parcelas - inicial + 1) return sum;
+                      const parcelas = splitInstallments(p.total, p.parcelas);
+                      return sum + Number(parcelas[(inicial - 1) + idx] || 0);
+                    }, 0);
+                    if (total > 0) movimentosSistemaHistorico.push({ data:baixa.dataBaixa, valor:-total });
+                  });
+                  const movimentosPluggyHistorico = (pluggyTransactions || []).filter(t => String(t.accountId) === String(pluggyId) && String(t.date || "").slice(0,10) > dataBaseSaldo && String(t.date || "").slice(0,10) <= concilDataFim).map(t => ({ data:String(t.date || "").slice(0,10), valor:valorPluggy(t) }));
+                  const inicioSaldo = concilDataIni || dataBaseSaldo;
+                  let saldoSistemaDia = saldoInicialBase + movimentosSistemaHistorico.filter(m => m.data < inicioSaldo).reduce((sum,m) => sum + m.valor,0);
+                  let saldoPluggyDia = saldoInicialBase + movimentosPluggyHistorico.filter(m => m.data < inicioSaldo).reduce((sum,m) => sum + m.valor,0);
+                  const mapaSistemaDia = new Map();
+                  const mapaPluggyDia = new Map();
+                  movimentosSistemaHistorico.filter(m => m.data >= inicioSaldo).forEach(m => mapaSistemaDia.set(m.data, (mapaSistemaDia.get(m.data) || 0) + m.valor));
+                  movimentosPluggyHistorico.filter(m => m.data >= inicioSaldo).forEach(m => mapaPluggyDia.set(m.data, (mapaPluggyDia.get(m.data) || 0) + m.valor));
+                  const saldosDiariosCruzamento = [];
+                  if (inicioSaldo && concilDataFim && inicioSaldo <= concilDataFim) {
+                    const cursor = new Date(inicioSaldo + "T12:00:00");
+                    const fim = new Date(concilDataFim + "T12:00:00");
+                    while (cursor <= fim) {
+                      const dia = cursor.getFullYear() + "-" + String(cursor.getMonth()+1).padStart(2,"0") + "-" + String(cursor.getDate()).padStart(2,"0");
+                      saldoSistemaDia = Number((saldoSistemaDia + (mapaSistemaDia.get(dia) || 0)).toFixed(2));
+                      saldoPluggyDia = Number((saldoPluggyDia + (mapaPluggyDia.get(dia) || 0)).toFixed(2));
+                      saldosDiariosCruzamento.push({ data:dia, sistema:saldoSistemaDia, pluggy:saldoPluggyDia, diferenca:Number((saldoPluggyDia-saldoSistemaDia).toFixed(2)) });
+                      cursor.setDate(cursor.getDate()+1);
+                    }
+                  }
+                  const primeiroDiaDivergente = saldosDiariosCruzamento.find(d => Math.abs(d.diferenca) > 0.01);
+const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
                   const salvarDados = next => {
                     setPluggyConcilPersistido(next);
                     localStorage.setItem("foundmyapp-pluggy-concil-v1", JSON.stringify(next));
@@ -7031,6 +7073,11 @@
                   const qtdPendentesSistema = movimentosSistema.length - qtdConciliados;
                   const qtdPendentesBanco = extratoBanco.length - pluggyConciliadoIds.size;
                   return h('div', null,
+                    h('div', { style:{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12, borderBottom:'1px solid var(--line)', paddingBottom:9 } },
+                      h('button', { type:'button', className:pluggyCruzamentoAba === 'lancamentos' ? 'primary' : 'action-btn', onClick:() => setPluggyCruzamentoAba('lancamentos') }, 'Lançamentos'),
+                      h('button', { type:'button', className:pluggyCruzamentoAba === 'saldos' ? 'primary' : 'action-btn', onClick:() => setPluggyCruzamentoAba('saldos') }, 'Saldos diários')
+                    ),
+                    pluggyCruzamentoAba === 'lancamentos' && h(React.Fragment, null,
                     h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:8, marginBottom:12 } },
                       h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo conciliado (valores iguais)"), h('strong', { style:{ color:'var(--green)', fontSize:18 } }, money(totalValorConciliado))),
                       h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo não conciliado — Pluggy"), h('strong', { style:{ color:'var(--red)', fontSize:18 } }, money(totalPluggyNaoConciliado))),
@@ -7056,6 +7103,31 @@
                     !pluggyId && h('div', { className:'warning-box', style:{ marginBottom:10 } }, "Vincule a conta bancária do sistema a uma conta Pluggy em Cadastros > Contas."),
                     !pluggyTransactionsLoadedAt && h('div', { className:'warning-box', style:{ marginBottom:10 } }, "Consulte para carregar o extrato da Pluggy."),
                     h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:10, alignItems:'start' } }, tabelaSistema, tabelaPluggy)
+                    ),
+                    pluggyCruzamentoAba === 'saldos' && h('div', null,
+                      h('div', { style:{ padding:12, border:'1px solid var(--line)', borderRadius:8, marginBottom:12, background:'var(--card)' } },
+                        h('strong', null, 'Comparação diária dos saldos'),
+                        h('div', { style:{ fontSize:12, color:'var(--ink-soft)', marginTop:5 } }, 'Saldos acumulados a partir do saldo inicial cadastrado e das movimentações de cada dia no sistema e na Pluggy.')
+                      ),
+                      primeiroDiaDivergente
+                        ? h('div', { className:'warning-box', style:{ marginBottom:12 } }, 'Primeira divergência em ' + formatDateBR(primeiroDiaDivergente.data) + ': diferença de ' + money(primeiroDiaDivergente.diferenca) + '.')
+                        : h('div', { className:'warning-box', style:{ marginBottom:12, borderColor:'var(--green)' } }, 'Nenhuma divergência diária encontrada no período consultado.'),
+                      h('div', { style:{ overflowX:'auto', border:'1px solid var(--line)', borderRadius:8, background:'var(--card)' } },
+                        h('table', { style:{ width:'100%', minWidth:700, margin:0, fontSize:12 } },
+                          h('thead', null, h('tr', null, h('th', null, 'Data'), h('th', { className:'right' }, 'Saldo do sistema'), h('th', { className:'right' }, 'Saldo Pluggy'), h('th', { className:'right' }, 'Diferença'), h('th', null, 'Resultado'))),
+                          h('tbody', null, saldosDiariosCruzamento.length ? saldosDiariosCruzamento.map(d => {
+                            const divergente = Math.abs(d.diferenca) > 0.01;
+                            return h('tr', { key:d.data, style:{ background:divergente ? 'var(--red-soft, #fdecea)' : 'transparent' } },
+                              h('td', null, formatDateBR(d.data)),
+                              h('td', { className:'right num' }, money(d.sistema)),
+                              h('td', { className:'right num' }, money(d.pluggy)),
+                              h('td', { className:'right num', style:{ color:divergente?'var(--red)':'var(--green)', fontWeight:700 } }, money(d.diferenca)),
+                              h('td', null, h('strong', { style:{ color:divergente?'var(--red)':'var(--green)' } }, divergente ? 'Divergente' : 'Confere'))
+                            );
+                          }) : h('tr', null, h('td', { colSpan:5, style:{ textAlign:'center', color:'var(--ink-soft)', padding:16 } }, 'Nenhum dia encontrado no período.')))
+                        )
+                      )
+                    )
                   );
                 })()
               ),
