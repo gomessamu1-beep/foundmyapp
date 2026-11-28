@@ -6697,22 +6697,15 @@
                 const contaSistemaSelecionada = contasBancarias.find(c => String(c.id) === String(consultaAplicada?.contaId));
                 const pluggyIdSelecionado = contaSistemaSelecionada?.pluggyAccountId || "";
                 const formatarValorPluggy = t => String(t.type || "").toUpperCase() === "DEBIT" ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
-                // Os saldos são reconstruídos pelo histórico até a data final consultada; não usamos o saldo atual da API.
                 const dataBaseSaldo = String(contaSistemaSelecionada?.dataSaldoInicial || "0000-00-00");
                 const dataReferenciaSaldo = String(consultaAplicada?.dataFim || "").slice(0, 10);
-                const saldoInicialConta = Number(contaSistemaSelecionada?.saldoInicial || 0);
+                // Saldo real retornado pela API Pluggy para a conta vinculada. Não estimar por movimentações.
+                const contaPluggyReal = (pluggyAccounts || []).find(a => String(a.id) === String(pluggyIdSelecionado));
+                const saldoPluggy = contaPluggyReal && Number.isFinite(Number(contaPluggyReal.balance)) ? Number(contaPluggyReal.balance) : null;
                 const historicoContaCompleto = (pluggyTransactions || []).filter(t =>
                   pluggyIdSelecionado && String(t.accountId) === String(pluggyIdSelecionado) &&
                   String(t.date || "").slice(0, 10) > dataBaseSaldo
                 ).sort((x, y) => String(x.date || "").localeCompare(String(y.date || "")) || String(x.id).localeCompare(String(y.id)));
-                const historicoPluggyAteReferencia = historicoContaCompleto.filter(t => String(t.date || "").slice(0, 10) <= dataReferenciaSaldo);
-                let saldoAcumuladoPluggy = saldoInicialConta;
-                const saldosCalculadosPorTransacao = new Map();
-                historicoContaCompleto.forEach(t => {
-                  saldoAcumuladoPluggy = Number((saldoAcumuladoPluggy + formatarValorPluggy(t)).toFixed(2));
-                  saldosCalculadosPorTransacao.set(String(t.id), saldoAcumuladoPluggy);
-                });
-                const saldoPluggy = contaSistemaSelecionada ? Number((saldoInicialConta + historicoPluggyAteReferencia.reduce((s, t) => s + formatarValorPluggy(t), 0)).toFixed(2)) : null;
                 const saldoSistemaAteReferencia = (() => {
                   if (!contaSistemaSelecionada) return null;
                   let saldo = saldoInicialConta;
@@ -6744,7 +6737,7 @@
                     h('div', { className: 'field' }, h('label', null, 'Conta bancária'), h('select', { style: { width: '100%', boxSizing: 'border-box' }, value: concilSaldoPluggyContaRascunho, onChange: e => setConcilSaldoPluggyContaRascunho(e.target.value) }, h('option', { value: '' }, 'Selecione a conta...'), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
                     h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilSaldoPluggyDataIniRascunho, onChange: e => setConcilSaldoPluggyDataIniRascunho(e.target.value) })),
                     h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilSaldoPluggyDataFimRascunho, onChange: e => setConcilSaldoPluggyDataFimRascunho(e.target.value) })),
-                    h('button', { type: 'button', className: 'primary', style: { minHeight: 40 }, disabled: pluggyTransactionsLoading, onClick: () => { setConcilSaldoPluggyConsulta({ contaId: concilSaldoPluggyContaRascunho, dataIni: concilSaldoPluggyDataIniRascunho, dataFim: concilSaldoPluggyDataFimRascunho }); setConcilExibido(true); carregarMovimentacoesPluggy(); } }, pluggyTransactionsLoading ? 'Consultando extrato…' : 'Consultar')
+                    h('button', { type: 'button', className: 'primary', style: { minHeight: 40 }, disabled: pluggyTransactionsLoading, onClick: () => { setConcilSaldoPluggyConsulta({ contaId: concilSaldoPluggyContaRascunho, dataIni: concilSaldoPluggyDataIniRascunho, dataFim: concilSaldoPluggyDataFimRascunho }); setConcilExibido(true); carregarSaldosPluggy(); carregarMovimentacoesPluggy(); } }, pluggyTransactionsLoading ? 'Consultando extrato…' : 'Consultar')
                   ),
                   h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
                   h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
@@ -6762,7 +6755,7 @@
                   !pluggyItemId.length && h('div', { className: 'warning-box' }, 'Nenhuma instituição Pluggy conectada. Use Conectar instituições para começar.'),
                   concilContaId && !contaSistemaSelecionada?.pluggyAccountId && h('div', { className: 'warning-box', style: { marginBottom: 10 } }, 'A conta selecionada ainda não está vinculada a uma conta Pluggy. Faça o vínculo em Cadastros > Contas.'),
                   contaSistemaSelecionada && pluggyIdSelecionado && h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 8, marginBottom: 12 } },
-                    h('div', { className: 'top', style: { margin: 0, padding: '10px 12px' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Saldo Pluggy até ' + formatDateBR(dataReferenciaSaldo)), h('strong', { style: { fontSize: 18 } }, valoresOcultos ? '••••••' : formatBRL(saldoPluggy))),
+                    h('div', { className: 'top', style: { margin: 0, padding: '10px 12px' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Saldo atual informado pela Pluggy'), h('strong', { style: { fontSize: 18 } }, valoresOcultos ? '••••••' : formatBRL(saldoPluggy))),
                     h('div', { className: 'top', style: { margin: 0, padding: '10px 12px' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Saldo do sistema até ' + formatDateBR(dataReferenciaSaldo)), h('strong', { style: { fontSize: 18 } }, valoresOcultos ? '••••••' : formatBRL(saldoSistema))),
                     h('div', { className: 'top', style: { margin: 0, padding: '10px 12px' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Diferença de saldos'), h('strong', { style: { fontSize: 18, color: Math.abs(diferenca) <= 0.01 ? 'var(--green)' : 'var(--red)' } }, valoresOcultos ? '••••••' : formatBRL(diferenca)))
                   ),
@@ -6777,7 +6770,7 @@
                   pluggyIdSelecionado && pluggyTransactionsLoadedAt && !pluggyTransactionsLoading && h('div', { style: { overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 8, marginTop: 8 } },
                     h('table', { style: { width: '100%', minWidth: 680, borderCollapse: 'collapse', fontSize: 12 } },
                       h('thead', null, h('tr', { style: { background: 'var(--paper)', textAlign: 'left' } },
-                        h('th', { style: { padding: 9 } }, 'Data'), h('th', { style: { padding: 9 } }, 'Descrição'), h('th', { style: { padding: 9 } }, 'Tipo'), h('th', { style: { padding: 9, textAlign: 'right' } }, 'Valor'), h('th', { style: { padding: 9, textAlign: 'right' } }, 'Saldo após'), h('th', { style: { padding: 9 } }, 'Situação')
+                        h('th', { style: { padding: 9 } }, 'Data'), h('th', { style: { padding: 9 } }, 'Descrição'), h('th', { style: { padding: 9 } }, 'Tipo'), h('th', { style: { padding: 9, textAlign: 'right' } }, 'Valor'), h('th', { style: { padding: 9 } }, 'Situação')
                       )),
                       h('tbody', null, movimentacoesDaConta.length ? movimentacoesDaConta.map(t => {
                         const valor = formatarValorPluggy(t);
@@ -6787,7 +6780,6 @@
                           h('td', { style: { padding: 9, minWidth: 180 } }, t.description || 'Movimentação bancária'),
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)' } }, valor < 0 ? 'Saída' : 'Entrada'),
                           h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: valor < 0 ? 'var(--red)' : 'inherit' } }, valoresOcultos ? '••••••' : formatBRL(valor)),
-                          h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: Number(saldosCalculadosPorTransacao.get(String(t.id))) < 0 ? 'var(--red)' : 'inherit', fontWeight: 600 } }, saldosCalculadosPorTransacao.has(String(t.id)) ? (valoresOcultos ? '••••••' : formatBRL(saldosCalculadosPorTransacao.get(String(t.id)))) : '—'),
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap' } },
                             h('strong', { style: { display:'block', color: correspondente ? 'var(--green)' : 'var(--red)', marginBottom:6 } }, correspondente ? 'Conciliado' : 'Não conciliado'),
                             !correspondente && !(pluggyConcilPersistido?.vinculos || []).some(v => String(v.contaId) === String(concilContaId) && String(v.pluggyId) === String(t.id)) && h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
