@@ -5189,6 +5189,47 @@
             }
             .pdf-modal-content > div:first-child { top: -14px; }
           }
+
+          /* Repaginação das áreas de lançamentos */
+          .launch-main-tabs .launch-tab {
+            display:flex; align-items:center; width:100%; border:1px solid var(--line);
+            background:var(--card); color:var(--ink-soft); transition:all .18s ease;
+            box-shadow:0 1px 2px rgba(20,30,40,.04);
+          }
+          .launch-main-tabs .launch-tab.active {
+            color:var(--green); background:var(--card); border:1px solid var(--green);
+            box-shadow:0 0 0 2px rgba(47,82,51,.10), 0 3px 8px rgba(20,30,40,.05);
+          }
+          .launch-page-header {
+            border:1px solid var(--line)!important; border-radius:12px; padding:15px!important;
+            background:linear-gradient(135deg,var(--card),var(--paper))!important;
+            box-shadow:0 2px 8px rgba(20,30,40,.035);
+          }
+          .launch-page-header .brand {
+            display:flex; align-items:center; justify-content:space-between; gap:12px;
+            flex-wrap:wrap; margin-bottom:12px;
+          }
+          .launch-page-header .brand > div:first-child {
+            font-size:17px; font-weight:750; color:var(--ink); letter-spacing:-.2px;
+          }
+          .launch-page-header .nav-month {
+            margin-top:10px; padding:8px 10px; border:1px solid var(--line);
+            border-radius:9px; background:var(--card);
+          }
+          .launch-page-header .month-label { font-weight:750; letter-spacing:.2px; }
+          .launch-page-header .field label { font-weight:650; }
+          .launch-page-header .field input,
+          .launch-page-header .field select { border-radius:8px; min-height:38px; }
+          @media(max-width:640px) {
+            .launch-main-tabs { gap:6px!important; padding:6px!important; }
+            .launch-main-tabs .launch-tab {
+              flex-direction:column; gap:5px!important; font-size:11px; line-height:1.2;
+              min-height:62px!important; padding:8px 4px!important; text-align:center;
+            }
+            .launch-page-header { padding:10px!important; border-radius:10px; }
+            .launch-page-header .brand { align-items:flex-start; }
+            .launch-page-header .brand > div:first-child { font-size:15px; }
+          }
         `),
 
         screen === 'lancamentos' && lancamentoTab === 'cartao' && h('button', {
@@ -5846,31 +5887,31 @@
 
           screen === "lancamentos" && h('div', { className: 'form-card' },
             h('div', {
-              className: 'sub-nav launch-selected-nav',
-              style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 16 }
+              className: 'sub-nav launch-selected-nav launch-main-tabs',
+              style: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', alignItems: 'stretch', gap: 10, marginBottom: 18, padding: 8, borderRadius: 12, background: 'var(--paper)', border: '1px solid var(--line)' }
             },
               h('button', {
                 type: 'button',
-                className: lancamentoTab === "pagar" ? "active" : "",
+                className: 'launch-tab ' + (lancamentoTab === "pagar" ? "active" : ""),
                 onClick: () => abrirConsultaFinanceira("pagar"),
-                style: { justifyContent: 'flex-start', padding: '9px 14px', fontWeight: 600 }
-              }, h(ArrowDownCircle, { size: 18 }), " Contas a Pagar"),
+                style: { justifyContent: 'center', gap: 9, padding: '13px 10px', fontWeight: 700, borderRadius: 9, minHeight: 52 }
+              }, h(ArrowDownCircle, { size: 19 }), "Contas a Pagar"),
               h('button', {
                 type: 'button',
-                className: lancamentoTab === "receber" ? "active" : "",
+                className: 'launch-tab ' + (lancamentoTab === "receber" ? "active" : ""),
                 onClick: () => abrirConsultaFinanceira("receber"),
-                style: { justifyContent: 'flex-start', padding: '9px 14px', fontWeight: 600 }
-              }, h(ArrowUpCircle, { size: 18 }), " Contas a Receber"),
+                style: { justifyContent: 'center', gap: 9, padding: '13px 10px', fontWeight: 700, borderRadius: 9, minHeight: 52 }
+              }, h(ArrowUpCircle, { size: 19 }), "Contas a Receber"),
               h('button', {
                 type: 'button',
-                className: lancamentoTab === "cartao" ? "active" : "",
+                className: 'launch-tab ' + (lancamentoTab === "cartao" ? "active" : ""),
                 onClick: () => { setLancamentoTab("cartao"); carregarConferenciaFaturas(); },
-                style: { justifyContent: 'flex-start', padding: '9px 14px', fontWeight: 600 }
-              }, h(CreditCard, { size: 18 }), " Cartão de Crédito")
+                style: { justifyContent: 'center', gap: 9, padding: '13px 10px', fontWeight: 700, borderRadius: 9, minHeight: 52 }
+              }, h(CreditCard, { size: 19 }), "Cartão de Crédito")
             ),
 
             lancamentoTab === "cartao" && h(React.Fragment, null,
-              h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
+              h('div', { className: 'top launch-page-header', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
                 h('div', { className: 'brand' },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(CreditCard), " Lançamentos do cartão"),
                   h('div', { style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, 
@@ -6019,7 +6060,7 @@
                 h('button', { type: 'button', className: pagarVisao === "calendario" ? "primary" : "action-btn", onClick: () => { setPagarVisao("calendario"); setPagarCalendarioDiaSelecionado(""); }, style: { padding: '8px 16px' } }, "Calendário")
               ),
               pagarVisao === "lancamentos" && h(React.Fragment, null,
-              h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
+              h('div', { className: 'top launch-page-header', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
                 h('div', { className: 'brand' },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(ArrowDownCircle), " Contas a Pagar"),
                   h('div', { style: { display: 'flex', gap: 8 } }, batchPagarIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: "", dataBaixa: currentDate(), tipoMovimentacaoId: "" }) }, `Baixar Selecionados (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('pagar', batchPagarIds) }, `Estornar Baixa (${batchPagarIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchPagarIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setAcrescimoInput(''); setDescontoInput(''); setDataLancamento(currentDate()); setDataVencimento(''); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setRecorrenteValorEmAberto(false); setEditingRecurringOccurrence(null); setLancamentoTab('pagar'); setModalOpen(true); } }, h(Plus), " Nova Conta a Pagar"))
@@ -6108,7 +6149,7 @@
             ),
 
             lancamentoTab === "receber" && h(React.Fragment, null,
-              h('div', { className: 'top', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
+              h('div', { className: 'top launch-page-header', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
                 h('div', { className: 'brand' },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(ArrowUpCircle), " Contas a Receber"),
                   h('div', { style: { display: 'flex', gap: 8 } }, batchReceberIds.length > 0 && h('div', { style: { display: 'flex', gap: 6 } }, h('button', { type: 'button', className: 'primary', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchBaixaModal({ open: true, bancoId: "", dataBaixa: currentDate(), tipoMovimentacaoId: "" }) }, `Baixar Selecionados (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => executarEstornoLote('receber', batchReceberIds) }, `Estornar Baixa (${batchReceberIds.length})`), h('button', { type: 'button', className: 'danger', style: { fontSize: 12, padding: '4px 10px' }, onClick: () => setBatchDeleteModalOpen(true) }, `Excluir (${batchReceberIds.length})`)), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setAcrescimoInput(''); setDescontoInput(''); setDataLancamento(currentDate()); setDataVencimento(''); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('receber'); setModalOpen(true); } }, h(Plus), " Nova Conta a Receber"))
