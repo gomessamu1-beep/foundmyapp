@@ -163,6 +163,7 @@
       const [pluggyTransactionDetailsOpen, setPluggyTransactionDetailsOpen] = useState({});
       const [categorias, setCategorias] = useState([]); 
       const [deparaList, setDeparaList] = useState([]);
+      const [deparaSubTab, setDeparaSubTab] = useState("fatura");
       const [faturasFechadas, setFaturasFechadas] = useState({});
       const [faturasBaixadas, setFaturasBaixadas] = useState({});
       const [diasFechados, setDiasFechados] = useState({});
@@ -2200,7 +2201,7 @@
       }
       
       function handleSaveEditSubcategoria(e) { e.preventDefault(); const nome = editSubcategoriaModal.nome.trim(); if (!nome) return; updateCategorias(prev => prev.map(c => { if (c.id !== editSubcategoriaModal.catId) return c; return { ...c, subcategorias: c.subcategorias.map(s => s.id === editSubcategoriaModal.subId ? { ...s, nome, contaContabilId: editSubcategoriaModal.contaContabilId || null } : s) }; })); setEditSubcategoriaModal({ open: false, catId: null, subId: null, nome: "", contaContabilId: "" }); setEditSubcategoriaContaBusca(""); }
-      function handleAddDepara(e) { e.preventDefault(); setDeparaError(""); const fatura = novoDeparaFatura.trim(); if (!fatura) return setDeparaError("Informe a descrição."); if (!novoDeparaCategoriaId || !novoDeparaSubcategoriaId) return setDeparaError("Selecione categoria/subcategoria."); updateDepara(prev => [...prev, { id: uid(), fatura, importacao: novoDeparaImportacao.trim(), categoriaId: novoDeparaCategoriaId, subcategoriaId: novoDeparaSubcategoriaId }]); setNovoDeparaFatura(""); setNovoDeparaImportacao(""); setNovoDeparaCategoriaId(""); setNovoDeparaSubcategoriaId(""); }
+      function handleAddDepara(e) { e.preventDefault(); setDeparaError(""); const descricaoRegra = novoDeparaFatura.trim(); if (!descricaoRegra) return setDeparaError("Informe a descrição."); if (!novoDeparaCategoriaId || !novoDeparaSubcategoriaId) return setDeparaError("Selecione categoria/subcategoria."); updateDepara(prev => [...prev, { id: uid(), origem: deparaSubTab === "conciliacao" ? "CONCILIACAO" : "FATURA", fatura: descricaoRegra, importacao: deparaSubTab === "fatura" ? novoDeparaImportacao.trim() : "", categoriaId: novoDeparaCategoriaId, subcategoriaId: novoDeparaSubcategoriaId }]); setNovoDeparaFatura(""); setNovoDeparaImportacao(""); setNovoDeparaCategoriaId(""); setNovoDeparaSubcategoriaId(""); }
       
       function handleAddCategoria(e) { 
         e.preventDefault(); 
@@ -2545,6 +2546,7 @@
         if (!alvo || !Array.isArray(deparaList) || !deparaList.length) return null;
         const candidatos = [];
         for (const regra of deparaList) {
+          if (regra?.origem === "CONCILIACAO") continue;
           const chaves = [regra?.fatura, regra?.importacao];
           for (const chave of chaves) {
             const textoRegra = normalizarDescricaoPDF(chave);
@@ -5811,9 +5813,30 @@
             ), h('button', { type: 'button', className: 'primary', style: { padding: '4px 8px', fontSize: 12 }, onClick: () => handleAddSubcategoria(cat.id) }, "Incluir")))))
             ),
             cadastroTab === "depara" && h(React.Fragment, null,
-              h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, "Regras de De-Para obrigatórias para importação de PDF do Santander."),
-              h('form', { onSubmit: handleAddDepara, style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end', flexWrap: 'wrap' } }, h('div', { className: 'field' }, h('label', null, "Descrição Fatura *"), h('input', { type: 'text', placeholder: 'Ex: UBER *TRIP', value: novoDeparaFatura, onChange: (e) => setNovoDeparaFatura(e.target.value), required: true })), h('div', { className: 'field' }, h('label', null, "Categoria *"), h('select', { value: novoDeparaCategoriaId, onChange: (e) => { setNovoDeparaCategoriaId(e.target.value); setNovoDeparaSubcategoriaId(""); }, required: true }, h('option', { value: "" }, "Selecione..."), categorias.map(c => h('option', { key: c.id, value: c.id }, `${c.nome} (${c.tipo === 'receita' ? 'Receita' : 'Despesa'})`)))), h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: novoDeparaSubcategoriaId, onChange: (e) => setNovoDeparaSubcategoriaId(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), subcategoriasDeparaDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome)))), h('button', { type: 'submit', className: 'primary', style: { height: 38 } }, h(Plus), " Adicionar")),
-              h('div', { className: 'list-vertical' }, deparaList.map((d) => { const cat = getCategoria(d.categoriaId); const sub = getSubcategoria(d.categoriaId, d.subcategoriaId); return h('div', { className: 'list-item', key: d.id }, h('div', { className: 'list-item-main', style: { fontSize: 13 } }, h('span', null, h('b', null, d.fatura), " ➔ ", cat?.nome, " > ", sub?.nome), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'depara', id: d.id, title: 'Excluir Regra', message: 'Excluir regra De-Para?', option: "all" }) }, h(Trash2, { size: 14 })))) }))
+              h('div', { className: 'sub-nav', style: { marginBottom: 14 } },
+                h('button', { className: deparaSubTab === "fatura" ? "active" : "", onClick: () => { setDeparaSubTab("fatura"); setDeparaError(""); } }, "Fatura"),
+                h('button', { className: deparaSubTab === "conciliacao" ? "active" : "", onClick: () => { setDeparaSubTab("conciliacao"); setDeparaError(""); } }, "Conciliação Bancária")
+              ),
+              deparaSubTab === "fatura" ? h(React.Fragment, null,
+                h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, "Regras de De-Para utilizadas na identificação e classificação das compras importadas das faturas de cartão de crédito. As regras já cadastradas permanecem nesta seção."),
+                h('form', { onSubmit: handleAddDepara, style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end', flexWrap: 'wrap' } },
+                  h('div', { className: 'field' }, h('label', null, "Descrição Fatura *"), h('input', { type: 'text', placeholder: 'Ex: UBER *TRIP', value: novoDeparaFatura, onChange: (e) => setNovoDeparaFatura(e.target.value), required: true })),
+                  h('div', { className: 'field' }, h('label', null, "Categoria *"), h('select', { value: novoDeparaCategoriaId, onChange: (e) => { setNovoDeparaCategoriaId(e.target.value); setNovoDeparaSubcategoriaId(""); }, required: true }, h('option', { value: "" }, "Selecione..."), categorias.map(c => h('option', { key: c.id, value: c.id }, `${c.nome} (${c.tipo === 'receita' ? 'Receita' : 'Despesa'})`))),
+                  h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: novoDeparaSubcategoriaId, onChange: (e) => setNovoDeparaSubcategoriaId(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), subcategoriasDeparaDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome))),
+                  h('button', { type: 'submit', className: 'primary', style: { height: 38 } }, h(Plus), " Adicionar")
+                ),
+                h('div', { className: 'list-vertical' }, deparaList.filter(d => !d.origem || d.origem === "FATURA").map((d) => { const cat = getCategoria(d.categoriaId); const sub = getSubcategoria(d.categoriaId, d.subcategoriaId); return h('div', { className: 'list-item', key: d.id }, h('div', { className: 'list-item-main', style: { fontSize: 13 } }, h('span', null, h('b', null, d.fatura), " ➔ ", cat?.nome, " > ", sub?.nome), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'depara', id: d.id, title: 'Excluir Regra', message: 'Excluir regra De-Para?', option: "all" }) }, h(Trash2, { size: 14 })))) }))
+              ) : h(React.Fragment, null,
+                h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 } }, "Cadastre regras para reconhecer descrições que aparecem nos extratos bancários e associá-las a categorias e subcategorias. Estas regras ficam separadas das regras das faturas."),
+                h('form', { onSubmit: handleAddDepara, style: { display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr auto', gap: 8, alignItems: 'end', flexWrap: 'wrap' } },
+                  h('div', { className: 'field' }, h('label', null, "Descrição no extrato *"), h('input', { type: 'text', placeholder: 'Ex: PIX RECEBIDO, POSTO ABC, SUPERMERCADO...', value: novoDeparaFatura, onChange: (e) => setNovoDeparaFatura(e.target.value), required: true })),
+                  h('div', { className: 'field' }, h('label', null, "Categoria *"), h('select', { value: novoDeparaCategoriaId, onChange: (e) => { setNovoDeparaCategoriaId(e.target.value); setNovoDeparaSubcategoriaId(""); }, required: true }, h('option', { value: "" }, "Selecione..."), categorias.map(c => h('option', { key: c.id, value: c.id }, `${c.nome} (${c.tipo === 'receita' ? 'Receita' : 'Despesa'})`))),
+                  h('div', { className: 'field' }, h('label', null, "Subcategoria *"), h('select', { value: novoDeparaSubcategoriaId, onChange: (e) => setNovoDeparaSubcategoriaId(e.target.value), required: true }, h('option', { value: "" }, "Selecione..."), subcategoriasDeparaDisponiveis.map(s => h('option', { key: s.id, value: s.id }, s.nome))),
+                  h('button', { type: 'submit', className: 'primary', style: { height: 38 } }, h(Plus), " Adicionar")
+                ),
+                h('div', { className: 'list-vertical' }, deparaList.filter(d => d.origem === "CONCILIACAO").map((d) => { const cat = getCategoria(d.categoriaId); const sub = getSubcategoria(d.categoriaId, d.subcategoriaId); return h('div', { className: 'list-item', key: d.id }, h('div', { className: 'list-item-main', style: { fontSize: 13 } }, h('span', null, h('b', null, d.fatura), " ➔ ", cat?.nome, " > ", sub?.nome), h('button', { type: 'button', className: 'action-btn delete', onClick: () => setDeleteModal({ open: true, type: 'depara', id: d.id, title: 'Excluir Regra', message: 'Excluir regra De-Para?', option: "all" }) }, h(Trash2, { size: 14 })))) }))
+              ),
+              deparaError && h('div', { className: 'warning-box', style: { marginTop: 10 } }, deparaError)
             ),
             cadastroTab === "importar-txt" && h(React.Fragment, null,
               h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 } }, "Selecione se deseja importar para Despesas ou Receitas, e cole abaixo ou carregue um arquivo .txt."),
