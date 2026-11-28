@@ -188,6 +188,7 @@
       const [contabMascaraAberta, setContabMascaraAberta] = useState(false);
       const [contabDescricao, setContabDescricao] = useState("");
       const [contabBuscaConta, setContabBuscaConta] = useState("");
+      const [contabGruposRecolhidos, setContabGruposRecolhidos] = useState([]);
       const [contabBuscaAberta, setContabBuscaAberta] = useState(false);
       const [contabNatureza, setContabNatureza] = useState("ATIVO");
       const [contabTipo, setContabTipo] = useState("ANALITICA");
@@ -1747,7 +1748,13 @@
           {naturezas:["DESPESA","CUSTO"],titulo:"DESPESAS",subtitulo:"Despesas e custos já cadastrados",icone:"💸",cor:"#dc2626",fundo:"#fef2f2"},
           {naturezas:["RESULTADO"],titulo:"RESULTADO",subtitulo:"Classificações anteriores preservadas",icone:"📊",cor:"#7c3aed",fundo:"#f5f3ff"}
         ];
+        const gruposVisiveis=grupos.filter(grupo=>visiveis.some(c=>grupo.naturezas.includes(String(c.natureza||"").toUpperCase())));
+        const todosExpandidos=gruposVisiveis.every(grupo=>!contabGruposRecolhidos.includes(grupo.titulo));
         return h('div',{style:{display:'flex',flexDirection:'column',gap:14,marginTop:8}},
+          h('div',{style:{display:'flex',justifyContent:'flex-end',gap:8,flexWrap:'wrap'}},
+            h('button',{type:'button',className:'action-btn',style:{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 12px',fontWeight:700},onClick:()=>setContabGruposRecolhidos([])},h(ChevronDown,{size:15}),"Expandir tudo"),
+            h('button',{type:'button',className:'action-btn',style:{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 12px'},onClick:()=>setContabGruposRecolhidos(gruposVisiveis.map(g=>g.titulo))},h(ChevronUp,{size:15}),"Recolher tudo")
+          ),
           grupos.map(grupo=>{
             const contasGrupo=visiveis.filter(c=>grupo.naturezas.includes(String(c.natureza||"").toUpperCase()));
             if(!contasGrupo.length)return null;
@@ -1760,9 +1767,12 @@
                     h('div',{style:{fontSize:11,color:'#475569',marginTop:2}},grupo.subtitulo)
                   )
                 ),
-                h('span',{style:{fontSize:11,fontWeight:800,color:grupo.cor,background:'#ffffffc9',border:'1px solid '+grupo.cor+'35',borderRadius:999,padding:'5px 9px',whiteSpace:'nowrap'}},contasGrupo.length+" conta(s)")
+                h('div',{style:{display:'flex',alignItems:'center',gap:8,flexShrink:0}},
+                  h('span',{style:{fontSize:11,fontWeight:800,color:grupo.cor,background:'#ffffffc9',border:'1px solid '+grupo.cor+'35',borderRadius:999,padding:'5px 9px',whiteSpace:'nowrap'}},contasGrupo.length+" conta(s)"),
+                  h('button',{type:'button',className:'action-btn',style:{display:'inline-flex',alignItems:'center',gap:5,padding:'7px 9px',background:'#ffffffd9',color:grupo.cor,border:'1px solid '+grupo.cor+'45',fontSize:11,fontWeight:800,whiteSpace:'nowrap'},onClick:()=>setContabGruposRecolhidos(prev=>prev.includes(grupo.titulo)?prev.filter(x=>x!==grupo.titulo):[...prev,grupo.titulo])},contabGruposRecolhidos.includes(grupo.titulo)?h(ChevronDown,{size:14}):h(ChevronUp,{size:14}),contabGruposRecolhidos.includes(grupo.titulo)?"Expandir":"Recolher")
+                )
               ),
-              h('div',{className:'list-vertical',style:{gap:0}},
+              !contabGruposRecolhidos.includes(grupo.titulo) && h('div',{className:'list-vertical',style:{gap:0}},
                 contasGrupo.map(c=>{
                   const mae=contabPlano.find(p=>String(p.id)===String(c.conta_pai_id));
                   const nivel=nivelHierarquiaPlano(c);
