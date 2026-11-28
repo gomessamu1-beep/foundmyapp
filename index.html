@@ -6701,11 +6701,10 @@
                 // Exibir exclusivamente o saldo atual retornado pela API Pluggy, sem reconstrução local.
                 const contaPluggyReal = (pluggyAccounts || []).find(a => String(a.id) === String(pluggyIdSelecionado));
                 const saldoPluggy = contaPluggyReal && Number.isFinite(Number(contaPluggyReal.balance)) ? Number(contaPluggyReal.balance) : null;
-                const movimentacoesDaConta = historicoContaCompleto.filter(t => {
+                const movimentacoesDaConta = (pluggyTransactions || []).filter(t => {
                   const data = String(t.date || "").slice(0, 10);
-                  return (!consultaAplicada?.dataIni || data >= consultaAplicada.dataIni) && (!consultaAplicada?.dataFim || data <= consultaAplicada.dataFim);
+                  return String(t.accountId) === String(pluggyIdSelecionado) && (!consultaAplicada?.dataIni || data >= consultaAplicada.dataIni) && (!consultaAplicada?.dataFim || data <= consultaAplicada.dataFim);
                 }).sort((x, y) => String(y.date || "").localeCompare(String(x.date || "")) || String(y.id).localeCompare(String(x.id)));
-                const diferenca = saldoSistema == null || saldoPluggy == null ? null : Number((saldoPluggy - saldoSistema).toFixed(2));
                 return h(React.Fragment, null,
                   h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: isAndroidApp ? '1fr' : '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 14, width: '100%' } },
                     h('div', { className: 'field' }, h('label', null, 'Conta bancária'), h('select', { style: { width: '100%', boxSizing: 'border-box' }, value: concilSaldoPluggyContaRascunho, onChange: e => setConcilSaldoPluggyContaRascunho(e.target.value) }, h('option', { value: '' }, 'Selecione a conta...'), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
