@@ -820,13 +820,16 @@
           const novosCreditos = [];
           const idsJaImportados = new Set([...(contasPagar || []).map(x => String(x.pluggyTransactionId || "")), ...(contasReceber || []).map(x => String(x.pluggyTransactionId || ""))].filter(Boolean));
           const idsProcessados = new Set();
+          let movimentosSemVinculo = 0;
           (atualizado || []).forEach(t => {
-            if (!t?.id || !t?.accountId || String(t.accountType || "").toUpperCase() !== "BANK" || String(t.status || "").toUpperCase() === "PENDING") return;
+            if (!t?.id || !t?.accountId || String(t.status || "").toUpperCase() === "PENDING") return;
+            // O vínculo cadastrado é a referência principal; payloads antigos podem não conter accountType.
             const contaSistema = contasPluggyVinculadas.find(c => String(c.pluggyAccountId) === String(t.accountId));
+            if (!contaSistema) { movimentosSemVinculo++; return; }
             const dataMov = String(t.date || "").slice(0, 10);
             const valorMov = Math.abs(Number(t.amount || 0));
             const tipoMov = String(t.type || "").toUpperCase();
-            if (!contaSistema || !/^\d{4}-\d{2}-\d{2}$/.test(dataMov) || !Number.isFinite(valorMov) || valorMov <= 0 || (tipoMov !== "DEBIT" && tipoMov !== "CREDIT")) return;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dataMov) || !Number.isFinite(valorMov) || valorMov <= 0 || (tipoMov !== "DEBIT" && tipoMov !== "CREDIT")) return;
             const idPluggy = String(t.id);
             if (idsJaImportados.has(idPluggy) || idsProcessados.has(idPluggy)) return;
             const debito = tipoMov === "DEBIT";
@@ -857,6 +860,8 @@
           setPluggyTransactionsLoadedAt(new Date().toISOString());
           if (data?.partialError) {
             setPluggyTransactionsError(((Array.isArray(data.errors) ? data.errors.join(" ") : "") || "Algumas contas não retornaram todas as movimentações.") + " O histórico já salvo foi preservado.");
+          } else if (movimentosSemVinculo > 0) {
+            setPluggyTransactionsError(movimentosSemVinculo + " movimentação(ões) não foram importadas porque a conta Pluggy correspondente não está vinculada em Cadastros > API. Confira o vínculo da conta bancária.");
           } else if (!recebidas.length) {
             setPluggyTransactionsError(atualizado.length
               ? "A Pluggy não retornou novas movimentações nesta consulta. Exibindo o histórico salvo; nenhum registro foi apagado."
