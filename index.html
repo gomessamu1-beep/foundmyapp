@@ -272,6 +272,7 @@
       const [paramTipo,setParamTipo]=useState("PAGAMENTO"),[paramDescricao,setParamDescricao]=useState(""),[paramExigeBanco,setParamExigeBanco]=useState(false),[paramExigeCartao,setParamExigeCartao]=useState(false),[paramEditId,setParamEditId]=useState("");
       const [categoriaTipoTab, setCategoriaTipoTab] = useState(() => sessionStorage.getItem("fatura-categoriatipo-v1") || "despesa");
       const [lancamentoTab, setLancamentoTab] = useState(() => sessionStorage.getItem("fatura-lancamentotab-v1") || "cartao");
+      const [cartaoSubTab, setCartaoSubTab] = useState(() => sessionStorage.getItem("fatura-cartaosubtab-v1") || "lancamentos");
       const [relatorioTab, setRelatorioTab] = useState(() => sessionStorage.getItem("fatura-relatoriotab-v1") || "pagar");
       
       const [month, setMonth] = useState(() => sessionStorage.getItem('fatura-month-v1') || currentMonth());
@@ -5993,6 +5994,11 @@
             ),
 
             lancamentoTab === "cartao" && h(React.Fragment, null,
+              h('div', { style: { display: 'flex', gap: 8, marginBottom: 14, borderBottom: '1px solid var(--line)', paddingBottom: 10, flexWrap: 'wrap' } },
+                h('button', { type: 'button', className: cartaoSubTab === 'lancamentos' ? 'primary' : 'action-btn', onClick: () => { setCartaoSubTab('lancamentos'); sessionStorage.setItem('fatura-cartaosubtab-v1', 'lancamentos'); }, style: { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px' } }, h(FileText, { size: 16 }), ' Lançamentos'),
+                h('button', { type: 'button', className: cartaoSubTab === 'pluggy' ? 'primary' : 'action-btn', onClick: () => { setCartaoSubTab('pluggy'); sessionStorage.setItem('fatura-cartaosubtab-v1', 'pluggy'); carregarHistoricoPluggySalvo().catch(e => console.error("Histórico Pluggy:", e)); }, style: { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px' } }, h(RefreshCw, { size: 16 }), ' Pluggy')
+              ),
+              cartaoSubTab === 'lancamentos' && h(React.Fragment, null,
               h('div', { className: 'top launch-page-header', style: { margin: 0, border: 'none', background: 'transparent', padding: 0 } },
                 h('div', { className: 'brand' },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, h(CreditCard), " Lançamentos do cartão"),
@@ -6134,11 +6140,8 @@
                   h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '8', style: { textAlign: 'right', padding: '10px 6px' } }, "Total da Fatura:"), h('td', { className: 'right num' }, showMoney(totalValorParcelaTabela)), h('td', { className: 'right num' }, showMoney(totalValorTotalTabela)), h('td', null)))
                 )
               )
-,
-
-            
-
-              h('div', { className: 'form-card' },
+              ),
+              cartaoSubTab === 'pluggy' && h('div', { className: 'form-card' },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 } },
             h('div', null,
               h('h3', { style: { margin: 0 } }, 'Movimentações do cartão — Pluggy'),
@@ -6204,7 +6207,7 @@
             })(),
             h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 12 } }, 'Esta aba é somente de consulta. Nenhuma movimentação é gravada ou modificada na sua fatura do FoundMyApp.')
           )
-),
+            ),
 
             lancamentoTab === "pagar" && h(React.Fragment, null,
               h('div', { style: { display: 'flex', gap: 8, marginBottom: 14, borderBottom: '1px solid var(--line)', paddingBottom: 10 } },
