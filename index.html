@@ -5390,7 +5390,6 @@
               h('button', { className: cadastroTab === "contas" ? "active" : "", onClick: () => { setCadastroTab("contas"); setScreen("cadastros"); } }, "🏦 Contas"),
               h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => { setCadastroTab("categorias"); setScreen("cadastros"); } }, "Categorias"),
               h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => { setCadastroTab("depara"); setScreen("cadastros"); } }, "De-Para (Regras)"),
-              h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => { setCadastroTab("importar-txt"); setScreen("cadastros"); } }, "📥 Importar TXT"),
               h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");setScreen("cadastros");}},"Parâmetros"),
               h('button',{className:cadastroTab==="contabilidade"?"active":"",onClick:()=>{setCadastroTab("contabilidade");setContabTab("plano");setScreen("cadastros-contabilidade");}}, "Contabilidade")
             )
@@ -5779,7 +5778,6 @@
               h('button', { className: cadastroTab === "contas" ? "active" : "", onClick: () => { setCadastroTab("contas"); setScreen("cadastros"); } }, "🏦 Contas"),
               h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => { setCadastroTab("categorias"); setScreen("cadastros"); } }, "Categorias"),
               h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => { setCadastroTab("depara"); setScreen("cadastros"); } }, "De-Para (Regras)"),
-              h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => { setCadastroTab("importar-txt"); setScreen("cadastros"); } }, "📥 Importar TXT"),
               h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");setScreen("cadastros");}},"Parâmetros"),
               h('button',{className:cadastroTab==="contabilidade"?"active":"",onClick:()=>{setCadastroTab("contabilidade");setContabTab("plano");setScreen("cadastros-contabilidade");}}, "Contabilidade")
             ),
@@ -5838,12 +5836,7 @@
               ),
               deparaError && h('div', { className: 'warning-box', style: { marginTop: 10 } }, deparaError)
             ),
-            cadastroTab === "importar-txt" && h(React.Fragment, null,
-              h('div', { style: { fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 } }, "Selecione se deseja importar para Despesas ou Receitas, e cole abaixo ou carregue um arquivo .txt."),
-              h('div', { style: { display: 'flex', gap: 10, marginBottom: 12 } }, h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'despesa' ? 'active' : ''}`, style: { background: categoriaTipoTab === 'despesa' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'despesa' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('despesa') }, "🔴 Importar para Despesas"), h('button', { type: 'button', className: `action-btn ${categoriaTipoTab === 'receita' ? 'active' : ''}`, style: { background: categoriaTipoTab === 'receita' ? 'var(--green)' : '#fff', color: categoriaTipoTab === 'receita' ? '#fff' : 'var(--ink)' }, onClick: () => setCategoriaTipoTab('receita') }, "🟢 Importar para Receitas")),
-              h('div', { style: { display: 'flex', gap: 10, marginBottom: 10 } }, h('input', { type: 'file', accept: '.txt', ref: txtInputRef, style: { display: 'none' }, onChange: handleUploadTxtFile }), h('button', { type: 'button', className: 'action-btn', onClick: () => txtInputRef.current && txtInputRef.current.click() }, "📁 Carregar arquivo .txt")),
-              h('form', { onSubmit: handleProcessarTxtCategorias, style: { display: 'flex', flexDirection: 'column', gap: 10 } }, h('textarea', { rows: 10, placeholder: 'Exemplo:\nAlimentação\n\t- Supermercado\n\t- Restaurante', value: txtCategoriasContent, onChange: (e) => setTxtCategoriasContent(e.target.value), required: true }), h('button', { type: 'submit', className: 'primary', style: { alignSelf: 'flex-start' } }, h(Plus), ` Importar para ${categoriaTipoTab === 'despesa' ? 'Despesas' : 'Receitas'}`))
-            )
+
           ),
 
           screen === "lancamentos" && h('div', { className: 'form-card' },
