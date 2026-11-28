@@ -304,7 +304,6 @@
       const [concilSaldoPluggyDataFimRascunho, setConcilSaldoPluggyDataFimRascunho] = useState(currentDate());
       const [concilTab, setConcilTab] = useState(() => sessionStorage.getItem("fatura-conciltab-v1") || "movimentacoes");
       const [concilCalMes, setConcilCalMes] = useState(currentMonth());
-      const [calendarioExpandido, setCalendarioExpandido] = useState(false);
 
       const [concilEditModal, setConcilEditModal] = useState({ open: false, item: null });
       const [pluggySistemaSelecionados, setPluggySistemaSelecionados] = useState([]);
@@ -6808,25 +6807,23 @@
 
               concilTab === 'calendario' && h(React.Fragment, null,
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: '#F2EFE9', borderRadius: 6, border: '1px solid var(--line)' } }, 
-                h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }, onClick: () => setCalendarioExpandido(!calendarioExpandido) }, 
-                  h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Calendário de Saldos do Mês"),
-                  h('button', { type: 'button', className: 'action-btn', style: { padding: 4, borderRadius: '50%' } }, calendarioExpandido ? h(ChevronUp, {size: 16}) : h(ChevronDown, {size: 16})),
-                  !calendarioExpandido && h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, "Clique para expandir")
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, 
+                  h('div', { style: { fontSize: 16, fontWeight: 'bold' } }, "Calendário de Saldos do Mês")
                 ),
                 h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' }, onClick: e => e.stopPropagation() }, 
                   h('span', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, `Mês:`), 
                   h('input', { type: 'month', value: concilCalMes, onChange: e => setConcilCalMes(e.target.value), style: { width: 140 } }), 
-                  calendarioExpandido && h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF, title: 'Imprimir Calendário' }, h(Printer, { size: 14 }), " Imprimir")
+                  h('button', { type: 'button', className: 'action-btn', onClick: exportToPDF, title: 'Imprimir Calendário' }, h(Printer, { size: 14 }), " Imprimir")
                 )
               ),
 
-              calendarioExpandido && h('div', { style: { marginBottom: 24, overflowX: 'auto', paddingBottom: 6 } },
+              h('div', { style: { marginBottom: 24, overflowX: 'auto', paddingBottom: 6 } },
                 h('div', { style: { minWidth: 700 } },
                 h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6, marginBottom: 7 } },
-                  ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map((nome, indice) => h('div', { key: nome, style: { textAlign: 'center', padding: '9px 2px', borderRadius: 8, fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: indice >= 5 ? '#9A5B24' : 'var(--ink-soft)', background: indice >= 5 ? '#FFF0DF' : 'var(--paper)', border: indice >= 5 ? '1px solid #F3D5B5' : '1px solid var(--line)' } }, nome))
+                  ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((nome, indice) => { const fimDeSemanaColuna = indice === 0 || indice === 6; return h('div', { key: nome, style: { textAlign: 'center', padding: '9px 2px', borderRadius: 8, fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: fimDeSemanaColuna ? '#9A5B24' : 'var(--ink-soft)', background: fimDeSemanaColuna ? '#FFF0DF' : 'var(--paper)', border: fimDeSemanaColuna ? '1px solid #F3D5B5' : '1px solid var(--line)' } }, nome); })
                 ),
                 h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6 } },
-                  ...Array.from({ length: (new Date(Number(concilCalMes.slice(0,4)), Number(concilCalMes.slice(5,7)) - 1, 1).getDay() + 6) % 7 }, (_, i) => h('div', { key: 'vazio-' + i, 'aria-hidden': true, style: { minHeight: 112, borderRadius: 10, background: 'transparent' } })),
+                  ...Array.from({ length: new Date(Number(concilCalMes.slice(0,4)), Number(concilCalMes.slice(5,7)) - 1, 1).getDay() }, (_, i) => h('div', { key: 'vazio-' + i, 'aria-hidden': true, style: { minHeight: 112, borderRadius: 10, background: 'transparent' } })),
                   ...calendarioDiasDoMes.map(d => {
                     const dataDia = new Date(d.data + 'T12:00:00');
                     const fimDeSemana = dataDia.getDay() === 0 || dataDia.getDay() === 6;
