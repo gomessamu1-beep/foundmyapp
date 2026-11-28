@@ -6924,11 +6924,16 @@
                   });
                   const movimentosPluggyHistorico = (pluggyTransactions || []).filter(t => String(t.accountId) === String(pluggyId) && String(t.date || "").slice(0,10) > dataBaseSaldo && String(t.date || "").slice(0,10) <= concilDataFim).map(t => ({ data:String(t.date || "").slice(0,10), valor:valorPluggy(t) }));
                   const inicioSaldo = concilDataIni || dataBaseSaldo;
+                  // O saldo do período deve acompanhar exatamente as movimentações exibidas na Conciliação Bancária.
+                  // Mantemos o histórico anterior ao período apenas para formar o saldo de abertura da comparação.
+                  const movimentosSistemaPeriodo = (movimentacoesConciliacao || [])
+                    .filter(m => m.data >= inicioSaldo && m.data <= concilDataFim)
+                    .map(m => ({ data:m.data, valor:valorSistema(m) }));
                   let saldoSistemaDia = saldoInicialBase + movimentosSistemaHistorico.filter(m => m.data < inicioSaldo).reduce((sum,m) => sum + m.valor,0);
                   let saldoPluggyDia = saldoInicialBase + movimentosPluggyHistorico.filter(m => m.data < inicioSaldo).reduce((sum,m) => sum + m.valor,0);
                   const mapaSistemaDia = new Map();
                   const mapaPluggyDia = new Map();
-                  movimentosSistemaHistorico.filter(m => m.data >= inicioSaldo).forEach(m => mapaSistemaDia.set(m.data, (mapaSistemaDia.get(m.data) || 0) + m.valor));
+                  movimentosSistemaPeriodo.forEach(m => mapaSistemaDia.set(m.data, (mapaSistemaDia.get(m.data) || 0) + m.valor));
                   movimentosPluggyHistorico.filter(m => m.data >= inicioSaldo).forEach(m => mapaPluggyDia.set(m.data, (mapaPluggyDia.get(m.data) || 0) + m.valor));
                   const saldosDiariosCruzamento = [];
                   if (inicioSaldo && concilDataFim && inicioSaldo <= concilDataFim) {
