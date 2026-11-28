@@ -1820,7 +1820,7 @@
             if(!contasGrupo.length)return null;
             return h('section',{key:grupo.titulo,style:{border:'1px solid '+grupo.cor+'35',borderRadius:12,overflow:'hidden',background:'var(--card)',boxShadow:'0 2px 8px rgba(15,23,42,.035)'}},
               h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,padding:'12px 14px',background:grupo.fundo,borderBottom:'1px solid '+grupo.cor+'28'}},
-                h('div',{style:{display:'flex',alignItems:'center',gap:10,minWidth:0}},
+                h('div',{style:{display:'flex',alignItems:'center',gap:10,minWidth:0},onClick:e=>e.stopPropagation()},
                   h('span',{style:{width:38,height:38,display:'grid',placeItems:'center',borderRadius:10,background:'#ffffffcc',fontSize:21,flexShrink:0}},grupo.icone),
                   h('div',{style:{minWidth:0}},
                     h('div',{style:{fontSize:13,fontWeight:900,letterSpacing:'.045em',color:grupo.cor}},grupo.titulo),
@@ -1829,7 +1829,7 @@
                 ),
                 h('div',{style:{display:'flex',alignItems:'center',gap:8,flexShrink:0}},
                   h('span',{style:{fontSize:11,fontWeight:800,color:grupo.cor,background:'#ffffffc9',border:'1px solid '+grupo.cor+'35',borderRadius:999,padding:'5px 9px',whiteSpace:'nowrap'}},contasGrupo.length+" conta(s)"),
-                  h('button',{type:'button',className:'action-btn',style:{display:'inline-flex',alignItems:'center',gap:5,padding:'7px 9px',background:'#ffffffd9',color:grupo.cor,border:'1px solid '+grupo.cor+'45',fontSize:11,fontWeight:800,whiteSpace:'nowrap'},onClick:()=>setContabGruposRecolhidos(prev=>prev.includes(grupo.titulo)?prev.filter(x=>x!==grupo.titulo):[...prev,grupo.titulo])},contabGruposRecolhidos.includes(grupo.titulo)?h(ChevronDown,{size:14}):h(ChevronUp,{size:14}),contabGruposRecolhidos.includes(grupo.titulo)?"Expandir":"Recolher")
+                  h('button',{type:'button',className:'action-btn',style:{display:'inline-flex',alignItems:'center',gap:5,padding:'7px 9px',background:'#ffffffd9',color:grupo.cor,border:'1px solid '+grupo.cor+'45',fontSize:11,fontWeight:800,whiteSpace:'nowrap'},onClick:e=>{e.stopPropagation();setContabGruposRecolhidos(prev=>prev.includes(grupo.titulo)?prev.filter(x=>x!==grupo.titulo):[...prev,grupo.titulo]);}},contabGruposRecolhidos.includes(grupo.titulo)?h(ChevronDown,{size:14}):h(ChevronUp,{size:14}),contabGruposRecolhidos.includes(grupo.titulo)?"Expandir":"Recolher")
                 )
               ),
               !contabGruposRecolhidos.includes(grupo.titulo) && h('div',{className:'list-vertical',style:{gap:0}},
