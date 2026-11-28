@@ -296,6 +296,7 @@
       const [concilDataIni, setConcilDataIni] = useState(`${currentMonth()}-01`);
       const [concilDataFim, setConcilDataFim] = useState(currentDate());
       const [concilExibido, setConcilExibido] = useState(false);
+      const [concilSaldoPluggyConsulta, setConcilSaldoPluggyConsulta] = useState(null);
       const [concilTab, setConcilTab] = useState(() => sessionStorage.getItem("fatura-conciltab-v1") || "movimentacoes");
       const [concilCalMes, setConcilCalMes] = useState(currentMonth());
       const [calendarioExpandido, setCalendarioExpandido] = useState(false);
@@ -6719,12 +6720,13 @@
               [['resumo', 'Resumo'], ['calendario', 'Calendário'], ['movimentacoes', 'Movimentações do Sistema'], ['cruzamento', 'Cruzamento de Extratos'], ['saldoPluggy', 'Saldo bancário — Pluggy']].map(([id, label]) => h('button', { key: id, type: 'button', role: 'tab', 'aria-selected': concilTab === id, className: concilTab === id ? 'primary' : 'action-btn', style: { whiteSpace: 'nowrap', borderRadius: 7, padding: '9px 13px', borderBottom: concilTab === id ? '3px solid var(--green)' : '3px solid transparent' }, onClick: () => { setConcilTab(id); if (id === 'calendario') setCalendarioExpandido(true); } }, label))
             ),
               concilTab === 'saldoPluggy' && (() => {
-                const contaSistemaSelecionada = contasBancarias.find(c => String(c.id) === String(concilContaId));
+                const consultaAplicada = concilSaldoPluggyConsulta;
+                const contaSistemaSelecionada = contasBancarias.find(c => String(c.id) === String(consultaAplicada?.contaId));
                 const pluggyIdSelecionado = contaSistemaSelecionada?.pluggyAccountId || "";
                 const formatarValorPluggy = t => String(t.type || "").toUpperCase() === "DEBIT" ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
                 // Os saldos são reconstruídos pelo histórico até a data final consultada; não usamos o saldo atual da API.
                 const dataBaseSaldo = String(contaSistemaSelecionada?.dataSaldoInicial || "0000-00-00");
-                const dataReferenciaSaldo = String(concilDataFim || currentDate()).slice(0, 10);
+                const dataReferenciaSaldo = String(consultaAplicada?.dataFim || "").slice(0, 10);
                 const saldoInicialConta = Number(contaSistemaSelecionada?.saldoInicial || 0);
                 const historicoContaCompleto = (pluggyTransactions || []).filter(t =>
                   pluggyIdSelecionado && String(t.accountId) === String(pluggyIdSelecionado) &&
@@ -6761,7 +6763,7 @@
                 const saldoSistema = saldoSistemaAteReferencia;
                 const movimentacoesDaConta = historicoContaCompleto.filter(t => {
                   const data = String(t.date || "").slice(0, 10);
-                  return (!concilDataIni || data >= concilDataIni) && (!concilDataFim || data <= concilDataFim);
+                  return (!consultaAplicada?.dataIni || data >= consultaAplicada.dataIni) && (!consultaAplicada?.dataFim || data <= consultaAplicada.dataFim);
                 }).sort((x, y) => String(y.date || "").localeCompare(String(x.date || "")) || String(y.id).localeCompare(String(x.id)));
                 const diferenca = saldoSistema == null || saldoPluggy == null ? null : Number((saldoPluggy - saldoSistema).toFixed(2));
                 return h(React.Fragment, null,
@@ -6769,7 +6771,7 @@
                     h('div', { className: 'field' }, h('label', null, 'Conta bancária'), h('select', { style: { width: '100%', boxSizing: 'border-box' }, value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: '' }, 'Selecione a conta...'), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
                     h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })),
                     h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })),
-                    h('button', { type: 'button', className: 'primary', style: { minHeight: 40 }, disabled: pluggyTransactionsLoading, onClick: () => { setConcilExibido(true); carregarMovimentacoesPluggy(); } }, pluggyTransactionsLoading ? 'Consultando extrato…' : 'Consultar')
+                    h('button', { type: 'button', className: 'primary', style: { minHeight: 40 }, disabled: pluggyTransactionsLoading, onClick: () => { setConcilSaldoPluggyConsulta({ contaId: concilContaId, dataIni: concilDataIni, dataFim: concilDataFim }); setConcilExibido(true); carregarMovimentacoesPluggy(); } }, pluggyTransactionsLoading ? 'Consultando extrato…' : 'Consultar')
                   ),
                   h('section', { style: { border: '1px solid var(--line)', borderRadius: 10, padding: 14, marginBottom: 16, background: 'var(--card)' } },
                   h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 } },
