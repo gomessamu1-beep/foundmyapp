@@ -4374,14 +4374,15 @@
         return null;
       }
 
-      function calcularSaldoSistemaBancario(conta) {
+      function calcularSaldoSistemaBancario(conta, dataLimiteExclusiva = null) {
         if (!conta) return null;
         const dataBase = String(conta.dataSaldoInicial || "0000-00-00");
+        const dentroDoPeriodoAnterior = data => !!data && data > dataBase && (!dataLimiteExclusiva || data < dataLimiteExclusiva);
         let saldo = Number(conta.saldoInicial || 0);
-        (contasPagar || []).forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === String(conta.id) && p.dataBaixa && p.dataBaixa > dataBase) saldo -= Number(p.valorParcela || p.total || 0); });
-        (contasReceber || []).forEach(r => { if (r.status === "Baixado" && String(r.bancoBaixaId) === String(conta.id) && r.dataBaixa && r.dataBaixa > dataBase) saldo += Number(r.valorParcela || r.total || 0); });
+        (contasPagar || []).forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === String(conta.id) && dentroDoPeriodoAnterior(p.dataBaixa)) saldo -= Number(p.valorParcela || p.total || 0); });
+        (contasReceber || []).forEach(r => { if (r.status === "Baixado" && String(r.bancoBaixaId) === String(conta.id) && dentroDoPeriodoAnterior(r.dataBaixa)) saldo += Number(r.valorParcela || r.total || 0); });
         Object.entries(faturasBaixadas || {}).forEach(([comp, baixa]) => {
-          if (!baixa || baixa.status !== "Baixado" || String(baixa.bancoId) !== String(conta.id) || !baixa.dataBaixa || baixa.dataBaixa <= dataBase) return;
+          if (!baixa || baixa.status !== "Baixado" || String(baixa.bancoId) !== String(conta.id) || !dentroDoPeriodoAnterior(baixa.dataBaixa)) return;
           const totalComp = (purchases || []).reduce((s, p) => {
             const idx = monthDiff(p.inicio, comp); if (idx < 0 || (p.canceladoEm && comp >= p.canceladoEm) || (p.mesesExcluidos || []).includes(comp)) return s;
             if (p.recorrente) return s + Number(p.total || 0);
@@ -4412,7 +4413,7 @@
             }
           }
         });
-        lista.sort((a, b) => a.data.localeCompare(b.data)); const contaSaldoBase = (contasBancarias || []).find(c => String(c.id) === String(concilContaId)); let saldoAcumulado = Number(contaSaldoBase?.saldoInicial || 0); return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); const contaPluggyVinculada = (contasBancarias || []).find(c => String(c.id) === String(concilContaId));
+        lista.sort((a, b) => a.data.localeCompare(b.data)); const contaSaldoBase = (contasBancarias || []).find(c => String(c.id) === String(concilContaId)); let saldoAcumulado = calcularSaldoSistemaBancario(contaSaldoBase, concilDataIni); return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); const contaPluggyVinculada = (contasBancarias || []).find(c => String(c.id) === String(concilContaId));
           const txCorrespondente = encontrarTransacaoPluggyParaMovimentacao(item, contaPluggyVinculada);
           return { ...item, saldo: saldoAcumulado, conciliadoPluggy: !!txCorrespondente }; });
       }, [concilExibido, concilContaId, concilDataIni, concilDataFim, contasPagar, contasReceber, faturasBaixadas, purchases, pluggyTransactions, contasBancarias]);
@@ -4425,7 +4426,7 @@
       const totalDebitosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorDebito, 0);
       const totalCreditosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorCredito, 0);
       const contaSaldoInicialConcil = (contasBancarias || []).find(c => String(c.id) === String(concilContaId));
-      const saldoInicialConcil = Number(contaSaldoInicialConcil?.saldoInicial || 0);
+      const saldoInicialConcil = calcularSaldoSistemaBancario(contaSaldoInicialConcil, concilDataIni) ?? 0;
       const saldoFinalConcil = Number((saldoInicialConcil + totalCreditosConcil - totalDebitosConcil).toFixed(2));
 
       const calendarioDiasDoMes = useMemo(() => {
@@ -6779,10 +6780,27 @@
             ),
 
             concilExibido && h(React.Fragment, null,
-              concilTab === 'resumo' && h('div', { style: { display: 'flex', gap: 20, marginBottom: 20, flexWrap: 'wrap' } },
-                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Débitos (Pagamentos)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--red)' } }, showMoney(totalDebitosConcil))),
-                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Créditos (Recebimentos)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--green)' } }, showMoney(totalCreditosConcil))),
-                h('div', { className: 'top', style: { flex: 1, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo Final da Conta"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoFinalConcil)))
+              concilTab === 'resumo' && h(React.Fragment, null,
+                h('div', { style: { display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' } },
+                  h('div', { className: 'top', style: { flex: 1, minWidth: 150, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo Inicial (Sistema)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoInicialConcil))),
+                  h('div', { className: 'top', style: { flex: 1, minWidth: 150, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Débitos (Saídas)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--red)' } }, showMoney(totalDebitosConcil))),
+                  h('div', { className: 'top', style: { flex: 1, minWidth: 150, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Total Créditos (Entradas)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold', color: 'var(--green)' } }, showMoney(totalCreditosConcil))),
+                  h('div', { className: 'top', style: { flex: 1, minWidth: 150, margin: 0, padding: 14 } }, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, "Saldo Final (Sistema)"), h('div', { className: 'num', style: { fontSize: 22, fontWeight: 'bold' } }, showMoney(saldoFinalConcil)))
+                ),
+                h('div', { style: { overflowX: 'auto', border: '1px solid var(--line)', borderRadius: 8, marginBottom: 20 } },
+                  h('table', { style: { width: '100%', minWidth: 650, borderCollapse: 'collapse', fontSize: 12 } },
+                    h('thead', null, h('tr', { style: { background: 'var(--paper)', textAlign: 'left' } },
+                      h('th', { style: { padding: 10 } }, 'Data'), h('th', { style: { padding: 10 } }, 'Movimentação da conta'), h('th', { style: { padding: 10, textAlign: 'right' } }, 'Débitos'), h('th', { style: { padding: 10, textAlign: 'right' } }, 'Créditos'), h('th', { style: { padding: 10, textAlign: 'right' } }, 'Saldo')
+                    )),
+                    h('tbody', null, movimentacoesConciliacao.length ? movimentacoesConciliacao.map(m => h('tr', { key: String(m.tipoOrigem) + '-' + String(m.id), style: { borderTop: '1px solid var(--line)' } },
+                      h('td', { style: { padding: 10, whiteSpace: 'nowrap' } }, formatDateBR(m.data)),
+                      h('td', { style: { padding: 10 } }, m.descricao || 'Movimentação bancária'),
+                      h('td', { style: { padding: 10, textAlign: 'right', color: m.valorDebito ? 'var(--red)' : 'inherit' } }, m.valorDebito ? showMoney(m.valorDebito) : '—'),
+                      h('td', { style: { padding: 10, textAlign: 'right', color: m.valorCredito ? 'var(--green)' : 'inherit' } }, m.valorCredito ? showMoney(m.valorCredito) : '—'),
+                      h('td', { style: { padding: 10, textAlign: 'right', fontWeight: 600 } }, showMoney(m.saldo))
+                    )) : h('tr', null, h('td', { colSpan: 5, style: { padding: 18, textAlign: 'center', color: 'var(--ink-soft)' } }, 'Nenhuma movimentação encontrada para a conta e o período selecionados.')))
+                  )
+                )
               ),
 
               concilTab === 'calendario' && h(React.Fragment, null,
