@@ -309,7 +309,6 @@
       const [pluggyBancoSelecionados, setPluggyBancoSelecionados] = useState([]);
       const [pluggyFiltroConciliacao, setPluggyFiltroConciliacao] = useState("todos");
       const [pluggyFiltroTipo, setPluggyFiltroTipo] = useState("todos");
-      const [pluggyCruzamentoAba, setPluggyCruzamentoAba] = useState("lancamentos");
       const [pluggyConcilPersistido, setPluggyConcilPersistido] = useState(() => {
         try { return JSON.parse(localStorage.getItem("foundmyapp-pluggy-concil-v1") || '{"vinculos":[],"removidos":[]}'); }
         catch (_) { return { vinculos: [], removidos: [] }; }
@@ -6885,8 +6884,6 @@
                       cursor.setDate(cursor.getDate()+1);
                     }
                   }
-                  const contaPluggySaldoReal = (pluggyAccounts || []).find(a => String(a.id) === String(pluggyId));
-                  const saldoPluggyRealAtual = contaPluggySaldoReal && Number.isFinite(Number(contaPluggySaldoReal.balance)) ? Number(contaPluggySaldoReal.balance) : null;
 const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
                   const salvarDados = next => {
                     setPluggyConcilPersistido(next);
@@ -6986,11 +6983,7 @@ const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v ||
                   const qtdPendentesSistema = movimentosSistema.length - qtdConciliados;
                   const qtdPendentesBanco = extratoBanco.length - pluggyConciliadoIds.size;
                   return h('div', null,
-                    h('div', { style:{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12, borderBottom:'1px solid var(--line)', paddingBottom:9 } },
-                      h('button', { type:'button', className:pluggyCruzamentoAba === 'lancamentos' ? 'primary' : 'action-btn', onClick:() => setPluggyCruzamentoAba('lancamentos') }, 'Lançamentos'),
-                      h('button', { type:'button', className:pluggyCruzamentoAba === 'saldos' ? 'primary' : 'action-btn', onClick:() => setPluggyCruzamentoAba('saldos') }, 'Saldos diários')
-                    ),
-                    pluggyCruzamentoAba === 'lancamentos' && h(React.Fragment, null,
+                    h(React.Fragment, null,
                     h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:8, marginBottom:12 } },
                       h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo conciliado (valores iguais)"), h('strong', { style:{ color:'var(--green)', fontSize:18 } }, money(totalValorConciliado))),
                       h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo não conciliado — Pluggy"), h('strong', { style:{ color:'var(--red)', fontSize:18 } }, money(totalPluggyNaoConciliado))),
@@ -7017,13 +7010,7 @@ const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v ||
                     !pluggyTransactionsLoadedAt && h('div', { className:'warning-box', style:{ marginBottom:10 } }, "Consulte para carregar o extrato da Pluggy."),
                     h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:10, alignItems:'start' } }, tabelaSistema, tabelaPluggy)
                     ),
-                    pluggyCruzamentoAba === 'saldos' && h('div', null,
-                      h('div', { className:'top', style:{ margin:0, padding:14 } },
-                        h('div', { style:{ fontSize:12, color:'var(--ink-soft)' } }, 'Saldo real atual informado pela Pluggy'),
-                        h('strong', { style:{ fontSize:24 } }, saldoPluggyRealAtual == null ? 'Indisponível — atualize os saldos' : money(saldoPluggyRealAtual))
-                      ),
-                      h('div', { className:'warning-box', style:{ marginTop:10 } }, 'A Pluggy informa o saldo atual da conta. O retorno disponível não contém saldos históricos por dia; por isso o sistema não calcula nem apresenta valores diários estimados da Pluggy.')
-                    )
+
                   );
                 })()
               ),
