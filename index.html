@@ -5200,6 +5200,30 @@
             color:var(--green); background:var(--card); border:1px solid var(--green);
             box-shadow:0 0 0 2px rgba(47,82,51,.10), 0 3px 8px rgba(20,30,40,.05);
           }
+          /* Ícones destacados para cada área financeira */
+          .launch-main-tabs .launch-tab {
+            flex-direction:column!important; justify-content:center!important; gap:9px!important;
+            min-height:112px!important; padding:14px 8px!important; border-radius:13px!important;
+            text-align:center; font-size:13px; font-weight:750;
+          }
+          .launch-main-tabs .launch-tab-icon {
+            width:54px; height:54px; border-radius:16px; display:flex; align-items:center;
+            justify-content:center; flex:0 0 54px; transition:transform .18s ease;
+          }
+          .launch-main-tabs .launch-tab:hover .launch-tab-icon { transform:translateY(-2px); }
+          .launch-main-tabs .launch-tab-icon-pagar { color:#b45309; background:#fff1d6; }
+          .launch-main-tabs .launch-tab-icon-receber { color:#15803d; background:#dcfce7; }
+          .launch-main-tabs .launch-tab-icon-cartao { color:#6d4bc3; background:#eee7ff; }
+          .launch-main-tabs .launch-tab-label { display:block; line-height:1.25; }
+          .launch-main-tabs .launch-tab.active.launch-tab { background:var(--card); }
+          .launch-main-tabs .launch-tab.active .launch-tab-icon-pagar { background:#ffdfaa; }
+          .launch-main-tabs .launch-tab.active .launch-tab-icon-receber { background:#bbf7d0; }
+          .launch-main-tabs .launch-tab.active .launch-tab-icon-cartao { background:#ddd0ff; }
+          @media(max-width:640px) {
+            .launch-main-tabs .launch-tab { min-height:94px!important; gap:7px!important; padding:10px 4px!important; font-size:11px; }
+            .launch-main-tabs .launch-tab-icon { width:44px; height:44px; flex-basis:44px; border-radius:13px; }
+            .launch-main-tabs .launch-tab-icon svg { width:24px; height:24px; }
+          }
           .launch-page-header {
             border:1px solid var(--line)!important; border-radius:12px; padding:15px!important;
             background:linear-gradient(135deg,var(--card),var(--paper))!important;
@@ -5895,19 +5919,19 @@
                 className: 'launch-tab ' + (lancamentoTab === "pagar" ? "active" : ""),
                 onClick: () => abrirConsultaFinanceira("pagar"),
                 style: { justifyContent: 'center', gap: 9, padding: '13px 10px', fontWeight: 700, borderRadius: 9, minHeight: 52 }
-              }, h(ArrowDownCircle, { size: 19 }), "Contas a Pagar"),
+              }, h('span', { className: 'launch-tab-icon launch-tab-icon-pagar' }, h(ArrowDownCircle, { size: 27 })), h('span', { className: 'launch-tab-label' }, "Contas a Pagar")),
               h('button', {
                 type: 'button',
                 className: 'launch-tab ' + (lancamentoTab === "receber" ? "active" : ""),
                 onClick: () => abrirConsultaFinanceira("receber"),
                 style: { justifyContent: 'center', gap: 9, padding: '13px 10px', fontWeight: 700, borderRadius: 9, minHeight: 52 }
-              }, h(ArrowUpCircle, { size: 19 }), "Contas a Receber"),
+              }, h('span', { className: 'launch-tab-icon launch-tab-icon-receber' }, h(ArrowUpCircle, { size: 27 })), h('span', { className: 'launch-tab-label' }, "Contas a Receber")),
               h('button', {
                 type: 'button',
                 className: 'launch-tab ' + (lancamentoTab === "cartao" ? "active" : ""),
                 onClick: () => { setLancamentoTab("cartao"); carregarConferenciaFaturas(); },
                 style: { justifyContent: 'center', gap: 9, padding: '13px 10px', fontWeight: 700, borderRadius: 9, minHeight: 52 }
-              }, h(CreditCard, { size: 19 }), "Cartão de Crédito")
+              }, h('span', { className: 'launch-tab-icon launch-tab-icon-cartao' }, h(CreditCard, { size: 27 })), h('span', { className: 'launch-tab-label' }, "Cartão de Crédito"))
             ),
 
             lancamentoTab === "cartao" && h(React.Fragment, null,
