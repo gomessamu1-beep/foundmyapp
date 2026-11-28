@@ -1488,27 +1488,43 @@
           if (!p) return;
           const status = String(p.status || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           if (/^(baixad[oa]|pago|quitad[oa]|liquidado|cancelado|estornado)/.test(status)) return;
-          const dataVencimentoReal = normalizarDataCalendario(p.dataVencimento);
-          const dataBase = dataVencimentoReal || normalizarDataCalendario(p.dataCompra) || normalizarDataCalendario(p.inicio);
-          if (!dataBase) return;
+          const vencimentoBase = normalizarDataCalendario(p.dataVencimento) || normalizarDataCalendario(p.dataCompra) || normalizarDataCalendario(p.inicio);
+          if (!vencimentoBase) return;
+
+          // Parcelas já individualizadas: cada registro usa seu próprio vencimento.
           if (p.parcelaIndividual) {
-            if (dataBase.slice(0, 7) === pagarCalendarioMes) {
-              itens.push({ ...p, dataCalendario: dataBase, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela || p.total || 0) });
+            if (vencimentoBase.slice(0, 7) === pagarCalendarioMes) {
+              itens.push({ ...p, dataCalendario: vencimentoBase, index: Number(p.numeroParcelaOriginal || 1), parcelas: Number(p.totalParcelasOriginal || 1), valorParcela: Number(p.valorParcela ?? p.total ?? 0) });
             }
             return;
           }
-          const competenciaInicial = String(p.inicio || dataBase.slice(0, 7)).slice(0, 7);
-          if (!/^\d{4}-\d{2}$/.test(competenciaInicial)) return;
-          const idx = monthDiff(competenciaInicial, pagarCalendarioMes);
-          if (idx < 0 || (p.canceladoEm && pagarCalendarioMes >= String(p.canceladoEm).slice(0, 7)) || (Array.isArray(p.mesesExcluidos) && p.mesesExcluidos.includes(pagarCalendarioMes))) return;
-          const parcelaInicial = Math.max(1, Number(p.parcelaInicial || 1));
+
           const quantidadeParcelas = Math.max(1, Number(p.parcelas || 1));
+          const parcelaInicial = Math.max(1, Number(p.parcelaInicial || 1));
+          const mesVencimentoBase = vencimentoBase.slice(0, 7);
+          const idx = monthDiff(mesVencimentoBase, pagarCalendarioMes);
+          if (idx < 0) return;
+          if (p.canceladoEm && pagarCalendarioMes >= String(p.canceladoEm).slice(0, 7)) return;
+          if (Array.isArray(p.mesesExcluidos) && p.mesesExcluidos.includes(pagarCalendarioMes)) return;
+
+          // Conta avulsa: nunca desloca o vencimento por causa do mês de emissão.
+          if (!p.recorrente && quantidadeParcelas === 1) {
+            if (mesVencimentoBase === pagarCalendarioMes) {
+              itens.push({ ...p, dataCalendario: vencimentoBase, index: parcelaInicial, parcelas: 1, valorParcela: Number(p.valorParcela ?? p.total ?? 0) });
+            }
+            return;
+          }
+
           if (!p.recorrente && idx >= quantidadeParcelas - parcelaInicial + 1) return;
-          const numeroParcela = p.recorrente ? idx + 1 : parcelaInicial + idx;
+          const numeroParcela = p.recorrente ? parcelaInicial + idx : parcelaInicial + idx;
           const valores = splitInstallments(Number(p.total || 0), quantidadeParcelas);
-          const valor = Number(p.recorrente ? (p.valorParcela || p.total || 0) : (p.valorParcela && quantidadeParcelas === 1 ? p.valorParcela : (valores[numeroParcela - 1] || p.valorParcela || p.total || 0)));
-          const vencimento = idx === 0 ? dataBase : avancarVencimento(dataBase, idx);
-          if (vencimento && vencimento.slice(0, 7) === pagarCalendarioMes) itens.push({ ...p, dataCalendario: vencimento, index: numeroParcela, parcelas: quantidadeParcelas, valorParcela: valor });
+          const valor = Number(p.recorrente
+            ? (p.valorParcela ?? p.total ?? 0)
+            : (p.ajustesParcelas?.[String(numeroParcela)]?.valorParcela ?? valores[numeroParcela - 1] ?? p.valorParcela ?? p.total ?? 0));
+          const vencimento = idx === 0 ? vencimentoBase : avancarVencimento(vencimentoBase, idx);
+          if (vencimento && vencimento.slice(0, 7) === pagarCalendarioMes) {
+            itens.push({ ...p, dataCalendario: vencimento, index: numeroParcela, parcelas: quantidadeParcelas, valorParcela: valor });
+          }
         });
         return itens.sort((a,b) => a.dataCalendario.localeCompare(b.dataCalendario));
       }, [contasPagar, pagarCalendarioMes]);
