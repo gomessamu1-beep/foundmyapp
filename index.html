@@ -6820,7 +6820,8 @@
                 )
               ),
 
-              calendarioExpandido && h('div', { style: { marginBottom: 24 } },
+              calendarioExpandido && h('div', { style: { marginBottom: 24, overflowX: 'auto', paddingBottom: 6 } },
+                h('div', { style: { minWidth: 700 } },
                 h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6, marginBottom: 7 } },
                   ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map((nome, indice) => h('div', { key: nome, style: { textAlign: 'center', padding: '9px 2px', borderRadius: 8, fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: indice >= 5 ? '#9A5B24' : 'var(--ink-soft)', background: indice >= 5 ? '#FFF0DF' : 'var(--paper)', border: indice >= 5 ? '1px solid #F3D5B5' : '1px solid var(--line)' } }, nome))
                 ),
@@ -6845,6 +6846,7 @@
                       )
                     );
                   })
+                )
                 )
               ),
               ),
