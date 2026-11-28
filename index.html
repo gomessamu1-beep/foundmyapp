@@ -6674,13 +6674,25 @@
                 const contaSistemaSelecionada = contasBancarias.find(c => String(c.id) === String(concilContaId));
                 const pluggyIdSelecionado = contaSistemaSelecionada?.pluggyAccountId || "";
                 const contaPluggySelecionada = pluggyAccounts.find(a => String(a.id) === String(pluggyIdSelecionado));
-                const movimentacoesDaConta = (pluggyTransactions || []).filter(t => {
-                  if (!pluggyIdSelecionado || String(t.accountId) !== String(pluggyIdSelecionado)) return false;
+                const formatarValorPluggy = t => String(t.type || "").toUpperCase() === "DEBIT" ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
+                // Calcula o saldo após cada lançamento usando TODO o histórico salvo, não apenas o período filtrado.
+                // O saldo inicial cadastrado é a base; movimentos anteriores/iguais à data-base não são somados novamente.
+                const dataBaseSaldo = String(contaSistemaSelecionada?.dataSaldoInicial || "0000-00-00");
+                const historicoContaCompleto = (pluggyTransactions || []).filter(t =>
+                  pluggyIdSelecionado && String(t.accountId) === String(pluggyIdSelecionado) &&
+                  String(t.date || "").slice(0, 10) > dataBaseSaldo
+                ).sort((x, y) => String(x.date || "").localeCompare(String(y.date || "")) || String(x.id).localeCompare(String(y.id)));
+                let saldoAcumuladoPluggy = Number(contaSistemaSelecionada?.saldoInicial || 0);
+                const saldosCalculadosPorTransacao = new Map();
+                historicoContaCompleto.forEach(t => {
+                  saldoAcumuladoPluggy = Number((saldoAcumuladoPluggy + formatarValorPluggy(t)).toFixed(2));
+                  saldosCalculadosPorTransacao.set(String(t.id), saldoAcumuladoPluggy);
+                });
+                const saldoSistema = contaSistemaSelecionada ? saldoAcumuladoPluggy : null;
+                const movimentacoesDaConta = historicoContaCompleto.filter(t => {
                   const data = String(t.date || "").slice(0, 10);
                   return (!concilDataIni || data >= concilDataIni) && (!concilDataFim || data <= concilDataFim);
-                }).sort((x, y) => String(y.date || "").localeCompare(String(x.date || "")));
-                const formatarValorPluggy = t => String(t.type || "").toUpperCase() === "DEBIT" ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
-                const saldoSistema = contaSistemaSelecionada ? calcularSaldoSistemaBancario(contaSistemaSelecionada) : null;
+                }).sort((x, y) => String(y.date || "").localeCompare(String(x.date || "")) || String(y.id).localeCompare(String(x.id)));
                 const saldoPluggy = contaPluggySelecionada ? Number(contaPluggySelecionada.balance || 0) : null;
                 const diferenca = saldoSistema == null || saldoPluggy == null ? null : Number((saldoPluggy - saldoSistema).toFixed(2));
                 return h(React.Fragment, null,
@@ -6731,7 +6743,7 @@
                           h('td', { style: { padding: 9, minWidth: 180 } }, t.description || 'Movimentação bancária'),
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap', color: valor < 0 ? 'var(--red)' : 'var(--green)' } }, valor < 0 ? 'Saída' : 'Entrada'),
                           h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: valor < 0 ? 'var(--red)' : 'inherit' } }, valoresOcultos ? '••••••' : formatBRL(valor)),
-                          h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: Number(t.balance) < 0 ? 'var(--red)' : 'inherit' } }, t.balance == null ? '—' : (valoresOcultos ? '••••••' : formatBRL(Number(t.balance)))),
+                          h('td', { style: { padding: 9, textAlign: 'right', whiteSpace: 'nowrap', color: Number(saldosCalculadosPorTransacao.get(String(t.id))) < 0 ? 'var(--red)' : 'inherit', fontWeight: 600 } }, saldosCalculadosPorTransacao.has(String(t.id)) ? (valoresOcultos ? '••••••' : formatBRL(saldosCalculadosPorTransacao.get(String(t.id)))) : '—'),
                           h('td', { style: { padding: 9, whiteSpace: 'nowrap' } },
                             h('strong', { style: { display:'block', color: correspondente ? 'var(--green)' : 'var(--red)', marginBottom:6 } }, correspondente ? 'Conciliado' : 'Não conciliado'),
                             !correspondente && !(pluggyConcilPersistido?.vinculos || []).some(v => String(v.contaId) === String(concilContaId) && String(v.pluggyId) === String(t.id)) && h('button', { type:'button', className:'primary', style:{ padding:'5px 9px', fontSize:11, whiteSpace:'nowrap' }, onClick:() => {
