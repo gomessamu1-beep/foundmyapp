@@ -5520,6 +5520,7 @@
               h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => { setCadastroTab("categorias"); setScreen("cadastros"); } }, "🏷️ Categorias"),
               h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => { setCadastroTab("depara"); setScreen("cadastros"); } }, "⚙️ Regras Automáticas"),
               h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");setScreen("cadastros");}},"🔧 Tipos de Movimentação"),
+              h('button',{className:cadastroTab==="api"?"active":"",onClick:()=>{setCadastroTab("api");setScreen("cadastros");}},"🔌 API"),
               h('button',{className:cadastroTab==="contabilidade"?"active":"",onClick:()=>{setCadastroTab("contabilidade");setContabTab("plano");setScreen("cadastros-contabilidade");}}, "📚 Contabilidade")
             )
           ),
@@ -5908,7 +5909,36 @@
               h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => { setCadastroTab("categorias"); setScreen("cadastros"); } }, "🏷️ Categorias"),
               h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => { setCadastroTab("depara"); setScreen("cadastros"); } }, "⚙️ Regras Automáticas"),
               h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");setScreen("cadastros");}},"🔧 Tipos de Movimentação"),
+              h('button',{className:cadastroTab==="api"?"active":"",onClick:()=>{setCadastroTab("api");setScreen("cadastros");}},"🔌 API"),
               h('button',{className:cadastroTab==="contabilidade"?"active":"",onClick:()=>{setCadastroTab("contabilidade");setContabTab("plano");setScreen("cadastros-contabilidade");}}, "📚 Contabilidade")
+            ),
+            cadastroTab === "api" && h(React.Fragment, null,
+              h('div',{style:{display:'flex',alignItems:'center',gap:12,padding:14,border:'1px solid var(--line)',borderRadius:12,background:'var(--surface-2)',marginBottom:14}},
+                h('div',{style:{width:46,height:46,borderRadius:12,display:'grid',placeItems:'center',background:'#eef2ff',color:'#4338ca'}},h(RefreshCw,{size:24})),
+                h('div',null,h('strong',{style:{fontSize:16,display:'block'}},'Integração Pluggy'),h('span',{style:{fontSize:12,color:'var(--ink-soft)'}},'Centralize aqui os vínculos entre suas contas e as contas retornadas pela Pluggy.'))
+              ),
+              h('div',{className:'form-card',style:{padding:14,marginBottom:14}},
+                h('strong',{style:{display:'block',marginBottom:8}},'Instituições conectadas'),
+                h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginBottom:10}},pluggyItemId.length+' instituição(ões) conectada(s)'),
+                pluggyItemId.length ? h('div',{className:'list-vertical'},pluggyItemId.map((id,i)=>{
+                  const item=(pluggyItem||[]).find(x=>String(x.id||x.itemId)===String(id)) || {};
+                  return h('div',{key:id,className:'list-item'},h('div',{className:'list-item-main'},
+                    h('strong',null,item.connector?.name||item.connectorName||item.name||('Instituição '+(i+1))),
+                    h('div',{style:{fontSize:11,color:'var(--ink-soft)'}},'Identificador: '+id)
+                  ));
+                })) : h('div',{style:{padding:12,textAlign:'center',color:'var(--ink-soft)'}},'Nenhuma instituição conectada. Use o botão “Conectar instituição” na tela de Conciliação Bancária.')
+              ),
+              h('div',{className:'form-card',style:{padding:14}},
+                h('strong',{style:{display:'block',marginBottom:5}},'Vínculo das contas bancárias'),
+                h('p',{style:{fontSize:12,color:'var(--ink-soft)',margin:'0 0 12px'}},'Associe cada conta do FoundMyApp à conta correspondente da Pluggy.'),
+                contasBancarias.length ? h('div',{className:'list-vertical'},contasBancarias.map(conta=>h('div',{key:conta.id,style:{display:'grid',gridTemplateColumns:'minmax(140px,1fr) minmax(180px,1.4fr)',gap:10,alignItems:'center',padding:'10px 0',borderBottom:'1px solid var(--line)'}},
+                  h('div',null,h('strong',{style:{fontSize:13}},conta.nome),h('div',{style:{fontSize:11,color:'var(--ink-soft)'}},conta.bancoCode||'Conta do sistema')),
+                  h('select',{value:conta.pluggyAccountId||'',onChange:e=>updateContasBancarias(prev=>prev.map(c=>String(c.id)===String(conta.id)?{...c,pluggyAccountId:e.target.value||null}:c)),style:{width:'100%'}},
+                    h('option',{value:''},'Não vinculada'),
+                    pluggyAccounts.filter(a=>String(a.type||'').toUpperCase()==='BANK').map(a=>h('option',{key:a.id,value:String(a.id)},(a.connector||'Banco')+' — '+(a.name||'Conta')+(a.number?' • '+a.number:'')))
+                  )
+                ))) : h('div',{style:{padding:12,textAlign:'center',color:'var(--ink-soft)'}},'Cadastre primeiro suas contas em Bancos e Caixas.')
+              )
             ),
             cadastroTab === "parametros" && renderParametrosMovimentacao(),
             cadastroTab === "cartoes" && h(React.Fragment, null,
@@ -6669,7 +6699,7 @@
                     h('div', { style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
                       h('button', { type: 'button', className: 'primary', disabled: pluggyConnecting, onClick: conectarBancoPluggy }, pluggyConnecting ? 'Conectando…' : (pluggyItemId.length ? 'Conectar outra instituição' : 'Conectar instituições')),
                       pluggyItemId.length > 0 && h('button', { type: 'button', className: 'action-btn', disabled: pluggyLoading, onClick: carregarSaldosPluggy }, pluggyLoading ? 'Atualizando…' : 'Atualizar saldos'),
-                      pluggyItemId.length > 0 && h('button', { type: 'button', className: 'action-btn delete', onClick: desconectarBancoPluggy }, 'Desvincular todas')
+                      
                     )
                   ),
                   pluggyError && h('div', { style: { color: 'var(--red)', fontSize: 12, marginBottom: 10, whiteSpace: 'pre-wrap' } }, pluggyError),
@@ -7389,7 +7419,7 @@
                 {id:'investimento',icon:'📈',title:'Investimentos',desc:'Aplicações e reservas',color:'#0f766e',bg:'#ecfdf5'},
                 {id:'dinheiro',icon:'💵',title:'Dinheiro / Caixa',desc:'Espécie e caixa físico',color:'#b45309',bg:'#fffbeb'},
                 {id:'outros',icon:'💼',title:'Outros',desc:'Outros tipos de conta',color:'#7c3aed',bg:'#f5f3ff'}
-              ].map(op=>h('button',{type:'button',key:op.id,onClick:()=>setNovaContaTipo(op.id),style:{display:'flex',alignItems:'center',gap:9,textAlign:'left',padding:'11px 10px',borderRadius:10,border:novaContaTipo===op.id?'2px solid '+op.color:'1px solid var(--line)',background:novaContaTipo===op.id?op.bg:'var(--card)',cursor:'pointer',minWidth:0,boxShadow:novaContaTipo===op.id?'0 0 0 2px '+op.color+'18':'none'}},h('span',{style:{fontSize:25,flexShrink:0}},op.icon),h('span',{style:{minWidth:0}},h('strong',{style:{display:'block',fontSize:12,color:novaContaTipo===op.id?op.color:'var(--ink)'}},op.title),h('small',{style:{display:'block',fontSize:10,color:'var(--ink-soft)',marginTop:3,lineHeight:1.3}},op.desc),novaContaTipo===op.id&&h('span',{style:{display:'inline-block',fontSize:9,fontWeight:700,color:op.color,marginTop:4}},'✓ SELECIONADA')))))), h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, h('div', { className: 'field' }, h('label', null, "Número da Agência"), h('input', { type: 'text', value: novaContaAgencia, onChange: e => setNovaContaAgencia(e.target.value), placeholder: 'Ex: 1234' })), h('div', { className: 'field' }, h('label', null, "Número da Conta"), h('input', { type: 'text', value: novaContaNumero, onChange: e => setNovaContaNumero(e.target.value), placeholder: 'Ex: 56789-0' }))), h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, h('div', { className: 'field' }, h('label', null, "Saldo Inicial *"), h('input', { type: 'text', value: novaContaSaldoInicial, onChange: e => setNovaContaSaldoInicial(e.target.value), placeholder: '0,00', required: true })), h('div', { className: 'field' }, h('label', null, "Data do Saldo Inicial *"), h('input', { type: 'date', value: novaContaDataSaldoInicial, onChange: e => setNovaContaDataSaldoInicial(e.target.value), required: true }))), h('div', { className: 'field' }, h('label', null, "Conta Pluggy vinculada"), h('select', { value: novaContaPluggyAccountId, onChange: e => setNovaContaPluggyAccountId(e.target.value) }, h('option', { value: "" }, "Não vinculada"), pluggyAccounts.filter(a => String(a.type || "").toUpperCase() === "BANK").map(a => h('option', { key: a.id, value: a.id }, (a.connector || "Banco") + " - " + (a.name || "Conta") + (a.number ? " • " + a.number : ""))))), h('div', { className: 'field' }, h('label', null, "Conta Contábil do Banco"), h('select', { value: novaContaContaContabilId, onChange: e => setNovaContaContaContabilId(e.target.value) }, h('option',{value:""},"Não vinculada"), contabPlano.filter(c=>c.tipo==="ANALITICA"&&c.ativa).map(c=>h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))), contaError && h('div', { style: { color: 'var(--red)', fontSize: 12 } }, contaError),
+              ].map(op=>h('button',{type:'button',key:op.id,onClick:()=>setNovaContaTipo(op.id),style:{display:'flex',alignItems:'center',gap:9,textAlign:'left',padding:'11px 10px',borderRadius:10,border:novaContaTipo===op.id?'2px solid '+op.color:'1px solid var(--line)',background:novaContaTipo===op.id?op.bg:'var(--card)',cursor:'pointer',minWidth:0,boxShadow:novaContaTipo===op.id?'0 0 0 2px '+op.color+'18':'none'}},h('span',{style:{fontSize:25,flexShrink:0}},op.icon),h('span',{style:{minWidth:0}},h('strong',{style:{display:'block',fontSize:12,color:novaContaTipo===op.id?op.color:'var(--ink)'}},op.title),h('small',{style:{display:'block',fontSize:10,color:'var(--ink-soft)',marginTop:3,lineHeight:1.3}},op.desc),novaContaTipo===op.id&&h('span',{style:{display:'inline-block',fontSize:9,fontWeight:700,color:op.color,marginTop:4}},'✓ SELECIONADA')))))), h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, h('div', { className: 'field' }, h('label', null, "Número da Agência"), h('input', { type: 'text', value: novaContaAgencia, onChange: e => setNovaContaAgencia(e.target.value), placeholder: 'Ex: 1234' })), h('div', { className: 'field' }, h('label', null, "Número da Conta"), h('input', { type: 'text', value: novaContaNumero, onChange: e => setNovaContaNumero(e.target.value), placeholder: 'Ex: 56789-0' }))), h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, h('div', { className: 'field' }, h('label', null, "Saldo Inicial *"), h('input', { type: 'text', value: novaContaSaldoInicial, onChange: e => setNovaContaSaldoInicial(e.target.value), placeholder: '0,00', required: true })), h('div', { className: 'field' }, h('label', null, "Data do Saldo Inicial *"), h('input', { type: 'date', value: novaContaDataSaldoInicial, onChange: e => setNovaContaDataSaldoInicial(e.target.value), required: true }))), h('div', { className: 'field' }, h('label', null, "Conta Contábil do Banco"), h('select', { value: novaContaContaContabilId, onChange: e => setNovaContaContaContabilId(e.target.value) }, h('option',{value:""},"Não vinculada"), contabPlano.filter(c=>c.tipo==="ANALITICA"&&c.ativa).map(c=>h('option',{key:c.id,value:c.id},c.codigo+" - "+c.descricao)))), contaError && h('div', { style: { color: 'var(--red)', fontSize: 12 } }, contaError),
               h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 } }, h('button', { type: 'button', className: 'action-btn', onClick: () => setContaModalOpen(false) }, "Cancelar"), h('button', { type: 'submit', className: 'primary' }, "Salvar"))
             )
           )
