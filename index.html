@@ -4437,7 +4437,7 @@
             }
           }
         });
-        lista.sort((a, b) => a.data.localeCompare(b.data)); let saldoAcumulado = 0; return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); const contaPluggyVinculada = (contasBancarias || []).find(c => String(c.id) === String(concilContaId));
+        lista.sort((a, b) => a.data.localeCompare(b.data)); const contaSaldoBase = (contasBancarias || []).find(c => String(c.id) === String(concilContaId)); let saldoAcumulado = Number(contaSaldoBase?.saldoInicial || 0); return lista.map(item => { saldoAcumulado += (item.valorCredito - item.valorDebito); const contaPluggyVinculada = (contasBancarias || []).find(c => String(c.id) === String(concilContaId));
           const txCorrespondente = encontrarTransacaoPluggyParaMovimentacao(item, contaPluggyVinculada);
           return { ...item, saldo: saldoAcumulado, conciliadoPluggy: !!txCorrespondente }; });
       }, [concilExibido, concilContaId, concilDataIni, concilDataFim, contasPagar, contasReceber, faturasBaixadas, purchases, pluggyTransactions, contasBancarias]);
@@ -4449,10 +4449,12 @@
 
       const totalDebitosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorDebito, 0);
       const totalCreditosConcil = movimentacoesConciliacao.reduce((s, m) => s + m.valorCredito, 0);
-      const saldoFinalConcil = totalCreditosConcil - totalDebitosConcil;
+      const contaSaldoInicialConcil = (contasBancarias || []).find(c => String(c.id) === String(concilContaId));
+      const saldoInicialConcil = Number(contaSaldoInicialConcil?.saldoInicial || 0);
+      const saldoFinalConcil = Number((saldoInicialConcil + totalCreditosConcil - totalDebitosConcil).toFixed(2));
 
       const calendarioDiasDoMes = useMemo(() => {
-        const [ano, mes] = concilCalMes.split("-").map(Number); const ultimoDia = new Date(ano, mes, 0).getDate(); const dias = []; let acumulado = 0;
+        const [ano, mes] = concilCalMes.split("-").map(Number); const ultimoDia = new Date(ano, mes, 0).getDate(); const dias = []; const contaCalendario = (contasBancarias || []).find(c => String(c.id) === String(concilContaId)); let acumulado = Number(contaCalendario?.saldoInicial || 0);
         for (let d = 1; d <= ultimoDia; d++) {
           const strD = `${ano}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`; let deb = 0; let cred = 0;
           if (concilContaId) {
