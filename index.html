@@ -6849,11 +6849,16 @@
                   const contaSistema = contasBancarias.find(c => String(c.id) === String(concilContaId));
                   const contaKey = String(concilContaId || "");
                   const pluggyId = contaSistema ? contaSistema.pluggyAccountId : "";
+                  const ordenarDataDecrescente = (a, b) => {
+                    const dataA = String(a.date || a.data || "").slice(0,10);
+                    const dataB = String(b.date || b.data || "").slice(0,10);
+                    return dataB.localeCompare(dataA) || String(b.id || "").localeCompare(String(a.id || ""));
+                  };
                   const extratoBanco = (pluggyTransactions || []).filter(t => {
                     const data = String(t.date || "").slice(0,10);
                     return String(t.accountId) === String(pluggyId) && (!concilDataIni || data >= concilDataIni) && (!concilDataFim || data <= concilDataFim);
-                  });
-                  const movimentosSistema = movimentacoesConciliacao || [];
+                  }).sort(ordenarDataDecrescente);
+                  const movimentosSistema = [...(movimentacoesConciliacao || [])].sort(ordenarDataDecrescente);
                   const dados = pluggyConcilPersistido || { vinculos: [], removidos: [] };
                   const vinculosConta = (dados.vinculos || []).filter(v => String(v.contaId) === contaKey);
                   const removidosConta = new Set((dados.removidos || []).filter(v => String(v.contaId) === contaKey).map(v => String(v.sistemaId) + "|" + String(v.pluggyId)));
