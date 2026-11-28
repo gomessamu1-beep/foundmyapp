@@ -5277,7 +5277,7 @@
             ),
             h('div', { className: 'sidebar-nav' },
               h('button', { className: screen === "dashboard" ? "active" : "", onClick: () => { setScreen("dashboard"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Visão geral")),
-              h('button', { className: screen === "cadastros" ? "active" : "", onClick: () => { setScreen("cadastros"); setMenuMobileOpen(false); } }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
+              h('button', { className: (screen === "cadastros" || screen === "cadastros-contabilidade") ? "active" : "", onClick: () => { setScreen("cadastros"); setMenuMobileOpen(false); } }, h(FolderTree, { size: 18 }), h('span', { className: 'nav-text' }, "Cadastros")),
               h('button', { className: screen === "lancamentos" ? "active" : "", onClick: () => { setScreen("lancamentos"); setLancamentoTab(""); setMenuMobileOpen(false); } }, h(CreditCard, { size: 18 }), h('span', { className: 'nav-text' }, "Lançamentos")),
               h('button', { className: screen === "faturas" ? "active" : "", onClick: () => { setScreen("faturas"); setFaturaViewTab("lancamentos"); setMenuMobileOpen(false); carregarConferenciaFaturas(); } }, h(FileText, { size: 18 }), h('span', { className: 'nav-text' }, "Faturas")),
               h('button', { className: screen === "relatorios" ? "active" : "", onClick: () => { setScreen("relatorios"); setMenuMobileOpen(false); } }, h(BarChart3, { size: 18 }), h('span', { className: 'nav-text' }, "Relatórios")),
@@ -5382,12 +5382,15 @@
             );
           })(),
 
-          screen === "contabilidade" && h('div', { className: 'form-card' },
+          (screen === "contabilidade" || screen === "cadastros-contabilidade") && h('div', { className: 'form-card' },
             h('div', { className: 'sub-nav', style: { marginBottom: 16 } },
-              h('button', { className: contabTab === "plano" ? "active" : "", onClick: () => setContabTab("plano") }, "Plano de Contas"),
-              h('button', { className: contabTab === "lancamentos" ? "active" : "", onClick: () => setContabTab("lancamentos") }, "Lançamentos"),
-              h('button', { className: contabTab === "relatorios" ? "active" : "", onClick: () => { setContabTab("relatorios"); carregarContabilidade(); } }, "Relatórios"),
-              h('button',{className:contabTab==="parametros"?"active":"",onClick:()=>{setContabTab("parametros");setParamTipo("PAGAMENTO");}},"Parâmetros")
+              screen === "cadastros-contabilidade" ? h(React.Fragment,null,
+                h('button', { className: contabTab === "plano" ? "active" : "", onClick: () => setContabTab("plano") }, "Plano de Contas"),
+                h('button',{className:contabTab==="parametros"?"active":"",onClick:()=>{setContabTab("parametros");setParamTipo("PAGAMENTO");}},"Parâmetros Contábeis")
+              ) : h(React.Fragment,null,
+                h('button', { className: contabTab === "lancamentos" ? "active" : "", onClick: () => setContabTab("lancamentos") }, "Lançamentos"),
+                h('button', { className: contabTab === "relatorios" ? "active" : "", onClick: () => { setContabTab("relatorios"); carregarContabilidade(); } }, "Relatórios")
+              )
             ),
             contabTab === "parametros" && renderParametrosContabilidadePagar(),
             contabErro && contabTab !== "parametros" && h('div', { className: 'warning-box', style: { marginBottom: 12 } }, contabErro),
@@ -5763,7 +5766,8 @@
               h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => setCadastroTab("categorias") }, "Categorias"),
               h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => setCadastroTab("depara") }, "De-Para (Regras)"),
               h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => setCadastroTab("importar-txt") }, "📥 Importar TXT"),
-              h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");}},"Parâmetros")
+              h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");}},"Parâmetros"),
+              h('button',{className:cadastroTab==="contabilidade"?"active":"",onClick:()=>{setCadastroTab("contabilidade");setContabTab("plano");setScreen("cadastros-contabilidade");}}, "Contabilidade")
             ),
             cadastroTab === "parametros" && renderParametrosMovimentacao(),
             cadastroTab === "cartoes" && h(React.Fragment, null,
