@@ -6688,7 +6688,7 @@
                   saldoAcumuladoPluggy = Number((saldoAcumuladoPluggy + formatarValorPluggy(t)).toFixed(2));
                   saldosCalculadosPorTransacao.set(String(t.id), saldoAcumuladoPluggy);
                 });
-                const saldoSistema = contaSistemaSelecionada ? saldoAcumuladoPluggy : null;
+                const saldoSistema = contaSistemaSelecionada ? calcularSaldoSistemaBancario(contaSistemaSelecionada) : null;
                 const movimentacoesDaConta = historicoContaCompleto.filter(t => {
                   const data = String(t.date || "").slice(0, 10);
                   return (!concilDataIni || data >= concilDataIni) && (!concilDataFim || data <= concilDataFim);
