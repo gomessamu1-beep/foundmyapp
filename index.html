@@ -6820,9 +6820,33 @@
                 )
               ),
 
-              calendarioExpandido && h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 24 } }, calendarioDiasDoMes.map(d => {
-                const fechado = isDiaFechado(d.data); return h('div', { key: d.data, style: { background: '#fff', border: '1px solid var(--line)', borderRadius: 5, padding: 8, fontSize: 12 } }, h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', marginBottom: 4 } }, h('span', null, formatDateBR(d.data)), h('button', { type: 'button', className: 'action-btn', style: { padding: 2, background: fechado ? 'var(--amber-soft)' : '#fff', borderColor: fechado ? 'var(--amber)' : 'var(--line)' }, onClick: (e) => toggleDiaFechado(d.data, e) }, fechado ? h(Lock, { size: 10, color: 'var(--amber)' }) : h(Unlock, { size: 10, color: 'var(--green)' }))), h('div', { style: { color: 'var(--red)', fontSize: 11 } }, `(-) ${showMoney(d.debitos)}`), h('div', { style: { color: 'var(--green)', fontSize: 11 } }, `(+) ${showMoney(d.cred)}`), h('div', { className: 'num', style: { fontWeight: 'bold', marginTop: 4, borderTop: '1px solid var(--line)', paddingTop: 2 } }, `Saldo: ${showMoney(d.saldo)}`));
-              })),
+              calendarioExpandido && h('div', { style: { marginBottom: 24 } },
+                h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6, marginBottom: 7 } },
+                  ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'].map((nome, indice) => h('div', { key: nome, style: { textAlign: 'center', padding: '9px 2px', borderRadius: 8, fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: indice >= 5 ? '#9A5B24' : 'var(--ink-soft)', background: indice >= 5 ? '#FFF0DF' : 'var(--paper)', border: indice >= 5 ? '1px solid #F3D5B5' : '1px solid var(--line)' } }, nome))
+                ),
+                h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6 } },
+                  ...Array.from({ length: (new Date(Number(concilCalMes.slice(0,4)), Number(concilCalMes.slice(5,7)) - 1, 1).getDay() + 6) % 7 }, (_, i) => h('div', { key: 'vazio-' + i, 'aria-hidden': true, style: { minHeight: 112, borderRadius: 10, background: 'transparent' } })),
+                  ...calendarioDiasDoMes.map(d => {
+                    const dataDia = new Date(d.data + 'T12:00:00');
+                    const fimDeSemana = dataDia.getDay() === 0 || dataDia.getDay() === 6;
+                    const fechado = isDiaFechado(d.data);
+                    const temMovimento = Number(d.debitos || 0) > 0 || Number(d.cred || 0) > 0;
+                    return h('div', { key: d.data, style: { minWidth: 0, minHeight: 112, padding: '9px 8px', borderRadius: 10, border: fechado ? '1px solid #E5B96D' : fimDeSemana ? '1px solid #E9C49F' : '1px solid var(--line)', background: fechado ? '#FFF7E8' : fimDeSemana ? '#FFF8F0' : 'var(--card)', boxShadow: fimDeSemana ? 'inset 0 3px 0 #E8B77F' : '0 1px 2px rgba(0,0,0,.04)', display: 'flex', flexDirection: 'column', gap: 5 } },
+                      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 3, marginBottom: 2 } },
+                        h('span', { style: { fontSize: 16, fontWeight: 800, color: fimDeSemana ? '#995A25' : 'var(--ink)' } }, d.diaNum),
+                        h('button', { type: 'button', className: 'action-btn', title: fechado ? 'Reabrir dia' : 'Fechar dia', style: { padding: 4, minWidth: 25, minHeight: 25, borderRadius: 7, background: fechado ? '#FCE7B8' : 'transparent', borderColor: fechado ? '#E5B96D' : 'transparent' }, onClick: e => toggleDiaFechado(d.data, e) }, fechado ? h(Lock, { size: 12, color: '#9A641E' }) : h(Unlock, { size: 12, color: fimDeSemana ? '#B77943' : 'var(--ink-soft)' }))
+                      ),
+                      h('div', { style: { fontSize: 10, fontWeight: 700, color: 'var(--ink-soft)', letterSpacing: '.03em' } }, fimDeSemana ? 'FIM DE SEMANA' : temMovimento ? 'MOVIMENTAÇÃO' : 'SEM MOVIMENTO'),
+                      h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 3, fontSize: 10, color: 'var(--red)', whiteSpace: 'nowrap' } }, h('span', null, 'Débitos'), h('strong', { className: 'num' }, showMoney(d.debitos))),
+                      h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 3, fontSize: 10, color: 'var(--green)', whiteSpace: 'nowrap' } }, h('span', null, 'Créditos'), h('strong', { className: 'num' }, showMoney(d.cred))),
+                      h('div', { style: { marginTop: 'auto', paddingTop: 5, borderTop: fimDeSemana ? '1px solid #E9C49F' : '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 2 } },
+                        h('span', { style: { fontSize: 9, color: 'var(--ink-soft)', fontWeight: 700, textTransform: 'uppercase' } }, 'Saldo do dia'),
+                        h('strong', { className: 'num', style: { fontSize: 11, color: Number(d.saldo) < 0 ? 'var(--red)' : 'var(--ink)', overflowWrap: 'anywhere' } }, showMoney(d.saldo))
+                      )
+                    );
+                  })
+                )
+              ),
               ),
 
 
