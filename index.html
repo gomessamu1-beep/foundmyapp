@@ -6331,7 +6331,7 @@
                   h('div', { style: { fontSize: 13, color: 'var(--ink-soft)' } }, calendarioPagarItens.length + ' conta(s) em aberto no mês')
                 ),
                 h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7,minmax(0,1fr))', gap: 6 } },
-                  ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => h('div', { key: d, style: { textAlign: 'center', fontWeight: 700, fontSize: 12, padding: '8px 2px', color: 'var(--ink-soft)' } }, d)),
+                  ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((d, indice) => h('div', { key: d, style: { textAlign: 'center', fontWeight: 800, fontSize: 12, padding: '9px 2px', borderRadius: 8, color: indice === 0 ? '#A33B48' : indice === 6 ? '#245B91' : 'var(--ink-soft)', background: indice === 0 ? '#FCE8EA' : indice === 6 ? '#E5F1FC' : 'var(--paper)', border: indice === 0 ? '1px solid #F2C4CA' : indice === 6 ? '1px solid #C4DDF4' : '1px solid var(--line)' } }, d)),
                   Array.from({ length: calendarioPagarInicioSemana }, (_,i) => h('div', { key: 'vazio-'+i, style: { minHeight: 76 } })),
                   Array.from({ length: calendarioPagarDiasMes }, (_,i) => {
                     const dia = i + 1;
@@ -6339,9 +6339,11 @@
                     const itens = calendarioPagarPorDia[data] || [];
                     const total = itens.reduce((s,p) => s + Number(p.valorParcela || 0), 0);
                     const selecionado = pagarCalendarioDiaSelecionado === data;
-                    return h('button', { key: data, type: 'button', onClick: () => setPagarCalendarioDiaSelecionado(data), style: { minWidth: 0, minHeight: 82, padding: '6px 3px', border: selecionado ? '2px solid var(--primary)' : '1px solid var(--line)', borderRadius: 7, background: selecionado ? 'var(--paper)' : 'var(--surface)', color: 'var(--ink)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 4, cursor: 'pointer' } },
-                      h('span', { style: { fontWeight: 700, fontSize: 13 } }, dia),
-                      itens.length > 0 ? h(React.Fragment, null, h('span', { style: { fontSize: 11, fontWeight: 700, color: '#B45309', lineHeight: 1.2 } }, itens.length + (itens.length === 1 ? ' conta' : ' contas')), h('span', { style: { fontSize: 10, fontWeight: 700, lineHeight: 1.2, textAlign: 'center' } }, showMoney(total))) : h('span', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, '—')
+                    const diaSemana = new Date(data + 'T12:00:00').getDay();
+                    const corDomingo = diaSemana === 0, corSabado = diaSemana === 6;
+                    return h('button', { key: data, type: 'button', onClick: () => setPagarCalendarioDiaSelecionado(data), style: { minWidth: 0, minHeight: 92, padding: '7px 4px', border: selecionado ? '2px solid var(--primary)' : corDomingo ? '1px solid #F0BFC6' : corSabado ? '1px solid #BBD7F0' : '1px solid var(--line)', borderRadius: 9, background: selecionado ? 'var(--paper)' : corDomingo ? '#FFF1F2' : corSabado ? '#EFF7FF' : 'var(--surface)', color: 'var(--ink)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 4, cursor: 'pointer', boxShadow: corDomingo ? 'inset 0 3px 0 #D97783' : corSabado ? 'inset 0 3px 0 #5B9BD5' : 'none' } },
+                      h('span', { style: { fontWeight: 800, fontSize: 14, color: corDomingo ? '#A33B48' : corSabado ? '#245B91' : 'var(--ink)' } }, dia),
+                      itens.length > 0 ? h(React.Fragment, null, h('span', { style: { fontSize: 10, fontWeight: 800, color: '#9A5A16', lineHeight: 1.2 } }, itens.length + (itens.length === 1 ? ' vencimento' : ' vencimentos')), h('span', { style: { fontSize: 10, fontWeight: 800, lineHeight: 1.2, textAlign: 'center' } }, showMoney(total))) : h('span', { style: { fontSize: 10, color: 'var(--ink-soft)' } }, '—')
                     );
                   })
                 ),
@@ -6820,24 +6822,26 @@
               h('div', { style: { marginBottom: 24, overflowX: 'auto', paddingBottom: 6 } },
                 h('div', { style: { minWidth: 700 } },
                 h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6, marginBottom: 7 } },
-                  ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((nome, indice) => { const fimDeSemanaColuna = indice === 0 || indice === 6; return h('div', { key: nome, style: { textAlign: 'center', padding: '9px 2px', borderRadius: 8, fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: fimDeSemanaColuna ? '#9A5B24' : 'var(--ink-soft)', background: fimDeSemanaColuna ? '#FFF0DF' : 'var(--paper)', border: fimDeSemanaColuna ? '1px solid #F3D5B5' : '1px solid var(--line)' } }, nome); })
+                  ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((nome, indice) => { const fimDeSemanaColuna = indice === 0 || indice === 6; return h('div', { key: nome, style: { textAlign: 'center', padding: '9px 2px', borderRadius: 8, fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: indice === 0 ? '#A33B48' : indice === 6 ? '#245B91' : 'var(--ink-soft)', background: indice === 0 ? '#FCE8EA' : indice === 6 ? '#E5F1FC' : 'var(--paper)', border: indice === 0 ? '1px solid #F2C4CA' : indice === 6 ? '1px solid #C4DDF4' : '1px solid var(--line)' } }, nome); })
                 ),
                 h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6 } },
                   ...Array.from({ length: new Date(Number(concilCalMes.slice(0,4)), Number(concilCalMes.slice(5,7)) - 1, 1).getDay() }, (_, i) => h('div', { key: 'vazio-' + i, 'aria-hidden': true, style: { minHeight: 112, borderRadius: 10, background: 'transparent' } })),
                   ...calendarioDiasDoMes.map(d => {
                     const dataDia = new Date(d.data + 'T12:00:00');
-                    const fimDeSemana = dataDia.getDay() === 0 || dataDia.getDay() === 6;
+                    const diaSemana = dataDia.getDay();
+                    const fimDeSemana = diaSemana === 0 || diaSemana === 6;
+                    const corDomingo = diaSemana === 0, corSabado = diaSemana === 6;
                     const fechado = isDiaFechado(d.data);
                     const temMovimento = Number(d.debitos || 0) > 0 || Number(d.cred || 0) > 0;
-                    return h('div', { key: d.data, style: { minWidth: 0, minHeight: 112, padding: '9px 8px', borderRadius: 10, border: fechado ? '1px solid #E5B96D' : fimDeSemana ? '1px solid #E9C49F' : '1px solid var(--line)', background: fechado ? '#FFF7E8' : fimDeSemana ? '#FFF8F0' : 'var(--card)', boxShadow: fimDeSemana ? 'inset 0 3px 0 #E8B77F' : '0 1px 2px rgba(0,0,0,.04)', display: 'flex', flexDirection: 'column', gap: 5 } },
+                    return h('div', { key: d.data, style: { minWidth: 0, minHeight: 112, padding: '9px 8px', borderRadius: 10, border: fechado ? '1px solid #E5B96D' : corDomingo ? '1px solid #F0BFC6' : corSabado ? '1px solid #BBD7F0' : '1px solid var(--line)', background: fechado ? '#FFF7E8' : corDomingo ? '#FFF1F2' : corSabado ? '#EFF7FF' : 'var(--card)', boxShadow: corDomingo ? 'inset 0 3px 0 #D97783' : corSabado ? 'inset 0 3px 0 #5B9BD5' : '0 1px 2px rgba(0,0,0,.04)', display: 'flex', flexDirection: 'column', gap: 5 } },
                       h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 3, marginBottom: 2 } },
-                        h('span', { style: { fontSize: 16, fontWeight: 800, color: fimDeSemana ? '#995A25' : 'var(--ink)' } }, d.diaNum),
+                        h('span', { style: { fontSize: 16, fontWeight: 800, color: corDomingo ? '#A33B48' : corSabado ? '#245B91' : 'var(--ink)' } }, d.diaNum),
                         h('button', { type: 'button', className: 'action-btn', title: fechado ? 'Reabrir dia' : 'Fechar dia', style: { padding: 4, minWidth: 25, minHeight: 25, borderRadius: 7, background: fechado ? '#FCE7B8' : 'transparent', borderColor: fechado ? '#E5B96D' : 'transparent' }, onClick: e => toggleDiaFechado(d.data, e) }, fechado ? h(Lock, { size: 12, color: '#9A641E' }) : h(Unlock, { size: 12, color: fimDeSemana ? '#B77943' : 'var(--ink-soft)' }))
                       ),
                       h('div', { style: { fontSize: 10, fontWeight: 700, color: 'var(--ink-soft)', letterSpacing: '.03em' } }, fimDeSemana ? 'FIM DE SEMANA' : temMovimento ? 'MOVIMENTAÇÃO' : 'SEM MOVIMENTO'),
                       h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 3, fontSize: 10, color: 'var(--red)', whiteSpace: 'nowrap' } }, h('span', null, 'Débitos'), h('strong', { className: 'num' }, showMoney(d.debitos))),
                       h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 3, fontSize: 10, color: 'var(--green)', whiteSpace: 'nowrap' } }, h('span', null, 'Créditos'), h('strong', { className: 'num' }, showMoney(d.cred))),
-                      h('div', { style: { marginTop: 'auto', paddingTop: 5, borderTop: fimDeSemana ? '1px solid #E9C49F' : '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 2 } },
+                      h('div', { style: { marginTop: 'auto', paddingTop: 5, borderTop: corDomingo ? '1px solid #F0BFC6' : corSabado ? '1px solid #BBD7F0' : '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 2 } },
                         h('span', { style: { fontSize: 9, color: 'var(--ink-soft)', fontWeight: 700, textTransform: 'uppercase' } }, 'Saldo do dia'),
                         h('strong', { className: 'num', style: { fontSize: 11, color: Number(d.saldo) < 0 ? 'var(--red)' : 'var(--ink)', overflowWrap: 'anywhere' } }, showMoney(d.saldo))
                       )
