@@ -6898,19 +6898,11 @@
                   const contaSaldoBase = contaSistema || {};
                   const dataBaseSaldo = String(contaSaldoBase.dataSaldoInicial || "0000-00-00");
                   const saldoInicialBase = Number(contaSaldoBase.saldoInicial || 0);
-                  const movimentosPluggyHistorico = (pluggyTransactions || []).filter(t => String(t.accountId) === String(pluggyId) && String(t.date || "").slice(0,10) > dataBaseSaldo && String(t.date || "").slice(0,10) <= concilDataFim).map(t => ({ data:String(t.date || "").slice(0,10), valor:valorPluggy(t) }));
                   const inicioSaldo = concilDataIni || dataBaseSaldo;
-                  // O saldo do Sistema vem do mesmo saldo acumulado exibido na Conciliação Bancária.
-                  // Não reconstruir esse saldo por uma segunda lista de contas a pagar/receber/faturas.
-                  const movimentosSistemaPeriodo = (movimentacoesConciliacao || [])
-                    .filter(m => m.data >= inicioSaldo && m.data <= concilDataFim)
-                    .sort((a,b) => String(a.data).localeCompare(String(b.data)));
+                  const movimentosSistemaPeriodo = (movimentacoesConciliacao || []).filter(m => m.data >= inicioSaldo && m.data <= concilDataFim).sort((a,b) => String(a.data).localeCompare(String(b.data)));
                   let saldoSistemaDia = saldoInicialBase;
-                  let saldoPluggyDia = saldoInicialBase + movimentosPluggyHistorico.filter(m => m.data < inicioSaldo).reduce((sum,m) => sum + m.valor,0);
                   const mapaSistemaDia = new Map();
-                  const mapaPluggyDia = new Map();
                   movimentosSistemaPeriodo.forEach(m => mapaSistemaDia.set(m.data, Number(m.saldo || 0)));
-                  movimentosPluggyHistorico.filter(m => m.data >= inicioSaldo).forEach(m => mapaPluggyDia.set(m.data, (mapaPluggyDia.get(m.data) || 0) + m.valor));
                   const saldosDiariosCruzamento = [];
                   if (inicioSaldo && concilDataFim && inicioSaldo <= concilDataFim) {
                     const cursor = new Date(inicioSaldo + "T12:00:00");
@@ -6918,12 +6910,12 @@
                     while (cursor <= fim) {
                       const dia = cursor.getFullYear() + "-" + String(cursor.getMonth()+1).padStart(2,"0") + "-" + String(cursor.getDate()).padStart(2,"0");
                       if (mapaSistemaDia.has(dia)) saldoSistemaDia = mapaSistemaDia.get(dia);
-                      saldoPluggyDia = Number((saldoPluggyDia + (mapaPluggyDia.get(dia) || 0)).toFixed(2));
-                      saldosDiariosCruzamento.push({ data:dia, sistema:saldoSistemaDia, pluggy:saldoPluggyDia, diferenca:Number((saldoPluggyDia-saldoSistemaDia).toFixed(2)) });
+                      saldosDiariosCruzamento.push({ data:dia, sistema:saldoSistemaDia });
                       cursor.setDate(cursor.getDate()+1);
                     }
                   }
-                  const primeiroDiaDivergente = saldosDiariosCruzamento.find(d => Math.abs(d.diferenca) > 0.01);
+                  const contaPluggySaldoReal = (pluggyAccounts || []).find(a => String(a.id) === String(pluggyId));
+                  const saldoPluggyRealAtual = contaPluggySaldoReal && Number.isFinite(Number(contaPluggySaldoReal.balance)) ? Number(contaPluggySaldoReal.balance) : null;
 const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v || 0));
                   const salvarDados = next => {
                     setPluggyConcilPersistido(next);
@@ -7055,28 +7047,11 @@ const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v ||
                     h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:10, alignItems:'start' } }, tabelaSistema, tabelaPluggy)
                     ),
                     pluggyCruzamentoAba === 'saldos' && h('div', null,
-                      h('div', { style:{ padding:12, border:'1px solid var(--line)', borderRadius:8, marginBottom:12, background:'var(--card)' } },
-                        h('strong', null, 'Comparação diária dos saldos'),
-                        h('div', { style:{ fontSize:12, color:'var(--ink-soft)', marginTop:5 } }, 'Saldos acumulados a partir do saldo inicial cadastrado e das movimentações de cada dia no sistema e na Pluggy.')
+                      h('div', { className:'top', style:{ margin:0, padding:14 } },
+                        h('div', { style:{ fontSize:12, color:'var(--ink-soft)' } }, 'Saldo real atual informado pela Pluggy'),
+                        h('strong', { style:{ fontSize:24 } }, saldoPluggyRealAtual == null ? 'Indisponível — atualize os saldos' : money(saldoPluggyRealAtual))
                       ),
-                      primeiroDiaDivergente
-                        ? h('div', { className:'warning-box', style:{ marginBottom:12 } }, 'Primeira divergência em ' + formatDateBR(primeiroDiaDivergente.data) + ': diferença de ' + money(primeiroDiaDivergente.diferenca) + '.')
-                        : h('div', { className:'warning-box', style:{ marginBottom:12, borderColor:'var(--green)' } }, 'Nenhuma divergência diária encontrada no período consultado.'),
-                      h('div', { style:{ overflowX:'auto', border:'1px solid var(--line)', borderRadius:8, background:'var(--card)' } },
-                        h('table', { style:{ width:'100%', minWidth:700, margin:0, fontSize:12 } },
-                          h('thead', null, h('tr', null, h('th', null, 'Data'), h('th', { className:'right' }, 'Saldo do sistema'), h('th', { className:'right' }, 'Saldo Pluggy'), h('th', { className:'right' }, 'Diferença'), h('th', null, 'Resultado'))),
-                          h('tbody', null, saldosDiariosCruzamento.length ? saldosDiariosCruzamento.map(d => {
-                            const divergente = Math.abs(d.diferenca) > 0.01;
-                            return h('tr', { key:d.data, style:{ background:divergente ? 'var(--red-soft, #fdecea)' : 'transparent' } },
-                              h('td', null, formatDateBR(d.data)),
-                              h('td', { className:'right num' }, money(d.sistema)),
-                              h('td', { className:'right num' }, money(d.pluggy)),
-                              h('td', { className:'right num', style:{ color:divergente?'var(--red)':'var(--green)', fontWeight:700 } }, money(d.diferenca)),
-                              h('td', null, h('strong', { style:{ color:divergente?'var(--red)':'var(--green)' } }, divergente ? 'Divergente' : 'Confere'))
-                            );
-                          }) : h('tr', null, h('td', { colSpan:5, style:{ textAlign:'center', color:'var(--ink-soft)', padding:16 } }, 'Nenhum dia encontrado no período.')))
-                        )
-                      )
+                      h('div', { className:'warning-box', style:{ marginTop:10 } }, 'A Pluggy informa o saldo atual da conta. O retorno disponível não contém saldos históricos por dia; por isso o sistema não calcula nem apresenta valores diários estimados da Pluggy.')
                     )
                   );
                 })()
