@@ -6906,34 +6906,18 @@
                   const contaSaldoBase = contaSistema || {};
                   const dataBaseSaldo = String(contaSaldoBase.dataSaldoInicial || "0000-00-00");
                   const saldoInicialBase = Number(contaSaldoBase.saldoInicial || 0);
-                  const movimentosSistemaHistorico = [];
-                  (contasPagar || []).forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === contaKey && p.dataBaixa && p.dataBaixa > dataBaseSaldo && p.dataBaixa <= concilDataFim) movimentosSistemaHistorico.push({ data:p.dataBaixa, valor:-Number(p.valorParcela || p.total || 0) }); });
-                  (contasReceber || []).forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === contaKey && p.dataBaixa && p.dataBaixa > dataBaseSaldo && p.dataBaixa <= concilDataFim) movimentosSistemaHistorico.push({ data:p.dataBaixa, valor:Number(p.valorParcela || p.total || 0) }); });
-                  Object.entries(faturasBaixadas || {}).forEach(([comp, baixa]) => {
-                    if (!baixa || baixa.status !== "Baixado" || String(baixa.bancoId) !== contaKey || !baixa.dataBaixa || baixa.dataBaixa <= dataBaseSaldo || baixa.dataBaixa > concilDataFim) return;
-                    const total = (purchases || []).reduce((sum, p) => {
-                      const idx = monthDiff(p.inicio, comp);
-                      if (idx < 0 || (p.canceladoEm && comp >= p.canceladoEm) || (p.mesesExcluidos || []).includes(comp)) return sum;
-                      if (p.recorrente) return sum + Number(p.total || 0);
-                      const inicial = p.parcelaInicial || 1;
-                      if (idx >= p.parcelas - inicial + 1) return sum;
-                      const parcelas = splitInstallments(p.total, p.parcelas);
-                      return sum + Number(parcelas[(inicial - 1) + idx] || 0);
-                    }, 0);
-                    if (total > 0) movimentosSistemaHistorico.push({ data:baixa.dataBaixa, valor:-total });
-                  });
                   const movimentosPluggyHistorico = (pluggyTransactions || []).filter(t => String(t.accountId) === String(pluggyId) && String(t.date || "").slice(0,10) > dataBaseSaldo && String(t.date || "").slice(0,10) <= concilDataFim).map(t => ({ data:String(t.date || "").slice(0,10), valor:valorPluggy(t) }));
                   const inicioSaldo = concilDataIni || dataBaseSaldo;
-                  // O saldo do período deve acompanhar exatamente as movimentações exibidas na Conciliação Bancária.
-                  // Mantemos o histórico anterior ao período apenas para formar o saldo de abertura da comparação.
+                  // O saldo do Sistema vem do mesmo saldo acumulado exibido na Conciliação Bancária.
+                  // Não reconstruir esse saldo por uma segunda lista de contas a pagar/receber/faturas.
                   const movimentosSistemaPeriodo = (movimentacoesConciliacao || [])
                     .filter(m => m.data >= inicioSaldo && m.data <= concilDataFim)
-                    .map(m => ({ data:m.data, valor:valorSistema(m) }));
-                  let saldoSistemaDia = saldoInicialBase + movimentosSistemaHistorico.filter(m => m.data < inicioSaldo).reduce((sum,m) => sum + m.valor,0);
+                    .sort((a,b) => String(a.data).localeCompare(String(b.data)));
+                  let saldoSistemaDia = saldoInicialBase;
                   let saldoPluggyDia = saldoInicialBase + movimentosPluggyHistorico.filter(m => m.data < inicioSaldo).reduce((sum,m) => sum + m.valor,0);
                   const mapaSistemaDia = new Map();
                   const mapaPluggyDia = new Map();
-                  movimentosSistemaPeriodo.forEach(m => mapaSistemaDia.set(m.data, (mapaSistemaDia.get(m.data) || 0) + m.valor));
+                  movimentosSistemaPeriodo.forEach(m => mapaSistemaDia.set(m.data, Number(m.saldo || 0)));
                   movimentosPluggyHistorico.filter(m => m.data >= inicioSaldo).forEach(m => mapaPluggyDia.set(m.data, (mapaPluggyDia.get(m.data) || 0) + m.valor));
                   const saldosDiariosCruzamento = [];
                   if (inicioSaldo && concilDataFim && inicioSaldo <= concilDataFim) {
@@ -6941,7 +6925,7 @@
                     const fim = new Date(concilDataFim + "T12:00:00");
                     while (cursor <= fim) {
                       const dia = cursor.getFullYear() + "-" + String(cursor.getMonth()+1).padStart(2,"0") + "-" + String(cursor.getDate()).padStart(2,"0");
-                      saldoSistemaDia = Number((saldoSistemaDia + (mapaSistemaDia.get(dia) || 0)).toFixed(2));
+                      if (mapaSistemaDia.has(dia)) saldoSistemaDia = mapaSistemaDia.get(dia);
                       saldoPluggyDia = Number((saldoPluggyDia + (mapaPluggyDia.get(dia) || 0)).toFixed(2));
                       saldosDiariosCruzamento.push({ data:dia, sistema:saldoSistemaDia, pluggy:saldoPluggyDia, diferenca:Number((saldoPluggyDia-saldoSistemaDia).toFixed(2)) });
                       cursor.setDate(cursor.getDate()+1);
