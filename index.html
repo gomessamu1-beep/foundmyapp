@@ -5306,7 +5306,7 @@
             }, '☰'),
             h('h2', { style: { margin: 0, fontSize: '20px', color: 'var(--ink)' } }, 
               screen === 'dashboard' ? 'Visão geral' :
-              screen === 'cadastros' ? 'Cadastros e Configurações' :
+              (screen === 'cadastros' || screen === 'cadastros-contabilidade') ? 'Cadastros e Configurações' :
               screen === 'lancamentos' ? 'Gestão de Lançamentos' :
               screen === 'faturas' ? 'Faturas de Cartão' :
               screen === 'relatorios' ? 'Relatórios Financeiros' :
