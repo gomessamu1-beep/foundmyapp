@@ -295,6 +295,8 @@
       const [concilContaId, setConcilContaId] = useState("");
       const [concilDataIni, setConcilDataIni] = useState(`${currentMonth()}-01`);
       const [concilDataFim, setConcilDataFim] = useState(currentDate());
+      const [concilCruzamentoDataIniRascunho, setConcilCruzamentoDataIniRascunho] = useState(`${currentMonth()}-01`);
+      const [concilCruzamentoDataFimRascunho, setConcilCruzamentoDataFimRascunho] = useState(currentDate());
       const [concilExibido, setConcilExibido] = useState(false);
       const [concilSaldoPluggyConsulta, setConcilSaldoPluggyConsulta] = useState(null);
       const [concilSaldoPluggyContaRascunho, setConcilSaldoPluggyContaRascunho] = useState("");
@@ -6772,9 +6774,9 @@
               })(),
             ['resumo', 'calendario', 'movimentacoes', 'cruzamento'].includes(concilTab) && h('div', { className: 'concil-filter-grid', style: { display: 'grid', gridTemplateColumns: isAndroidApp ? '1fr' : '1.5fr 1fr 1fr auto', gap: 10, alignItems: 'end', marginBottom: 20, width: '100%' } },
               h('div', { className: 'field' }, h('label', null, 'Conta bancária'), h('select', { style: { width: '100%', boxSizing: 'border-box' }, value: concilContaId, onChange: e => setConcilContaId(e.target.value) }, h('option', { value: '' }, 'Selecione a conta...'), contasBancarias.map(c => h('option', { key: c.id, value: c.id }, c.nome)))),
-              h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataIni, onChange: e => setConcilDataIni(e.target.value) })),
-              h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilDataFim, onChange: e => setConcilDataFim(e.target.value) })),
-              h('button', { type: 'button', className: 'primary', style: { minHeight: 40 }, disabled: (concilTab === 'cruzamento' || concilTab === 'saldoPluggy') && pluggyTransactionsLoading, onClick: () => { setConcilExibido(true); if (concilTab === 'cruzamento' || concilTab === 'saldoPluggy') carregarMovimentacoesPluggy(); } }, (concilTab === 'cruzamento' || concilTab === 'saldoPluggy') && pluggyTransactionsLoading ? 'Consultando extratos…' : 'Consultar')
+              h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilTab === 'cruzamento' ? concilCruzamentoDataIniRascunho : concilDataIni, onChange: e => concilTab === 'cruzamento' ? setConcilCruzamentoDataIniRascunho(e.target.value) : setConcilDataIni(e.target.value) })),
+              h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', style: { width: '100%', boxSizing: 'border-box' }, value: concilTab === 'cruzamento' ? concilCruzamentoDataFimRascunho : concilDataFim, onChange: e => concilTab === 'cruzamento' ? setConcilCruzamentoDataFimRascunho(e.target.value) : setConcilDataFim(e.target.value) })),
+              h('button', { type: 'button', className: 'primary', style: { minHeight: 40 }, disabled: (concilTab === 'cruzamento' || concilTab === 'saldoPluggy') && pluggyTransactionsLoading, onClick: () => { if (concilTab === 'cruzamento') { setConcilDataIni(concilCruzamentoDataIniRascunho); setConcilDataFim(concilCruzamentoDataFimRascunho); } setConcilExibido(true); if (concilTab === 'cruzamento' || concilTab === 'saldoPluggy') carregarMovimentacoesPluggy(); } }, (concilTab === 'cruzamento' || concilTab === 'saldoPluggy') && pluggyTransactionsLoading ? 'Consultando extratos…' : 'Consultar')
             ),
 
             concilExibido && h(React.Fragment, null,
