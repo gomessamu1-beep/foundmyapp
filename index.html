@@ -178,7 +178,7 @@
       const [assistantBusy, setAssistantBusy] = useState(false);
       const [assistantPendingAction, setAssistantPendingAction] = useState(null);
       const [screen, setScreen] = useState(() => sessionStorage.getItem("fatura-screen-v1") || "dashboard");
-      const [faturaViewTab, setFaturaViewTab] = useState(() => sessionStorage.getItem("fatura-viewtab-v1") || "lancamentos");
+      const [faturaViewTab, setFaturaViewTab] = useState(() => { const saved = sessionStorage.getItem("fatura-viewtab-v1"); return saved === "pluggy" ? "lancamentos" : (saved || "lancamentos"); });
       const [contabTab, setContabTab] = useState(() => sessionStorage.getItem("fatura-contabtab-v1") || "plano");
       const [contabPlano, setContabPlano] = useState([]);
       const [contabLancamentos, setContabLancamentos] = useState([]);
@@ -5207,9 +5207,13 @@
             text-align:center; font-size:13px; font-weight:750;
           }
           .launch-main-tabs .launch-tab-icon {
-            width:54px; height:54px; border-radius:16px; display:flex; align-items:center;
-            justify-content:center; flex:0 0 54px; transition:transform .18s ease;
+            width:58px; height:58px; border-radius:17px; display:flex; align-items:center;
+            justify-content:center; flex:0 0 58px; transition:transform .18s ease;
+            border:1px solid rgba(15,23,42,.07); box-shadow:0 3px 8px rgba(15,23,42,.09);
           }
+          .launch-main-tabs .launch-tab-icon svg { width:30px; height:30px; stroke-width:2.2; }
+          .launch-main-tabs .launch-tab { gap:10px!important; }
+          .launch-main-tabs .launch-tab-label { font-size:13px; font-weight:800; letter-spacing:.1px; }
           .launch-main-tabs .launch-tab:hover .launch-tab-icon { transform:translateY(-2px); }
           .launch-main-tabs .launch-tab-icon-pagar { color:#b45309; background:#fff1d6; }
           .launch-main-tabs .launch-tab-icon-receber { color:#15803d; background:#dcfce7; }
@@ -5221,7 +5225,8 @@
           .launch-main-tabs .launch-tab.active .launch-tab-icon-cartao { background:#ddd0ff; }
           @media(max-width:640px) {
             .launch-main-tabs .launch-tab { min-height:94px!important; gap:7px!important; padding:10px 4px!important; font-size:11px; }
-            .launch-main-tabs .launch-tab-icon { width:44px; height:44px; flex-basis:44px; border-radius:13px; }
+            .launch-main-tabs .launch-tab-icon { width:48px; height:48px; flex-basis:48px; border-radius:14px; }
+            .launch-main-tabs .launch-tab-icon svg { width:25px; height:25px; }
             .launch-main-tabs .launch-tab-icon svg { width:24px; height:24px; }
           }
           .launch-page-header {
@@ -6076,6 +6081,74 @@
                   h('tfoot', null, h('tr', { style: { fontWeight: 'bold', background: '#F2EFE9' } }, h('td', { colSpan: '8', style: { textAlign: 'right', padding: '10px 6px' } }, "Total da Fatura:"), h('td', { className: 'right num' }, showMoney(totalValorParcelaTabela)), h('td', { className: 'right num' }, showMoney(totalValorTotalTabela)), h('td', null)))
                 )
               )
+,
+
+              h('div', { className: 'form-card' },
+            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 } },
+              h('div', null,
+                h('h3', { style: { margin: 0 } }, 'Movimentações do cartão — Pluggy'),
+                h('div', { style: { color: 'var(--ink-soft)', fontSize: 12, marginTop: 4 } }, 'Consulta independente. Não altera lançamentos, compras ou faturas do sistema.')
+              ),
+              h('button', { type: 'button', className: 'primary', disabled: pluggyTransactionsLoading, onClick: carregarMovimentacoesPluggy }, h(RefreshCw, { size: 15 }), pluggyTransactionsLoading ? ' Consultando...' : ' Consultar Pluggy')
+            ),
+            h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 14 } },
+              h('div', { className: 'field' }, h('label', null, 'Cartão retornado pela Pluggy'), h('select', { value: pluggyTransactionAccountId, onChange: e => setPluggyTransactionAccountId(e.target.value), style: { width: '100%' } },
+                h('option', { value: '' }, 'Todos os cartões'),
+                pluggyAccounts.filter(a => String(a.type || '').toUpperCase() === 'CREDIT').map(a => h('option', { key: a.id, value: a.id }, (a.name || 'Cartão de crédito') + (a.number ? ' • ' + a.number : '')))
+              )),
+              h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', value: pluggyFilterStart, onChange: e => setPluggyFilterStart(e.target.value), style: { width: '100%' } })),
+              h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', value: pluggyFilterEnd, onChange: e => setPluggyFilterEnd(e.target.value), style: { width: '100%' } }))
+            ),
+            pluggyTransactionsError && h('div', { style: { color: 'var(--red)', fontSize: 12, padding: 10, border: '1px solid var(--red)', borderRadius: 7, marginBottom: 12 } }, pluggyTransactionsError),
+            pluggyTransactionsLoadedAt && h('div', { style: { display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 } },
+              h('span', null, pluggyCreditAccountsCount + ' cartão(ões) retornado(s) pela Pluggy'),
+              h('span', null, pluggyCreditTransactionsCount + ' movimentação(ões) de cartão retornada(s)')
+            ),
+            (() => {
+              const cartoesPluggy = (pluggyTransactions || []).filter(t => String(t.accountType || '').toUpperCase() === 'CREDIT');
+              const filtradas = cartoesPluggy.filter(t => {
+                const data = String(t.date || '').slice(0, 10);
+                return (!pluggyTransactionAccountId || String(t.accountId) === String(pluggyTransactionAccountId)) &&
+                  (!pluggyFilterStart || data >= pluggyFilterStart) &&
+                  (!pluggyFilterEnd || data <= pluggyFilterEnd);
+              }).sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')));
+              const money = v => valoresOcultos ? '••••••' : formatBRL(Math.abs(Number(v || 0)));
+              return h(React.Fragment, null,
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10, padding: 12, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--card)' } },
+                  h('div', null, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Movimentações encontradas'), h('strong', { style: { fontSize: 20 } }, filtradas.length)),
+                  h('div', null, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Total de compras / débitos'), h('strong', { style: { fontSize: 20, color: 'var(--red)' } }, money(filtradas.filter(t => String(t.type).toUpperCase() === 'DEBIT').reduce((a,t) => a + Math.abs(Number(t.amount || 0)), 0))))
+                ),
+                filtradas.length ? h('div', { style: { overflowX: 'auto' } },
+                  h('table', { className: 'data-table', style: { minWidth: 760, width: '100%' } },
+                    h('thead', null, h('tr', null,
+                      h('th', null, 'Data'), h('th', null, 'Descrição'), h('th', null, 'Cartão'), h('th', null, 'Parcela'), h('th', null, 'Situação'), h('th', { style: { textAlign: 'right' } }, 'Valor')
+                    )),
+                    h('tbody', null, filtradas.map(t => {
+                      const meta = t.creditCardMetadata || {};
+                      const parcela = meta.installmentNumber && meta.totalInstallments ? meta.installmentNumber + '/' + meta.totalInstallments : '—';
+                      const cartao = meta.cardNumber ? '•••• ' + String(meta.cardNumber).slice(-4) : 'Não informado';
+                      const valor = money(t.amount);
+                      return h('tr', { key: t.accountId + ':' + t.id },
+                        h('td', null, t.date ? new Date(t.date).toLocaleDateString('pt-BR') : '—'),
+                        h('td', null, h('strong', null, t.description || 'Movimentação'), t.operationType ? h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, t.operationType) : null),
+                        h('td', null, cartao),
+                        h('td', null, parcela),
+                        h('td', null, h('span', { style: { color: String(t.status).toUpperCase() === 'PENDING' ? 'var(--amber)' : 'var(--green)', fontWeight: 600 } }, String(t.status || '—').toUpperCase() === 'PENDING' ? 'Pendente' : String(t.status || '—').toUpperCase() === 'POSTED' ? 'Confirmada' : (t.status || '—'))),
+                        h('td', { style: { textAlign: 'right', color: String(t.type).toUpperCase() === 'DEBIT' ? 'var(--red)' : 'var(--green)', fontWeight: 700 } }, (String(t.type).toUpperCase() === 'DEBIT' ? '− ' : '+ ') + valor)
+                      );
+                    }))
+                  )
+                ) : h('div', { style: { padding: 22, textAlign: 'center', border: '1px dashed var(--line)', borderRadius: 8, color: 'var(--ink-soft)' } },
+                  pluggyTransactionsLoadedAt
+                    ? (pluggyCreditAccountsCount === 0
+                      ? 'A Pluggy não retornou nenhuma conta do tipo cartão de crédito para esta conexão Santander.'
+                      : 'A Pluggy retornou cartão(ões), mas nenhuma movimentação de crédito no período filtrado.')
+                    : 'Clique em “Consultar Pluggy” para buscar as movimentações dos cartões conectados.'
+                )
+              );
+            })(),
+            h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 12 } }, 'Esta aba é somente de consulta. Nenhuma movimentação é gravada ou modificada na sua fatura do FoundMyApp.')
+          ),
             ),
 
             lancamentoTab === "pagar" && h(React.Fragment, null,
@@ -6223,7 +6296,6 @@
             h('div', { className: 'sub-nav', style: { marginBottom: 0 } },
               h('button', { className: faturaViewTab === "lancamentos" ? "active" : "", onClick: () => setFaturaViewTab("lancamentos") }, "Lançamentos"),
               h('button', { className: faturaViewTab === "conferencia" ? "active" : "", onClick: () => { setFaturaViewTab("conferencia"); setConferenciaSelecionada(null); setConferenciaItensSelecionados([]); setConferenciaFaturas([]); setConferenciaConsultada(false); setConferenciaErro(""); carregarLayoutsFaturaPDF(); } }, "Conferência da Fatura"),
-              h('button', { className: faturaViewTab === "pluggy" ? "active" : "", onClick: () => { setFaturaViewTab("pluggy"); setPluggyFilterStart(""); setPluggyFilterEnd(""); setPluggyTransactionAccountId(""); } }, "💳 Movimentações Pluggy")
             )
           ),
 
@@ -6397,73 +6469,6 @@
             )
           ),
 
-
-          screen === "faturas" && faturaViewTab === "pluggy" && h('div', { className: 'form-card' },
-            h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 } },
-              h('div', null,
-                h('h3', { style: { margin: 0 } }, 'Movimentações do cartão — Pluggy'),
-                h('div', { style: { color: 'var(--ink-soft)', fontSize: 12, marginTop: 4 } }, 'Consulta independente. Não altera lançamentos, compras ou faturas do sistema.')
-              ),
-              h('button', { type: 'button', className: 'primary', disabled: pluggyTransactionsLoading, onClick: carregarMovimentacoesPluggy }, h(RefreshCw, { size: 15 }), pluggyTransactionsLoading ? ' Consultando...' : ' Consultar Pluggy')
-            ),
-            h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 14 } },
-              h('div', { className: 'field' }, h('label', null, 'Cartão retornado pela Pluggy'), h('select', { value: pluggyTransactionAccountId, onChange: e => setPluggyTransactionAccountId(e.target.value), style: { width: '100%' } },
-                h('option', { value: '' }, 'Todos os cartões'),
-                pluggyAccounts.filter(a => String(a.type || '').toUpperCase() === 'CREDIT').map(a => h('option', { key: a.id, value: a.id }, (a.name || 'Cartão de crédito') + (a.number ? ' • ' + a.number : '')))
-              )),
-              h('div', { className: 'field' }, h('label', null, 'Data inicial'), h('input', { type: 'date', value: pluggyFilterStart, onChange: e => setPluggyFilterStart(e.target.value), style: { width: '100%' } })),
-              h('div', { className: 'field' }, h('label', null, 'Data final'), h('input', { type: 'date', value: pluggyFilterEnd, onChange: e => setPluggyFilterEnd(e.target.value), style: { width: '100%' } }))
-            ),
-            pluggyTransactionsError && h('div', { style: { color: 'var(--red)', fontSize: 12, padding: 10, border: '1px solid var(--red)', borderRadius: 7, marginBottom: 12 } }, pluggyTransactionsError),
-            pluggyTransactionsLoadedAt && h('div', { style: { display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: 'var(--ink-soft)', marginBottom: 12 } },
-              h('span', null, pluggyCreditAccountsCount + ' cartão(ões) retornado(s) pela Pluggy'),
-              h('span', null, pluggyCreditTransactionsCount + ' movimentação(ões) de cartão retornada(s)')
-            ),
-            (() => {
-              const cartoesPluggy = (pluggyTransactions || []).filter(t => String(t.accountType || '').toUpperCase() === 'CREDIT');
-              const filtradas = cartoesPluggy.filter(t => {
-                const data = String(t.date || '').slice(0, 10);
-                return (!pluggyTransactionAccountId || String(t.accountId) === String(pluggyTransactionAccountId)) &&
-                  (!pluggyFilterStart || data >= pluggyFilterStart) &&
-                  (!pluggyFilterEnd || data <= pluggyFilterEnd);
-              }).sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')));
-              const money = v => valoresOcultos ? '••••••' : formatBRL(Math.abs(Number(v || 0)));
-              return h(React.Fragment, null,
-                h('div', { style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10, padding: 12, border: '1px solid var(--line)', borderRadius: 8, background: 'var(--card)' } },
-                  h('div', null, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Movimentações encontradas'), h('strong', { style: { fontSize: 20 } }, filtradas.length)),
-                  h('div', null, h('div', { style: { fontSize: 12, color: 'var(--ink-soft)' } }, 'Total de compras / débitos'), h('strong', { style: { fontSize: 20, color: 'var(--red)' } }, money(filtradas.filter(t => String(t.type).toUpperCase() === 'DEBIT').reduce((a,t) => a + Math.abs(Number(t.amount || 0)), 0))))
-                ),
-                filtradas.length ? h('div', { style: { overflowX: 'auto' } },
-                  h('table', { className: 'data-table', style: { minWidth: 760, width: '100%' } },
-                    h('thead', null, h('tr', null,
-                      h('th', null, 'Data'), h('th', null, 'Descrição'), h('th', null, 'Cartão'), h('th', null, 'Parcela'), h('th', null, 'Situação'), h('th', { style: { textAlign: 'right' } }, 'Valor')
-                    )),
-                    h('tbody', null, filtradas.map(t => {
-                      const meta = t.creditCardMetadata || {};
-                      const parcela = meta.installmentNumber && meta.totalInstallments ? meta.installmentNumber + '/' + meta.totalInstallments : '—';
-                      const cartao = meta.cardNumber ? '•••• ' + String(meta.cardNumber).slice(-4) : 'Não informado';
-                      const valor = money(t.amount);
-                      return h('tr', { key: t.accountId + ':' + t.id },
-                        h('td', null, t.date ? new Date(t.date).toLocaleDateString('pt-BR') : '—'),
-                        h('td', null, h('strong', null, t.description || 'Movimentação'), t.operationType ? h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, t.operationType) : null),
-                        h('td', null, cartao),
-                        h('td', null, parcela),
-                        h('td', null, h('span', { style: { color: String(t.status).toUpperCase() === 'PENDING' ? 'var(--amber)' : 'var(--green)', fontWeight: 600 } }, String(t.status || '—').toUpperCase() === 'PENDING' ? 'Pendente' : String(t.status || '—').toUpperCase() === 'POSTED' ? 'Confirmada' : (t.status || '—'))),
-                        h('td', { style: { textAlign: 'right', color: String(t.type).toUpperCase() === 'DEBIT' ? 'var(--red)' : 'var(--green)', fontWeight: 700 } }, (String(t.type).toUpperCase() === 'DEBIT' ? '− ' : '+ ') + valor)
-                      );
-                    }))
-                  )
-                ) : h('div', { style: { padding: 22, textAlign: 'center', border: '1px dashed var(--line)', borderRadius: 8, color: 'var(--ink-soft)' } },
-                  pluggyTransactionsLoadedAt
-                    ? (pluggyCreditAccountsCount === 0
-                      ? 'A Pluggy não retornou nenhuma conta do tipo cartão de crédito para esta conexão Santander.'
-                      : 'A Pluggy retornou cartão(ões), mas nenhuma movimentação de crédito no período filtrado.')
-                    : 'Clique em “Consultar Pluggy” para buscar as movimentações dos cartões conectados.'
-                )
-              );
-            })(),
-            h('div', { style: { fontSize: 11, color: 'var(--ink-soft)', marginTop: 12 } }, 'Esta aba é somente de consulta. Nenhuma movimentação é gravada ou modificada na sua fatura do FoundMyApp.')
-          ),
 
           screen === "faturas" && faturaViewTab === "lancamentos" && h('div', { className: 'form-card' },
             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } }, h('div', { style: { fontSize: 18, fontWeight: 'bold' } }, "Resumo de Faturas por Ano"), h('button', { type: 'button', className: 'primary', onClick: () => { setEditingId(null); setDescricao(''); setObservacao(''); setValorTotal(''); setValorParcelaInput(''); setAcrescimoInput(''); setDescontoInput(''); setDataLancamento(currentDate()); setFaturaMes(month); setParcelas('1'); setParcelaAtual('1'); setCartaoId(''); setCategoriaId(''); setSubcategoriaId(''); setIsRecorrente(false); setLancamentoTab('cartao'); setModalOpen(true); }, disabled: fechadaAtual }, h(Plus), " Novo Lançamento")),
