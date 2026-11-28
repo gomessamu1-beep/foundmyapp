@@ -4242,14 +4242,20 @@
           .eq("origem_id", idTitulo);
         if (erroConferenciaCab) throw erroConferenciaCab;
 
-        const { data: itensRestantes, error: erroConferenciaItens } = await supabaseClient
-          .from("contabilidade_lancamento_itens")
-          .select("id")
-          .eq("user_id", userId)
-          .in("lancamento_id", idsContabeis.length ? idsContabeis : ["__nenhum__"]);
-        if (erroConferenciaItens) throw erroConferenciaItens;
+        // Não consulta a tabela de partidas quando não há cabeçalhos vinculados.
+        // Evita enviar um valor sentinela textual para a coluna UUID lancamento_id.
+        let itensRestantes = [];
+        if (idsContabeis.length) {
+          const { data: itensEncontrados, error: erroConferenciaItens } = await supabaseClient
+            .from("contabilidade_lancamento_itens")
+            .select("id")
+            .eq("user_id", userId)
+            .in("lancamento_id", idsContabeis);
+          if (erroConferenciaItens) throw erroConferenciaItens;
+          itensRestantes = itensEncontrados || [];
+        }
 
-        if ((cabecalhosRestantes || []).length || (itensRestantes || []).length) {
+        if ((cabecalhosRestantes || []).length || itensRestantes.length) {
           throw new Error("O Supabase ainda encontrou registros contábeis vinculados à baixa. O título não será reaberto.");
         }
 
