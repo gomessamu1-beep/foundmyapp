@@ -6841,6 +6841,13 @@
                     return String(t.accountId) === String(pluggyId) && (!concilDataIni || data >= concilDataIni) && (!concilDataFim || data <= concilDataFim);
                   }).sort(ordenarDataDecrescente);
                   const movimentosSistema = [...(movimentacoesConciliacao || [])].sort(ordenarDataDecrescente);
+                  // Totais brutos por origem, sempre considerando a conta e o período aplicados no cruzamento.
+                  const totalDebitosSistemaCruzamento = movimentosSistema.reduce((soma, item) => soma + Math.abs(Number(item.valorDebito || 0)), 0);
+                  const totalCreditosSistemaCruzamento = movimentosSistema.reduce((soma, item) => soma + Math.abs(Number(item.valorCredito || 0)), 0);
+                  const totalDebitosPluggyCruzamento = extratoBanco.reduce((soma, tx) => soma + (String(tx.type || "").toUpperCase() === "DEBIT" ? Math.abs(Number(tx.amount || 0)) : 0), 0);
+                  const totalCreditosPluggyCruzamento = extratoBanco.reduce((soma, tx) => soma + (String(tx.type || "").toUpperCase() === "CREDIT" ? Math.abs(Number(tx.amount || 0)) : 0), 0);
+                  const diferencaDebitosCruzamento = totalDebitosSistemaCruzamento - totalDebitosPluggyCruzamento;
+                  const diferencaCreditosCruzamento = totalCreditosSistemaCruzamento - totalCreditosPluggyCruzamento;
                   const dados = pluggyConcilPersistido || { vinculos: [], removidos: [] };
                   const vinculosConta = (dados.vinculos || []).filter(v => String(v.contaId) === contaKey);
                   const removidosConta = new Set((dados.removidos || []).filter(v => String(v.contaId) === contaKey).map(v => String(v.sistemaId) + "|" + String(v.pluggyId)));
@@ -7007,6 +7014,10 @@ const money = v => valoresOcultos ? "••••••" : formatBRL(Number(v ||
                   return h('div', null,
                     h(React.Fragment, null,
                     h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:8, marginBottom:12 } },
+                      h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Débitos — Sistema"), h('strong', { style:{ color:'var(--red)', fontSize:18 } }, money(totalDebitosSistemaCruzamento))),
+                      h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Débitos — Pluggy"), h('strong', { style:{ color:'var(--red)', fontSize:18 } }, money(totalDebitosPluggyCruzamento)), h('div', { style:{ fontSize:11, color:Math.abs(diferencaDebitosCruzamento) <= 0.01 ? 'var(--green)' : 'var(--amber)', marginTop:3 } }, "Diferença: " + money(diferencaDebitosCruzamento))),
+                      h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Créditos — Sistema"), h('strong', { style:{ color:'var(--green)', fontSize:18 } }, money(totalCreditosSistemaCruzamento))),
+                      h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Créditos — Pluggy"), h('strong', { style:{ color:'var(--green)', fontSize:18 } }, money(totalCreditosPluggyCruzamento)), h('div', { style:{ fontSize:11, color:Math.abs(diferencaCreditosCruzamento) <= 0.01 ? 'var(--green)' : 'var(--amber)', marginTop:3 } }, "Diferença: " + money(diferencaCreditosCruzamento))),
                       h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo conciliado (valores iguais)"), h('strong', { style:{ color:'var(--green)', fontSize:18 } }, money(totalValorConciliado))),
                       h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo não conciliado — Pluggy"), h('strong', { style:{ color:'var(--red)', fontSize:18 } }, money(totalPluggyNaoConciliado))),
                       h('div', { className:'top', style:{ margin:0, padding:'10px 12px' } }, h('div', { style:{ fontSize:11 } }, "Saldo não conciliado — Sistema"), h('strong', { style:{ color:'var(--red)', fontSize:18 } }, money(totalSistemaNaoConciliado))),
