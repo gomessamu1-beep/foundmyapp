@@ -5759,14 +5759,14 @@
             )
           ),
 
-          screen === "cadastros" && h('div', { className: 'form-card' },
+          (screen === "cadastros" || screen === "cadastros-contabilidade") && h('div', { className: 'form-card' },
             h('div', { className: 'sub-nav' },
-              h('button', { className: cadastroTab === "cartoes" ? "active" : "", onClick: () => setCadastroTab("cartoes") }, "Cartões"),
-              h('button', { className: cadastroTab === "contas" ? "active" : "", onClick: () => setCadastroTab("contas") }, "🏦 Contas"),
-              h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => setCadastroTab("categorias") }, "Categorias"),
-              h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => setCadastroTab("depara") }, "De-Para (Regras)"),
-              h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => setCadastroTab("importar-txt") }, "📥 Importar TXT"),
-              h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");}},"Parâmetros"),
+              h('button', { className: cadastroTab === "cartoes" ? "active" : "", onClick: () => { setCadastroTab("cartoes"); setScreen("cadastros"); } }, "Cartões"),
+              h('button', { className: cadastroTab === "contas" ? "active" : "", onClick: () => { setCadastroTab("contas"); setScreen("cadastros"); } }, "🏦 Contas"),
+              h('button', { className: cadastroTab === "categorias" ? "active" : "", onClick: () => { setCadastroTab("categorias"); setScreen("cadastros"); } }, "Categorias"),
+              h('button', { className: cadastroTab === "depara" ? "active" : "", onClick: () => { setCadastroTab("depara"); setScreen("cadastros"); } }, "De-Para (Regras)"),
+              h('button', { className: cadastroTab === "importar-txt" ? "active" : "", onClick: () => { setCadastroTab("importar-txt"); setScreen("cadastros"); } }, "📥 Importar TXT"),
+              h('button',{className:cadastroTab==="parametros"?"active":"",onClick:()=>{setCadastroTab("parametros");setParamTipo("PAGAMENTO");setScreen("cadastros");}},"Parâmetros"),
               h('button',{className:cadastroTab==="contabilidade"?"active":"",onClick:()=>{setCadastroTab("contabilidade");setContabTab("plano");setScreen("cadastros-contabilidade");}}, "Contabilidade")
             ),
             cadastroTab === "parametros" && renderParametrosMovimentacao(),
