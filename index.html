@@ -813,6 +813,47 @@
             });
           }
           const atualizado = await carregarHistoricoPluggySalvo();
+
+          // A Pluggy é somente leitura. Movimentos sem correspondência são incluídos apenas no FoundMyApp.
+          const contasPluggyVinculadas = (contasBancarias || []).filter(c => c.pluggyAccountId);
+          const novosDebitos = [];
+          const novosCreditos = [];
+          const idsJaImportados = new Set([...(contasPagar || []).map(x => String(x.pluggyTransactionId || "")), ...(contasReceber || []).map(x => String(x.pluggyTransactionId || ""))].filter(Boolean));
+          const idsProcessados = new Set();
+          (atualizado || []).forEach(t => {
+            if (!t?.id || !t?.accountId || String(t.accountType || "").toUpperCase() !== "BANK" || String(t.status || "").toUpperCase() === "PENDING") return;
+            const contaSistema = contasPluggyVinculadas.find(c => String(c.pluggyAccountId) === String(t.accountId));
+            const dataMov = String(t.date || "").slice(0, 10);
+            const valorMov = Math.abs(Number(t.amount || 0));
+            const tipoMov = String(t.type || "").toUpperCase();
+            if (!contaSistema || !/^\d{4}-\d{2}-\d{2}$/.test(dataMov) || !Number.isFinite(valorMov) || valorMov <= 0 || (tipoMov !== "DEBIT" && tipoMov !== "CREDIT")) return;
+            const idPluggy = String(t.id);
+            if (idsJaImportados.has(idPluggy) || idsProcessados.has(idPluggy)) return;
+            const debito = tipoMov === "DEBIT";
+            const lista = debito ? [...(contasPagar || []), ...novosDebitos] : [...(contasReceber || []), ...novosCreditos];
+            const encontrado = lista.some(item => item.status === "Baixado" && String(item.bancoBaixaId) === String(contaSistema.id) && String(item.dataBaixa || "") === dataMov && Math.abs(Number(item.valorParcela || item.total || 0) - valorMov) <= 0.01);
+            idsProcessados.add(idPluggy);
+            if (encontrado) return;
+            const registro = {
+              id: uid(), descricao: String(t.description || t.rawDescription || "Movimentação bancária Pluggy").trim(),
+              observacao: "Importado automaticamente da Pluggy. ID da transação: " + idPluggy,
+              total: valorMov, valorParcela: valorMov, dataCompra: dataMov, dataVencimento: dataMov,
+              parcelas: 1, parcelaInicial: 1, inicio: dataMov.slice(0, 7), recorrente: false,
+              cartaoId: null, categoriaId: null, subcategoriaId: null, status: "Baixado", criadoEm: Date.now(),
+              transferenciaId: null, isLancamentoDireto: true, origem: "CONCILIACAO BANCARIA",
+              bancoBaixaId: contaSistema.id, dataBaixa: dataMov, pluggyTransactionId: idPluggy, pluggyAccountId: String(t.accountId)
+            };
+            if (debito) novosDebitos.push(registro); else novosCreditos.push(registro);
+          });
+          const totalImportado = novosDebitos.length + novosCreditos.length;
+          if (totalImportado) {
+            const pagarAtualizado = [...(contasPagar || []), ...novosDebitos];
+            const receberAtualizado = [...(contasReceber || []), ...novosCreditos];
+            setContasPagar(pagarAtualizado);
+            setContasReceber(receberAtualizado);
+            await saveDataToSupabase(purchases, pagarAtualizado, receberAtualizado, cartoes, contasBancarias, categorias, deparaList, faturasFechadas, faturasBaixadas, diasFechados, mesesFechados);
+            setPluggyTransactionsError("Atualização concluída: " + totalImportado + " movimentação(ões) sem correspondência foram lançadas automaticamente no FoundMyApp.");
+          }
           setPluggyTransactionsLoadedAt(new Date().toISOString());
           if (data?.partialError) {
             setPluggyTransactionsError(((Array.isArray(data.errors) ? data.errors.join(" ") : "") || "Algumas contas não retornaram todas as movimentações.") + " O histórico já salvo foi preservado.");
