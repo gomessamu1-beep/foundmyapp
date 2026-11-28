@@ -1485,10 +1485,11 @@
           return alvo.getFullYear() + "-" + String(alvo.getMonth() + 1).padStart(2, "0") + "-" + String(Math.min(partes[2], ultimoDia)).padStart(2, "0");
         };
         (Array.isArray(contasPagar) ? contasPagar : []).forEach(p => {
-          if (!p || p.isLancamentoDireto) return;
+          if (!p) return;
           const status = String(p.status || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           if (/^(baixad[oa]|pago|quitad[oa]|liquidado|cancelado|estornado)/.test(status)) return;
-          const dataBase = normalizarDataCalendario(p.dataVencimento) || normalizarDataCalendario(p.dataCompra) || normalizarDataCalendario(p.inicio);
+          const dataVencimentoReal = normalizarDataCalendario(p.dataVencimento);
+          const dataBase = dataVencimentoReal || normalizarDataCalendario(p.dataCompra) || normalizarDataCalendario(p.inicio);
           if (!dataBase) return;
           if (p.parcelaIndividual) {
             if (dataBase.slice(0, 7) === pagarCalendarioMes) {
@@ -1506,7 +1507,7 @@
           const numeroParcela = p.recorrente ? idx + 1 : parcelaInicial + idx;
           const valores = splitInstallments(Number(p.total || 0), quantidadeParcelas);
           const valor = Number(p.recorrente ? (p.valorParcela || p.total || 0) : (p.valorParcela && quantidadeParcelas === 1 ? p.valorParcela : (valores[numeroParcela - 1] || p.valorParcela || p.total || 0)));
-          const vencimento = avancarVencimento(dataBase, idx);
+          const vencimento = idx === 0 ? dataBase : avancarVencimento(dataBase, idx);
           if (vencimento && vencimento.slice(0, 7) === pagarCalendarioMes) itens.push({ ...p, dataCalendario: vencimento, index: numeroParcela, parcelas: quantidadeParcelas, valorParcela: valor });
         });
         return itens.sort((a,b) => a.dataCalendario.localeCompare(b.dataCalendario));
