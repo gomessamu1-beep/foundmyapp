@@ -1735,6 +1735,59 @@
           String(conta.codigo || "").toLocaleLowerCase("pt-BR").includes(termo)
         );
       }
+      function renderGruposPlanoContas() {
+        const visiveis = contasPlanoFiltradas();
+        if (!contabPlano.length) return h('div',{style:{padding:28,textAlign:'center',color:'var(--ink-soft)',background:'var(--card)',border:'1px dashed var(--line)',borderRadius:12}},"Nenhuma conta cadastrada. Comece incluindo seu plano de contas.");
+        if (!visiveis.length) return h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)',background:'var(--card)',border:'1px solid var(--line)',borderRadius:12}},"Nenhuma conta encontrada com esse nome ou código.");
+        const grupos = [
+          {naturezas:["ATIVO"],titulo:"ATIVO",subtitulo:"Bens e direitos",icone:"🏦",cor:"#2563eb",fundo:"#eff6ff"},
+          {naturezas:["PASSIVO"],titulo:"PASSIVO",subtitulo:"Obrigações e compromissos",icone:"🧾",cor:"#b45309",fundo:"#fffbeb"},
+          {naturezas:["PATRIMONIO_LIQUIDO"],titulo:"PATRIMÔNIO LÍQUIDO",subtitulo:"Capital e patrimônio próprio",icone:"🏛️",cor:"#64748b",fundo:"#f1f5f9"},
+          {naturezas:["RECEITA"],titulo:"RECEITAS",subtitulo:"Entradas e ganhos",icone:"📈",cor:"#059669",fundo:"#ecfdf5"},
+          {naturezas:["DESPESA","CUSTO"],titulo:"DESPESAS",subtitulo:"Despesas e custos já cadastrados",icone:"💸",cor:"#dc2626",fundo:"#fef2f2"},
+          {naturezas:["RESULTADO"],titulo:"RESULTADO",subtitulo:"Classificações anteriores preservadas",icone:"📊",cor:"#7c3aed",fundo:"#f5f3ff"}
+        ];
+        return h('div',{style:{display:'flex',flexDirection:'column',gap:14,marginTop:8}},
+          grupos.map(grupo=>{
+            const contasGrupo=visiveis.filter(c=>grupo.naturezas.includes(String(c.natureza||"").toUpperCase()));
+            if(!contasGrupo.length)return null;
+            return h('section',{key:grupo.titulo,style:{border:'1px solid '+grupo.cor+'35',borderRadius:12,overflow:'hidden',background:'var(--card)',boxShadow:'0 2px 8px rgba(15,23,42,.035)'}},
+              h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,padding:'12px 14px',background:grupo.fundo,borderBottom:'1px solid '+grupo.cor+'28'}},
+                h('div',{style:{display:'flex',alignItems:'center',gap:10,minWidth:0}},
+                  h('span',{style:{width:38,height:38,display:'grid',placeItems:'center',borderRadius:10,background:'#ffffffcc',fontSize:21,flexShrink:0}},grupo.icone),
+                  h('div',{style:{minWidth:0}},
+                    h('div',{style:{fontSize:13,fontWeight:900,letterSpacing:'.045em',color:grupo.cor}},grupo.titulo),
+                    h('div',{style:{fontSize:11,color:'#475569',marginTop:2}},grupo.subtitulo)
+                  )
+                ),
+                h('span',{style:{fontSize:11,fontWeight:800,color:grupo.cor,background:'#ffffffc9',border:'1px solid '+grupo.cor+'35',borderRadius:999,padding:'5px 9px',whiteSpace:'nowrap'}},contasGrupo.length+" conta(s)")
+              ),
+              h('div',{className:'list-vertical',style:{gap:0}},
+                contasGrupo.map(c=>{
+                  const mae=contabPlano.find(p=>String(p.id)===String(c.conta_pai_id));
+                  const nivel=nivelHierarquiaPlano(c);
+                  return h('div',{className:'list-item',key:c.id,style:{padding:'8px 10px',paddingLeft:10+nivel*22,borderRadius:0,borderLeft:0,borderRight:0,borderTop:0,borderBottom:'1px solid var(--line)'}},
+                    h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,minHeight:28}},
+                      h('div',{style:{display:'flex',alignItems:'center',gap:7,minWidth:0,flex:1,flexWrap:'wrap'}},
+                        nivel>0&&h('span',{style:{color:'var(--ink-soft)',fontSize:12,flexShrink:0}},"↳"),
+                        h('span',{style:{fontSize:13,fontWeight:c.tipo==="SINTETICA"?850:500,color:c.tipo==="SINTETICA"?'var(--ink)':'var(--ink-soft)'}},c.codigo+" - "+c.descricao),
+                        h('span',{style:{fontSize:10,fontWeight:700,color:c.tipo==="SINTETICA"?'#475569':'#64748b',background:c.tipo==="SINTETICA"?'#e2e8f0':'#f1f5f9',borderRadius:5,padding:'3px 6px',whiteSpace:'nowrap'}},c.tipo==="SINTETICA"?"SINTÉTICA":"ANALÍTICA"),
+                        mae&&h('span',{style:{fontSize:10,color:'var(--ink-soft)',whiteSpace:'nowrap'}},"Mãe: "+mae.codigo)
+                      ),
+                      h('div',{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:4,flexWrap:'nowrap',marginLeft:'auto',flexShrink:0}},
+                        c.tipo==="SINTETICA"&&h('button',{type:'button',className:'action-btn',style:{padding:4},title:'Incluir conta filha',onClick:()=>abrirInclusaoContaFilha(c)},h(Plus,{size:13})),
+                        h('button',{type:'button',className:'action-btn',style:{padding:4},title:'Editar conta',onClick:()=>editarContaContabil(c)},h(Pencil,{size:13})),
+                        h('button',{type:'button',className:'action-btn delete',style:{padding:4},title:'Excluir conta',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:13}))
+                      )
+                    )
+                  );
+                })
+              )
+            );
+          })
+        );
+      }
+
 
       function proximoCodigoContabil(codigoAtual) {
         const codigo = formatarCodigoContabil(codigoAtual);
@@ -5403,22 +5456,7 @@
                   !contabEditandoId && h('div',{style:{fontSize:12,color:'var(--ink-soft)',marginTop:10}},"Depois de incluir, os campos serão limpos e esta janela continuará aberta para o próximo cadastro.")
                 )
               ),
-              h('div', { className: 'list-vertical', style:{gap:0,marginTop:8} }, contabPlano.length === 0 ? h('div', { style: { padding: 24, textAlign: 'center', color: 'var(--ink-soft)' } }, "Nenhuma conta cadastrada. Comece incluindo seu plano de contas.") : contasPlanoFiltradas().length === 0 ? h('div',{style:{padding:24,textAlign:'center',color:'var(--ink-soft)'}},"Nenhuma conta encontrada com esse nome ou código.") : contasPlanoFiltradas().map(c => {
-                const mae = contabPlano.find(p => p.id === c.conta_pai_id);
-                return h('div', { className: 'list-item', key:c.id, style:{ padding: '5px 10px', paddingLeft: 10 + nivelHierarquiaPlano(c) * 22, borderRadius:0, borderLeft:0, borderRight:0, borderTop:0 } },
-                  h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,minHeight:24}},
-                    h('div',{style:{display:'flex',alignItems:'center',gap:8,minWidth:0,flex:1,flexWrap:'wrap'}},
-                      h('span',{style:{fontSize:14,fontWeight:c.tipo==="SINTETICA"?800:500}},c.codigo+" - "+c.descricao),
-                      h('span',{style:{fontSize:11,color:'var(--ink-soft)',whiteSpace:'nowrap'}},c.natureza.replaceAll("_"," ")+" • "+(c.tipo==="SINTETICA"?"Sintética":"Analítica")+(mae?" • Mãe: "+mae.codigo:""))
-                    ),
-                    h('div',{style:{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:4,flexWrap:'nowrap',marginLeft:'auto',flexShrink:0}},
-                      c.tipo==="SINTETICA" && h('button',{type:'button',className:'action-btn',style:{padding:3},title:'Incluir conta filha no final da sequência',onClick:()=>abrirInclusaoContaFilha(c)},h(Plus,{size:13})),
-                      h('button',{type:'button',className:'action-btn',style:{padding:3},title:'Editar conta',onClick:()=>editarContaContabil(c)},h(Pencil,{size:13})),
-                      h('button',{type:'button',className:'action-btn delete',style:{padding:3},title:'Excluir conta',onClick:()=>excluirContaContabil(c)},h(Trash2,{size:13}))
-                    )
-                  )
-                );
-              }))
+              renderGruposPlanoContas()
             ),
             (contabTab === "lancamentos" || (contabManualModal && contabTab === "relatorios")) && h(React.Fragment, null,
               h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,flexWrap:'wrap',marginBottom:12}},
