@@ -6697,36 +6697,9 @@
                 const contaSistemaSelecionada = contasBancarias.find(c => String(c.id) === String(consultaAplicada?.contaId));
                 const pluggyIdSelecionado = contaSistemaSelecionada?.pluggyAccountId || "";
                 const formatarValorPluggy = t => String(t.type || "").toUpperCase() === "DEBIT" ? -Math.abs(Number(t.amount || 0)) : Math.abs(Number(t.amount || 0));
-                const dataBaseSaldo = String(contaSistemaSelecionada?.dataSaldoInicial || "0000-00-00");
-                const dataReferenciaSaldo = String(consultaAplicada?.dataFim || "").slice(0, 10);
-                // Saldo real retornado pela API Pluggy para a conta vinculada. Não estimar por movimentações.
+                // Exibir exclusivamente o saldo atual retornado pela API Pluggy, sem reconstrução local.
                 const contaPluggyReal = (pluggyAccounts || []).find(a => String(a.id) === String(pluggyIdSelecionado));
                 const saldoPluggy = contaPluggyReal && Number.isFinite(Number(contaPluggyReal.balance)) ? Number(contaPluggyReal.balance) : null;
-                const historicoContaCompleto = (pluggyTransactions || []).filter(t =>
-                  pluggyIdSelecionado && String(t.accountId) === String(pluggyIdSelecionado) &&
-                  String(t.date || "").slice(0, 10) > dataBaseSaldo
-                ).sort((x, y) => String(x.date || "").localeCompare(String(y.date || "")) || String(x.id).localeCompare(String(y.id)));
-                const saldoSistemaAteReferencia = (() => {
-                  if (!contaSistemaSelecionada) return null;
-                  let saldo = saldoInicialConta;
-                  (contasPagar || []).forEach(p => { if (p.status === "Baixado" && String(p.bancoBaixaId) === String(contaSistemaSelecionada.id) && p.dataBaixa && p.dataBaixa > dataBaseSaldo && p.dataBaixa <= dataReferenciaSaldo) saldo -= Number(p.valorParcela || p.total || 0); });
-                  (contasReceber || []).forEach(r => { if (r.status === "Baixado" && String(r.bancoBaixaId) === String(contaSistemaSelecionada.id) && r.dataBaixa && r.dataBaixa > dataBaseSaldo && r.dataBaixa <= dataReferenciaSaldo) saldo += Number(r.valorParcela || r.total || 0); });
-                  Object.entries(faturasBaixadas || {}).forEach(([comp, baixa]) => {
-                    if (!baixa || baixa.status !== "Baixado" || String(baixa.bancoId) !== String(contaSistemaSelecionada.id) || !baixa.dataBaixa || baixa.dataBaixa <= dataBaseSaldo || baixa.dataBaixa > dataReferenciaSaldo) return;
-                    const totalComp = (purchases || []).reduce((total, p) => {
-                      const idx = monthDiff(p.inicio, comp);
-                      if (idx < 0 || (p.canceladoEm && comp >= p.canceladoEm) || (p.mesesExcluidos || []).includes(comp)) return total;
-                      if (p.recorrente) return total + Number(p.total || 0);
-                      const inicial = p.parcelaInicial || 1;
-                      if (idx >= p.parcelas - inicial + 1) return total;
-                      const parcelas = splitInstallments(p.total, p.parcelas);
-                      return total + Number(parcelas[(inicial - 1) + idx] || 0);
-                    }, 0);
-                    saldo -= totalComp;
-                  });
-                  return Number(saldo.toFixed(2));
-                })();
-                const saldoSistema = saldoSistemaAteReferencia;
                 const movimentacoesDaConta = historicoContaCompleto.filter(t => {
                   const data = String(t.date || "").slice(0, 10);
                   return (!consultaAplicada?.dataIni || data >= consultaAplicada.dataIni) && (!consultaAplicada?.dataFim || data <= consultaAplicada.dataFim);
@@ -6755,9 +6728,7 @@
                   !pluggyItemId.length && h('div', { className: 'warning-box' }, 'Nenhuma instituição Pluggy conectada. Use Conectar instituições para começar.'),
                   concilContaId && !contaSistemaSelecionada?.pluggyAccountId && h('div', { className: 'warning-box', style: { marginBottom: 10 } }, 'A conta selecionada ainda não está vinculada a uma conta Pluggy. Faça o vínculo em Cadastros > Contas.'),
                   contaSistemaSelecionada && pluggyIdSelecionado && h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 8, marginBottom: 12 } },
-                    h('div', { className: 'top', style: { margin: 0, padding: '10px 12px' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Saldo atual informado pela Pluggy'), h('strong', { style: { fontSize: 18 } }, valoresOcultos ? '••••••' : formatBRL(saldoPluggy))),
-                    h('div', { className: 'top', style: { margin: 0, padding: '10px 12px' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Saldo do sistema até ' + formatDateBR(dataReferenciaSaldo)), h('strong', { style: { fontSize: 18 } }, valoresOcultos ? '••••••' : formatBRL(saldoSistema))),
-                    h('div', { className: 'top', style: { margin: 0, padding: '10px 12px' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Diferença de saldos'), h('strong', { style: { fontSize: 18, color: Math.abs(diferenca) <= 0.01 ? 'var(--green)' : 'var(--red)' } }, valoresOcultos ? '••••••' : formatBRL(diferenca)))
+                    h('div', { className: 'top', style: { margin: 0, padding: '10px 12px' } }, h('div', { style: { fontSize: 11, color: 'var(--ink-soft)' } }, 'Saldo real informado pela Pluggy'), h('strong', { style: { fontSize: 18 } }, valoresOcultos ? '••••••' : (saldoPluggy == null ? 'Não disponível' : formatBRL(saldoPluggy))))
                   ),
                   h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 } },
                     h('strong', { style: { fontSize: 14 } }, 'Movimentações da conta selecionada'),
